@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import anthropic
 
+from alphamo.errors import Stage1OutputError, parse_or_raise
 from alphamo.evaluator._common import HAIKU_MODEL, MAX_TOKENS_SHORT, cached_system
 from alphamo.prompts.evaluator_prompts import STAGE1_SYSTEM, render_candidate
 from alphamo.schemas import Architecture
@@ -19,11 +20,12 @@ def stage1_feasibility(
     architecture: Architecture, client: anthropic.Anthropic
 ) -> Stage1Finding:
     """Score the candidate's feasibility and middle-class accessibility."""
-    response = client.messages.parse(
+    return parse_or_raise(
+        client,
+        Stage1OutputError,
         model=HAIKU_MODEL,
         max_tokens=MAX_TOKENS_SHORT,
         system=cached_system(STAGE1_SYSTEM),
         messages=[{"role": "user", "content": render_candidate(architecture)}],
         output_format=Stage1Finding,
     )
-    return response.parsed_output

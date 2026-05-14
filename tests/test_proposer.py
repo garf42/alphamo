@@ -11,7 +11,11 @@ from alphamo.evaluator._common import OPUS_MODEL
 from alphamo.proposer import Proposer
 from alphamo.schemas import Architecture
 from tests.fixtures.exemplars import ROWLING_FIXTURE, SATOSHI_FIXTURE
-from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
+from tests.fixtures.parsed_message import (
+    FakeContentBlock,
+    FakeParsedMessage,
+    make_truncation_error,
+)
 
 
 def _fake_architecture() -> Architecture:
@@ -85,3 +89,14 @@ def test_propose_raises_proposer_output_error_when_parsed_is_none():
         Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     assert exc_info.value.stop_reason == "refusal"
     assert exc_info.value.content_block_types == ["text", "tool_use"]
+
+
+def test_propose_raises_proposer_output_error_on_truncated_json():
+    """SDK-side pydantic.ValidationError (truncation) must surface as ProposerOutputError."""
+    client = MagicMock()
+    client.messages.parse.side_effect = make_truncation_error()
+    with pytest.raises(ProposerOutputError) as exc_info:
+        Proposer(client).propose([SATOSHI_FIXTURE.architecture])
+    assert exc_info.value.stop_reason == "parse_error"
+    assert "validation failed" in exc_info.value.detail
+    assert exc_info.value.__cause__ is not None

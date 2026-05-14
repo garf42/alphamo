@@ -45,3 +45,28 @@ class FakeParsedMessage:
         self.parsed_output = parsed_output
         self.stop_reason = stop_reason
         self.content = content if content is not None else [FakeContentBlock()]
+
+
+def make_truncation_error() -> Any:
+    """Build a real pydantic.ValidationError to simulate SDK-side JSON truncation.
+
+    The SDK's parse_response calls TypeAdapter(output_format).validate_json(text)
+    inside its post-parser callback. When the response was truncated at
+    max_tokens the text ends mid-string, validate_json raises
+    pydantic.ValidationError, and that exception flies out of
+    client.messages.parse(...) before any ParsedMessage exists. Setting
+    `client.messages.parse.side_effect = make_truncation_error()` on a
+    MagicMock reproduces that exception path faithfully.
+    """
+    import pydantic
+    from pydantic import BaseModel, TypeAdapter
+
+    class _Probe(BaseModel):
+        name: str
+        summary: str
+
+    try:
+        TypeAdapter(_Probe).validate_json('{"name": "Proprietary Ben')
+    except pydantic.ValidationError as exc:
+        return exc
+    raise RuntimeError("expected pydantic.ValidationError")

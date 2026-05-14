@@ -16,7 +16,11 @@ from alphamo.schemas.findings import (
     Severity,
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
-from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
+from tests.fixtures.parsed_message import (
+    FakeContentBlock,
+    FakeParsedMessage,
+    make_truncation_error,
+)
 
 
 def _raw(claim: str, falsifier: str = "if X were true") -> RawFinding:
@@ -127,3 +131,16 @@ def test_red_team_raises_when_parsed_is_none():
         )
     assert exc_info.value.stop_reason == "end_turn"
     assert "framing='regulatory'" in exc_info.value.detail
+
+
+def test_red_team_raises_on_truncated_json():
+    """SDK-side pydantic.ValidationError must surface as RedTeamOutputError."""
+    client = MagicMock()
+    client.messages.parse.side_effect = make_truncation_error()
+    with pytest.raises(RedTeamOutputError) as exc_info:
+        red_team_candidate(
+            SATOSHI_FIXTURE.architecture, client, framings=["regulatory"]
+        )
+    assert exc_info.value.stop_reason == "parse_error"
+    assert "framing='regulatory'" in exc_info.value.detail
+    assert "validation failed" in exc_info.value.detail

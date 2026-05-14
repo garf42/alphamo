@@ -1,23 +1,35 @@
 """Errors raised when an LLM call returns malformed or empty parsed output.
 
-`client.messages.parse(...).parsed_output` is `Optional[ResponseFormatT]`.
-A None return means the model emitted no JSON-schema text block — typically
-a refusal, a tool-only turn, or a stop_sequence cut-off before the
-structured payload landed. Each LLM-calling component raises a subclass of
-LLMOutputError when this happens so the orchestrator can decide whether to
-continue (transient) or halt (persistent).
+`client.messages.parse(...)` can fail in two ways for a structured-output
+call:
+
+  1. ParsedMessage.parsed_output is None — the model emitted no JSON-schema
+     text block (refusal, tool-only turn, or stop_sequence cut-off before
+     the structured payload).
+  2. pydantic.ValidationError raised inside the SDK's parse_response — the
+     model emitted text that won't validate against the schema. Most
+     common cause: the response was truncated at max_tokens and the JSON
+     ends mid-string.
+
+Both failure modes are wrapped into a component-specific subclass of
+LLMOutputError so the orchestrator can decide whether to continue
+(transient — single failure) or halt (persistent — N consecutive).
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable
 
+import pydantic
+
 
 class LLMOutputError(Exception):
-    """Raised when client.messages.parse(...).parsed_output is None.
+    """Raised when an LLM-calling component fails to produce parsed output.
 
     Carries the response's stop_reason and content-block types so the
     failure is diagnosable without needing to log the full response body.
+    `stop_reason="parse_error"` is used when the SDK raised a
+    pydantic.ValidationError before the response object was available.
     """
 
     COMPONENT: str = "llm"
@@ -33,7 +45,7 @@ class LLMOutputError(Exception):
         self.content_block_types = list(content_block_types)
         self.detail = detail
         msg = (
-            f"{self.COMPONENT}: parsed_output is None "
+            f"{self.COMPONENT}: parsed output unavailable "
             f"(stop_reason={stop_reason!r}, "
             f"content_block_types={self.content_block_types})"
         )
@@ -55,6 +67,26 @@ class LLMOutputError(Exception):
             detail=detail,
         )
 
+    @classmethod
+    def from_validation_error(
+        cls,
+        exc: pydantic.ValidationError,
+        detail: str = "",
+    ) -> "LLMOutputError":
+        """Build the error from a pydantic.ValidationError raised inside the SDK.
+
+        We don't have a ParsedMessage to inspect — the SDK raised before
+        constructing one. stop_reason='parse_error' marks this case so the
+        orchestrator can distinguish truncation/schema failures from
+        explicit refusals if it ever cares to.
+        """
+        suffix = f"validation failed (likely truncation or schema mismatch): {str(exc)[:300]}"
+        return cls(
+            stop_reason="parse_error",
+            content_block_types=[],
+            detail=f"{detail}: {suffix}" if detail else suffix,
+        )
+
 
 class ProposerOutputError(LLMOutputError):
     COMPONENT = "proposer"
@@ -70,3 +102,39 @@ class RedTeamOutputError(LLMOutputError):
 
 class ResearchOutputError(LLMOutputError):
     COMPONENT = "research"
+
+
+class Stage1OutputError(LLMOutputError):
+    COMPONENT = "stage1_feasibility"
+
+
+class Stage2OutputError(LLMOutputError):
+    COMPONENT = "stage2_structured"
+
+
+class Stage3OutputError(LLMOutputError):
+    COMPONENT = "stage3_exemplars"
+
+
+def parse_or_raise(
+    client: Any,
+    error_cls: type[LLMOutputError],
+    *,
+    detail: str = "",
+    **parse_kwargs: Any,
+) -> Any:
+    """Call client.messages.parse(...) and roll any output-side failure into error_cls.
+
+    Catches both pydantic.ValidationError (truncation / schema mismatch
+    raised inside parse_response) and parsed_output=None (refusal /
+    tool-only turn). Returns the validated `parsed_output` instance on
+    success.
+    """
+    try:
+        result = client.messages.parse(**parse_kwargs)
+    except pydantic.ValidationError as exc:
+        raise error_cls.from_validation_error(exc, detail=detail) from exc
+    parsed = result.parsed_output
+    if parsed is None:
+        raise error_cls.from_response(result, detail=detail)
+    return parsed

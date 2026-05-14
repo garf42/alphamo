@@ -9,7 +9,11 @@ import pytest
 from alphamo.errors import ResearchOutputError
 from alphamo.meta.research import WEB_SEARCH_TOOL, Trigger, run_research
 from alphamo.schemas.findings import RawFinding, RawFindingsBatch, Severity
-from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
+from tests.fixtures.parsed_message import (
+    FakeContentBlock,
+    FakeParsedMessage,
+    make_truncation_error,
+)
 
 
 def _mock_client(batch: RawFindingsBatch) -> MagicMock:
@@ -64,3 +68,14 @@ def test_run_research_raises_when_parsed_is_none():
         run_research(Trigger.MILESTONE_CANDIDATE, client)
     assert exc_info.value.stop_reason == "tool_use"
     assert "trigger='milestone_candidate'" in exc_info.value.detail
+
+
+def test_run_research_raises_on_truncated_json():
+    """SDK-side pydantic.ValidationError must surface as ResearchOutputError."""
+    client = MagicMock()
+    client.messages.parse.side_effect = make_truncation_error()
+    with pytest.raises(ResearchOutputError) as exc_info:
+        run_research(Trigger.PROGRESS_STALL, client)
+    assert exc_info.value.stop_reason == "parse_error"
+    assert "trigger='progress_stall'" in exc_info.value.detail
+    assert "validation failed" in exc_info.value.detail

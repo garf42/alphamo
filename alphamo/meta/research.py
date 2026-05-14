@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from alphamo.errors import ResearchOutputError
-from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
+from alphamo.errors import ResearchOutputError, parse_or_raise
+from alphamo.evaluator._common import MAX_TOKENS_XLONG, OPUS_MODEL, cached_system
 from alphamo.prompts.research_prompts import (
     RESEARCH_SYSTEM,
     Trigger,
@@ -33,20 +33,18 @@ def run_research(
     model: str = OPUS_MODEL,
 ) -> list[MetaFinding]:
     """Run one research pass; returns MetaFindings tagged source='research'."""
-    result = client.messages.parse(
+    batch = parse_or_raise(
+        client,
+        ResearchOutputError,
+        detail=f"trigger={trigger!r}",
         model=model,
-        max_tokens=MAX_TOKENS_LONG,
+        max_tokens=MAX_TOKENS_XLONG,
         thinking={"type": "adaptive"},
         tools=[WEB_SEARCH_TOOL],
         system=cached_system(RESEARCH_SYSTEM),
         messages=[{"role": "user", "content": render_research_trigger(trigger)}],
         output_format=RawFindingsBatch,
     )
-    batch = result.parsed_output
-    if batch is None:
-        raise ResearchOutputError.from_response(
-            result, detail=f"trigger={trigger!r}"
-        )
     return [
         MetaFinding(source="research", framing=None, **raw.model_dump())
         for raw in batch.findings

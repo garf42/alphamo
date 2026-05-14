@@ -16,7 +16,11 @@ from alphamo.schemas.findings import (
     MetaFinding,
     Severity,
 )
-from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
+from tests.fixtures.parsed_message import (
+    FakeContentBlock,
+    FakeParsedMessage,
+    make_truncation_error,
+)
 
 
 def _finding(claim: str = "x") -> MetaFinding:
@@ -126,3 +130,15 @@ def test_classify_raises_curator_output_error_when_parsed_is_none(tmp_path):
     assert exc_info.value.stop_reason == "max_tokens"
     assert exc_info.value.content_block_types == ["text"]
     assert audit.read_all() == []  # no audit event when classify fails
+
+
+def test_classify_raises_curator_output_error_on_truncated_json(tmp_path):
+    """SDK-side pydantic.ValidationError must surface as CuratorOutputError."""
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    client = MagicMock()
+    client.messages.parse.side_effect = make_truncation_error()
+    with pytest.raises(CuratorOutputError) as exc_info:
+        Curator(client, audit).curate([_finding("x")], trigger="t")
+    assert exc_info.value.stop_reason == "parse_error"
+    assert "validation failed" in exc_info.value.detail
+    assert audit.read_all() == []

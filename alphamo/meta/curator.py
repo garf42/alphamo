@@ -16,8 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from alphamo.context.parent_goal import PARENT_GOAL
-from alphamo.errors import CuratorOutputError
-from alphamo.evaluator._common import MAX_TOKENS_MEDIUM, OPUS_MODEL, cached_system
+from alphamo.errors import CuratorOutputError, parse_or_raise
+from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas.findings import (
     Classification,
@@ -80,9 +80,11 @@ class Curator:
         self.model = model
 
     def classify(self, finding: MetaFinding) -> ClassificationVerdict:
-        result = self.client.messages.parse(
+        return parse_or_raise(
+            self.client,
+            CuratorOutputError,
             model=self.model,
-            max_tokens=MAX_TOKENS_MEDIUM,
+            max_tokens=MAX_TOKENS_LONG,
             thinking={"type": "adaptive"},
             system=cached_system(CURATOR_SYSTEM),
             messages=[
@@ -93,10 +95,6 @@ class Curator:
             ],
             output_format=ClassificationVerdict,
         )
-        parsed = result.parsed_output
-        if parsed is None:
-            raise CuratorOutputError.from_response(result)
-        return parsed
 
     def curate(
         self, findings: list[MetaFinding], trigger: str

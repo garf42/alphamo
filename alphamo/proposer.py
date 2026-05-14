@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from alphamo.errors import ProposerOutputError
-from alphamo.evaluator._common import MAX_TOKENS_MEDIUM, OPUS_MODEL, cached_system
+from alphamo.errors import ProposerOutputError, parse_or_raise
+from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.prompts.proposer_prompt import PROPOSER_SYSTEM, render_seeds
 from alphamo.schemas import Architecture
 
@@ -18,15 +18,13 @@ class Proposer:
         self.model = model
 
     def propose(self, seeds: list[Architecture]) -> Architecture:
-        result = self.client.messages.parse(
+        return parse_or_raise(
+            self.client,
+            ProposerOutputError,
             model=self.model,
-            max_tokens=MAX_TOKENS_MEDIUM,
+            max_tokens=MAX_TOKENS_LONG,
             thinking={"type": "adaptive"},
             system=cached_system(PROPOSER_SYSTEM),
             messages=[{"role": "user", "content": render_seeds(seeds)}],
             output_format=Architecture,
         )
-        parsed = result.parsed_output
-        if parsed is None:
-            raise ProposerOutputError.from_response(result)
-        return parsed
