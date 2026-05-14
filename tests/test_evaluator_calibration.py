@@ -13,7 +13,7 @@ from tests.fixtures.exemplars import (
     ALL_FIXTURES,
     EXEMPLARS,
     FOILS,
-    SATOSHI,
+    SATOSHI_FIXTURE,
 )
 
 
@@ -22,7 +22,7 @@ def _names(rows) -> list[str]:
 
 
 def test_insert_returns_id_and_positive_fitness(db: ProgramsDB) -> None:
-    new_id = db.insert(SATOSHI.architecture, SATOSHI.scores)
+    new_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores)
     assert isinstance(new_id, int) and new_id > 0
     row = db.get(new_id)
     assert row.fitness > 0

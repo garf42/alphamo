@@ -1,17 +1,22 @@
-"""Hand-curated exemplars used to calibrate the evaluator.
+"""Test fixtures: positive exemplars + foils with hand-picked scores.
 
-Three positive exemplars (Satoshi, Rowling, Levels) plus two foils that fail
-the middle-class entry constraint and should therefore be filtered to fitness
-0.0 by the aggregator (per the modal's "Filter, not penalty" rule).
+The Architecture instances themselves live in
+`alphamo.evaluator.exemplar_library` — they're imported from there so the
+test calibration data and the runtime exemplar library can't drift apart.
 
-Scores are picked to produce a deterministic ranking:
-  Satoshi  > Rowling  > Levels  >  (foils, all at 0.0)
+The foils (PE rollup, trust-fund SaaS) are test-only — they exist purely
+to verify the middle-class filter rejects wealth-required configurations.
+
+Scores attached to each fixture are hand-picked for the phase-01 DB-level
+test where the DB takes scores it's given. Phase-02 cascade tests compute
+their own scores via the LLM evaluator and ignore these.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from alphamo.evaluator.exemplar_library import LEVELS, ROWLING, SATOSHI
 from alphamo.schemas import Architecture, Scores
 
 
@@ -21,20 +26,8 @@ class Exemplar:
     scores: Scores
 
 
-SATOSHI = Exemplar(
-    architecture=Architecture(
-        name="Satoshi",
-        summary="Pseudonymous launch of a permissionless monetary protocol.",
-        value_chain="Miners and node operators secure and propagate the chain.",
-        capture_mechanism=(
-            "Pre-mined / early-mined coin allocation under a fixed-supply protocol "
-            "whose value accrues to early holders as the network grows."
-        ),
-        entry_resources=(
-            "Cryptography and distributed-systems skill; time outside a primary job; "
-            "commodity hardware; no institutional backing."
-        ),
-    ),
+SATOSHI_FIXTURE = Exemplar(
+    architecture=SATOSHI,
     scores=Scores(
         feasibility=0.95,
         structural=0.95,
@@ -43,23 +36,8 @@ SATOSHI = Exemplar(
     ),
 )
 
-ROWLING = Exemplar(
-    architecture=Architecture(
-        name="Rowling",
-        summary="Author retains downstream IP rights across a transmedia franchise.",
-        value_chain=(
-            "Publishers, film studios, merchandising licensees, and theme parks "
-            "perform the operational labor of distribution and production."
-        ),
-        capture_mechanism=(
-            "Copyright ownership over a singular creative IP, licensed across media "
-            "with royalty structures that scale with franchise revenue."
-        ),
-        entry_resources=(
-            "Writing skill and time; modest savings; no industry network at start "
-            "(per the famous slush-pile origin)."
-        ),
-    ),
+ROWLING_FIXTURE = Exemplar(
+    architecture=ROWLING,
     scores=Scores(
         feasibility=0.85,
         structural=0.90,
@@ -68,23 +46,8 @@ ROWLING = Exemplar(
     ),
 )
 
-LEVELS = Exemplar(
-    architecture=Architecture(
-        name="Levels",
-        summary="Solo-operator portfolio of bootstrapped SaaS and media products.",
-        value_chain=(
-            "Hosted infrastructure providers, payment processors, and the user "
-            "community supply operational scale; the operator writes the code."
-        ),
-        capture_mechanism=(
-            "Direct subscription revenue + audience-driven distribution; no "
-            "investors, no equity dilution, public build-in-public flywheel."
-        ),
-        entry_resources=(
-            "Programming skill; laptop; modest runway; personal credit; no "
-            "institutional backing."
-        ),
-    ),
+LEVELS_FIXTURE = Exemplar(
+    architecture=LEVELS,
     scores=Scores(
         feasibility=0.90,
         structural=0.80,
@@ -132,6 +95,6 @@ TRUST_FUND_SAAS_FOIL = Exemplar(
     ),
 )
 
-EXEMPLARS: list[Exemplar] = [SATOSHI, ROWLING, LEVELS]
+EXEMPLARS: list[Exemplar] = [SATOSHI_FIXTURE, ROWLING_FIXTURE, LEVELS_FIXTURE]
 FOILS: list[Exemplar] = [PE_ROLLUP_FOIL, TRUST_FUND_SAAS_FOIL]
 ALL_FIXTURES: list[Exemplar] = EXEMPLARS + FOILS
