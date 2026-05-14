@@ -1,11 +1,13 @@
-"""Structured per-stage evaluator output.
+"""Structured per-stage evaluator output and meta-layer findings.
 
-The evaluator stages emit these as structured-output payloads parsed by
-`client.messages.parse()`. The cascade composes them into the system-wide
-`Scores` shape stored on each candidate.
+Phase 02 added Stage{1,2,3}Finding for the evaluator cascade.
+Phase 05 adds RawFinding (LLM output) → MetaFinding (Python-side, tagged
+with source and framing) → ClassifiedFinding → CuratorDecision.
 """
 
 from __future__ import annotations
+
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -80,3 +82,106 @@ class Stage3Finding(BaseModel):
     reasoning: str = Field(
         description="Two to four sentences justifying the similarity score and exemplar choice.",
     )
+
+
+class Severity(str, Enum):
+    """Per-finding severity tag from the research/red-team agents."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class RawFinding(BaseModel):
+    """LLM-facing schema for a single research or red-team finding.
+
+    `source` and `framing` are NOT part of the LLM output — the Python
+    wrapper sets them when promoting a RawFinding to a MetaFinding.
+    """
+
+    claim: str = Field(description="The finding itself, one or two sentences.")
+    evidence: str = Field(
+        description=(
+            "Direct citation, URL, or concise reasoning supporting the claim."
+        ),
+    )
+    falsification_condition: str = Field(
+        description=(
+            "A concrete fact that, if true, would make this finding NOT a "
+            "problem. Required — empty strings will be dropped at validation."
+        ),
+    )
+    severity: Severity = Field(
+        description="low / medium / high. High = blocks the parent goal as stated."
+    )
+
+
+class RawFindingsBatch(BaseModel):
+    """LLM-facing schema for an entire research or red-team pass."""
+
+    findings: list[RawFinding] = Field(
+        description=(
+            "Zero or more findings. Empty list is a first-class output — emit "
+            "it when an honest pass surfaces nothing material."
+        ),
+    )
+
+
+class MetaFinding(BaseModel):
+    """Python-side finding: a RawFinding tagged with its source and framing."""
+
+    source: str = Field(description='"research" or "redteam".')
+    framing: str | None = Field(
+        default=None,
+        description="Red-team framing tag (regulatory, economic, …) or None.",
+    )
+    claim: str
+    evidence: str
+    falsification_condition: str
+    severity: Severity
+
+
+class Classification(str, Enum):
+    """Curator's verdict on a single finding."""
+
+    STRUCTURAL = "structural"
+    COSMETIC = "cosmetic"
+
+
+class ClassificationVerdict(BaseModel):
+    """LLM output for one classification decision."""
+
+    classification: Classification = Field(
+        description=(
+            "STRUCTURAL = warrants pausing the build / updating context. "
+            "COSMETIC = note and continue. Default cosmetic unless clearly structural."
+        ),
+    )
+    rationale: str = Field(
+        description="One or two sentences justifying the classification."
+    )
+
+
+class ClassifiedFinding(BaseModel):
+    """A finding paired with the curator's classification."""
+
+    finding: MetaFinding
+    classification: Classification
+    rationale: str
+
+
+class CuratorAction(str, Enum):
+    """The action returned by Curator.curate()."""
+
+    CONTINUE = "continue"
+    RECALIBRATE_VERIFIER = "recalibrate_verifier"
+    REFRAME_PARENT_GOAL = "reframe_parent_goal"
+    PAUSE_FOR_HUMAN = "pause_for_human"
+
+
+class CuratorDecision(BaseModel):
+    """Final output of the curator for one batch of findings."""
+
+    action: CuratorAction
+    classified: list[ClassifiedFinding]
+    rationale: str
