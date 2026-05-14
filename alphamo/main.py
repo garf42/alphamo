@@ -1,7 +1,7 @@
 """AlphaMo CLI entry point.
 
-Phase 01 surface: init / insert / query / show. Enough to put rows into the
-Programs DB by hand and pull the top-k back out, no LLM in the loop yet.
+Phase 01 surface: init / insert / query / show.
+Phase 03 surface: generate — draw seeds, propose, evaluate, insert.
 """
 
 from __future__ import annotations
@@ -136,6 +136,45 @@ def show(candidate_id: int, db_path: Path) -> None:
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
     click.echo(json.dumps(payload, indent=2))
+
+
+@cli.command()
+@click.option("--island", "island_id", type=int, default=0, show_default=True)
+@click.option("--k-seeds", "k_seeds", type=int, default=2, show_default=True)
+@click.option("--generation", type=int, default=1, show_default=True)
+@_DB_OPTION
+def generate(island_id: int, k_seeds: int, generation: int, db_path: Path) -> None:
+    """Draw seeds from an island, propose a new candidate, evaluate, and insert."""
+    import anthropic
+
+    from alphamo.evaluator import EvaluatorCascade
+    from alphamo.proposer import Proposer
+    from alphamo.sampler import Sampler
+
+    db = ProgramsDB(_db_url(db_path))
+    client = anthropic.Anthropic()
+
+    seeds = Sampler(db).draw(island_id=island_id, k=k_seeds)
+    if not seeds:
+        raise click.ClickException(
+            f"island {island_id} is empty — insert some candidates first"
+        )
+
+    click.echo(f"seeds: {[s.name for s in seeds]}")
+    architecture = Proposer(client).propose(seeds)
+    click.echo(f"proposed: {architecture.name}")
+
+    result = EvaluatorCascade(client).evaluate(architecture)
+    new_id = db.insert(
+        architecture,
+        result.scores,
+        island_id=island_id,
+        generation=generation,
+    )
+    row = db.get(new_id)
+    click.echo(f"inserted id={new_id} fitness={row.fitness:.3f}")
+    if result.early_exit:
+        click.echo(f"early exit: {result.early_exit}")
 
 
 if __name__ == "__main__":
