@@ -36,9 +36,12 @@ from alphamo.context.hyperparams import Hyperparameters
 from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
+from alphamo.database.operations import aggregate_fitness
 from alphamo.errors import LLMOutputError
 from alphamo.evaluator import EvaluatorCascade
 from alphamo.evaluator.exemplar_library import STARTERS
+
+SEED_BASELINE_KEY = "seed_baseline_fitness"
 from alphamo.islands import IslandsManager, ResetEvent
 from alphamo.meta.audit_log import AuditLog
 from alphamo.meta.curator import Curator
@@ -104,6 +107,15 @@ class Orchestrator:
         self.hp = hp or Hyperparameters()
         self.rng = rng or random.Random()
 
+        # Load any derived run-start state (e.g. seed_baseline_fitness)
+        # persisted into the run's hyperparameters JSON. Populated by
+        # seed_if_empty() on a fresh run; survived from the original session
+        # on a resumed run. None until seeding completes.
+        run_row = db.get_run(run_id)
+        self.seed_baseline_fitness: float | None = run_row.hyperparameters.get(
+            SEED_BASELINE_KEY
+        )
+
         self.islands = IslandsManager(
             db,
             run_id=run_id,
@@ -118,6 +130,9 @@ class Orchestrator:
             pool_size=self.hp.pool_size,
             rng=self.rng,
             run_id=run_id,
+            cluster_temperature_t0=self.hp.cluster_temperature_t0,
+            cluster_temperature_period=self.hp.cluster_temperature_period,
+            cluster_signature_resolution=self.hp.cluster_signature_resolution,
         )
         self.proposer = Proposer(client)
         self.cascade = EvaluatorCascade(
@@ -176,10 +191,19 @@ class Orchestrator:
         A fresh run starts with zero candidates for its run_id and gets
         seeded. A resumed run sees its existing candidates and skips. Other
         runs in the same DB are invisible.
+
+        On a fresh seed, computes seed_baseline_fitness = max aggregate
+        fitness across STARTERS, caches it on self, and persists it into
+        the run's hyperparameters JSON for milestone gating and auditability.
         """
         if self.db.count_candidates_in_run(self.run_id) > 0:
             return False
         self.islands.seed_all_islands(STARTERS)
+        starter_fitnesses = [aggregate_fitness(scores) for _, scores in STARTERS]
+        self.seed_baseline_fitness = max(starter_fitnesses)
+        self.db.patch_run_hyperparameters(
+            self.run_id, {SEED_BASELINE_KEY: self.seed_baseline_fitness}
+        )
         return True
 
     def detect_stall(self) -> bool:
@@ -195,7 +219,23 @@ class Orchestrator:
         architecture: Architecture,
         fitness: float,
     ) -> tuple[str, CuratorDecision] | None:
-        if fitness < self.hp.milestone_fitness:
+        """Fire the red-team agent only when the candidate is BOTH:
+
+          (1) past the early-generation warmup (`milestone_min_generation`), and
+          (2) decisively above the seed baseline (`seed_baseline_fitness +
+              milestone_fitness_delta`).
+
+        Phase 2 replaced the absolute `milestone_fitness` floor — that
+        version fired on candidates BELOW the seed exemplars (Satoshi=0.967,
+        Rowling=0.900) because 0.7 sits well under them.
+        """
+        if generation < self.hp.milestone_min_generation:
+            return None
+        if self.seed_baseline_fitness is None:
+            # No baseline persisted yet (only reachable if seed_if_empty
+            # wasn't called before step()). Be conservative: don't fire.
+            return None
+        if fitness <= self.seed_baseline_fitness + self.hp.milestone_fitness_delta:
             return None
         findings = red_team_candidate(architecture, self.client)
         decision = self.curator.curate(findings, trigger=Trigger.MILESTONE_CANDIDATE)

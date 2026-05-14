@@ -93,11 +93,15 @@ def _stub_client(
 
 
 def _hp(**kwargs) -> Hyperparameters:
+    # Phase 2: milestone is gated by (a) generation >= milestone_min_generation
+    # and (b) fitness > seed_baseline + milestone_fitness_delta. We default the
+    # min-generation to 10000 here to disable the trigger for most tests; the
+    # milestone-specific tests opt in explicitly.
     defaults = dict(
         num_islands=2,
         reset_every_generations=1000,
         research_every_generations=1000,
-        milestone_fitness=1.0,  # stub fitness is ~0.88, so this disables red-team
+        milestone_min_generation=10_000,
     )
     defaults.update(kwargs)
     return Hyperparameters(**defaults)
@@ -144,41 +148,102 @@ def test_step_skips_empty_island(db, monkeypatch, tmp_path):
     assert event.candidate_id is None
 
 
-def test_step_does_not_invoke_red_team_below_milestone(db, monkeypatch, tmp_path):
+def test_step_does_not_invoke_red_team_below_baseline_delta(db, monkeypatch, tmp_path):
+    """A candidate not exceeding the seed baseline by `delta` must not fire red-team."""
     calls = []
     monkeypatch.setattr(
         orch_mod,
         "red_team_candidate",
         lambda *a, **k: calls.append(1) or [],
     )
+    # Seed baseline (max of STARTERS) is ~0.967 (Satoshi). Stub produces
+    # fitness ≈ 0.88, well below baseline + delta. Should NOT fire even
+    # past the min-generation gate.
     _stub_cascade(monkeypatch, feasibility=0.9, structural=0.85, similarity=0.9)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db, _stub_client(), audit, hp=_hp(milestone_fitness=0.99)
+        db, _stub_client(), audit, hp=_hp(milestone_min_generation=1)
     )
     orch.seed_if_empty()
-    orch.step(generation=1)
+    orch.step(generation=5)
     assert calls == []
 
 
-def test_step_invokes_red_team_at_or_above_milestone(db, monkeypatch, tmp_path):
+def test_step_does_not_invoke_red_team_before_min_generation(db, monkeypatch, tmp_path):
+    """Even a high-fitness candidate must not fire red-team during the warmup."""
     calls = []
     monkeypatch.setattr(
         orch_mod,
         "red_team_candidate",
         lambda *a, **k: calls.append(1) or [],
     )
-    _stub_cascade(monkeypatch, feasibility=0.9, structural=0.9, similarity=0.9)
+    # Stub fitness ~0.99 — well above seed baseline — but generation=5 < 25.
+    _stub_cascade(monkeypatch, feasibility=0.99, structural=0.99, similarity=0.99)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db, _stub_client(), audit, hp=_hp(milestone_fitness=0.5)
+        db, _stub_client(), audit, hp=_hp(milestone_min_generation=25)
     )
     orch.seed_if_empty()
-    event = orch.step(generation=1)
+    orch.step(generation=5)
+    assert calls == []
+
+
+def test_step_invokes_red_team_when_both_conditions_hold(db, monkeypatch, tmp_path):
+    """Past min-generation AND above baseline+delta → red-team fires."""
+    calls = []
+    monkeypatch.setattr(
+        orch_mod,
+        "red_team_candidate",
+        lambda *a, **k: calls.append(1) or [],
+    )
+    # Stub fitness ~0.99 > 0.967 (seed baseline) + 0.02 delta; generation 30 >= 25.
+    _stub_cascade(monkeypatch, feasibility=0.99, structural=0.99, similarity=0.99)
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(
+        db,
+        _stub_client(),
+        audit,
+        hp=_hp(milestone_min_generation=25, milestone_fitness_delta=0.02),
+    )
+    orch.seed_if_empty()
+    event = orch.step(generation=30)
     assert calls == [1]
     assert event.meta_trigger == "milestone_candidate"
+
+
+def test_seed_baseline_is_persisted_in_run_hyperparameters(db, monkeypatch, tmp_path):
+    """The computed seed_baseline_fitness must survive into the run row's HP JSON."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
+    orch.seed_if_empty()
+    run = db.get_run(orch.run_id)
+    assert "seed_baseline_fitness" in run.hyperparameters
+    # Satoshi's hand-picked aggregate (0.95 + 0.95 + 1.00) / 3.0 ≈ 0.967
+    assert run.hyperparameters["seed_baseline_fitness"] == pytest.approx(0.967, abs=0.005)
+
+
+def test_resumed_run_inherits_seed_baseline(db, monkeypatch, tmp_path):
+    """Resume of a previously-seeded run must read the baseline from HP JSON, not recompute."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch_a = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
+    orch_a.seed_if_empty()
+    baseline = orch_a.seed_baseline_fitness
+    assert baseline is not None
+
+    orch_resumed = Orchestrator.resume_run(db, _stub_client(), audit, orch_a.run_id)
+    assert orch_resumed.seed_baseline_fitness == baseline
+    # seed_if_empty must NOT re-seed and must NOT recompute.
+    assert orch_resumed.seed_if_empty() is False
+    assert orch_resumed.seed_baseline_fitness == baseline
 
 
 def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
@@ -193,7 +258,7 @@ def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
         db,
         _stub_client(),
         audit,
-        hp=_hp(milestone_fitness=1.0, research_every_generations=5),
+        hp=_hp(research_every_generations=5),
     )
     orch.seed_if_empty()
     event = orch.step(generation=5)
@@ -210,7 +275,9 @@ def test_run_returns_after_max_generations(db, monkeypatch, tmp_path):
 
 
 def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
-    _stub_cascade(monkeypatch, feasibility=0.9, structural=0.9, similarity=0.9)
+    # Make the proposer's output score above the seed baseline so the
+    # milestone gate fires past gen 1.
+    _stub_cascade(monkeypatch, feasibility=0.99, structural=0.99, similarity=0.99)
     monkeypatch.setattr(
         orch_mod,
         "red_team_candidate",
@@ -228,7 +295,12 @@ def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _stub_client(classification=Classification.STRUCTURAL)
-    orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(milestone_fitness=0.5))
+    orch = Orchestrator.for_new_run(
+        db,
+        client,
+        audit,
+        hp=_hp(milestone_min_generation=1, milestone_fitness_delta=0.01),
+    )
     result = orch.run(max_generations=10)
     assert result.paused is True
     assert result.stopped_reason == "curator_pause"

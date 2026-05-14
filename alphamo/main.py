@@ -286,7 +286,7 @@ def generate(
             f"island {island_id} in run {resolved_run_id} is empty — insert candidates first"
         )
 
-    click.echo(f"seeds: {[s.name for s in seeds]}")
+    click.echo(f"seeds: {[s.architecture.name for s in seeds]}")
     architecture = Proposer(client).propose(seeds)
     click.echo(f"proposed: {architecture.name}")
 
@@ -338,7 +338,22 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
 @cli.command()
 @click.option("--generations", type=int, default=50, show_default=True)
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
-@click.option("--milestone", type=float, default=0.7, show_default=True)
+@click.option(
+    "--milestone-min-generation",
+    "milestone_min_generation",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Red-team trigger requires generation >= this (warmup gate).",
+)
+@click.option(
+    "--milestone-delta",
+    "milestone_fitness_delta",
+    type=float,
+    default=0.02,
+    show_default=True,
+    help="Red-team trigger requires fitness > seed_baseline_fitness + this.",
+)
 @click.option("--research-every", "research_every", type=int, default=50, show_default=True)
 @click.option(
     "--resume",
@@ -352,7 +367,8 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
 def run(
     generations: int,
     num_islands: int,
-    milestone: float,
+    milestone_min_generation: int,
+    milestone_fitness_delta: float,
     research_every: int,
     resume_id: str | None,
     db_path: Path,
@@ -378,7 +394,8 @@ def run(
     else:
         hp = Hyperparameters(
             num_islands=num_islands,
-            milestone_fitness=milestone,
+            milestone_min_generation=milestone_min_generation,
+            milestone_fitness_delta=milestone_fitness_delta,
             research_every_generations=research_every,
         )
         orchestrator = Orchestrator.for_new_run(db, client, audit, hp=hp)

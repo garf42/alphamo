@@ -187,6 +187,24 @@ class ProgramsDB:
             if result.rowcount == 0:
                 raise KeyError(f"no run with run_id={run_id!r}")
 
+    def patch_run_hyperparameters(
+        self, run_id: str, patch: dict[str, Any]
+    ) -> None:
+        """Merge `patch` into the run's hyperparameters JSON.
+
+        Used by the orchestrator to persist derived run-start constants
+        (e.g. `seed_baseline_fitness`) alongside the user-set Hyperparameters
+        config. The Pydantic Hyperparameters model ignores unknown keys, so
+        these extras survive a resume_run() roundtrip cleanly.
+        """
+        with self._session() as session:
+            row = session.get(Run, run_id)
+            if row is None:
+                raise KeyError(f"no run with run_id={run_id!r}")
+            merged = dict(row.hyperparameters)
+            merged.update(patch)
+            row.hyperparameters = merged
+
     # ------------------------------------------------------------------ inserts
 
     def insert(

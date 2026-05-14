@@ -89,7 +89,7 @@ def _hp(**overrides) -> Hyperparameters:
         num_islands=2,
         reset_every_generations=1000,
         research_every_generations=1000,
-        milestone_fitness=1.0,
+        milestone_min_generation=10_000,  # disables milestone trigger by default
     )
     base.update(overrides)
     return Hyperparameters(**base)
@@ -205,7 +205,7 @@ def test_read_paths_filter_by_run_id(db):
 def test_orchestrator_for_new_run_creates_run_row(db, tmp_path, monkeypatch):
     _stub_cascade(monkeypatch)
     audit = AuditLog(tmp_path / "audit.jsonl")
-    hp = Hyperparameters(num_islands=2, milestone_fitness=1.0)
+    hp = Hyperparameters(num_islands=2, milestone_min_generation=10_000)
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=hp)
     run = db.get_run(orch.run_id)
     assert run.hyperparameters["num_islands"] == 2
