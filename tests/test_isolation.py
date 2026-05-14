@@ -27,18 +27,21 @@ from alphamo.schemas.findings import (
     Severity,
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
+from tests.fixtures.parsed_message import FakeParsedMessage
 
 DISTINCTIVE_LEAK_MARKER = "LEAK_CANARY_a47b3c"
 
 
 def _proposer_with_fake_output() -> tuple[Proposer, MagicMock]:
     client = MagicMock()
-    client.messages.parse.return_value.parsed = Architecture(
-        name="fake",
-        summary="fake",
-        value_chain="fake",
-        capture_mechanism="fake",
-        entry_resources="fake",
+    client.messages.parse.return_value = FakeParsedMessage(
+        Architecture(
+            name="fake",
+            summary="fake",
+            value_chain="fake",
+            capture_mechanism="fake",
+            entry_resources="fake",
+        )
     )
     return Proposer(client), client
 
@@ -89,9 +92,11 @@ def test_curator_decision_does_not_leak_into_proposer(tmp_path):
         severity=Severity.LOW,
     )
     classify_client = MagicMock()
-    classify_client.messages.parse.return_value.parsed = ClassificationVerdict(
-        classification=Classification.STRUCTURAL,
-        rationale=f"{DISTINCTIVE_LEAK_MARKER}: must pause",
+    classify_client.messages.parse.return_value = FakeParsedMessage(
+        ClassificationVerdict(
+            classification=Classification.STRUCTURAL,
+            rationale=f"{DISTINCTIVE_LEAK_MARKER}: must pause",
+        )
     )
     decision = Curator(classify_client, audit).curate([finding], trigger="t")
     assert decision.action == CuratorAction.PAUSE_FOR_HUMAN

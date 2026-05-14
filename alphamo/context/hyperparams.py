@@ -47,3 +47,13 @@ class Hyperparameters(BaseModel):
         ge=0.0,
         description="Min fitness improvement over the stall window to NOT be stalled.",
     )
+
+    max_consecutive_failures: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Halt the run after this many consecutive iterations without a "
+            "scored candidate (LLM output parsing failures or empty islands). "
+            "Guards against burning the API budget on broken outputs."
+        ),
+    )

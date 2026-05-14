@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from alphamo.errors import ResearchOutputError
 from alphamo.meta.research import WEB_SEARCH_TOOL, Trigger, run_research
 from alphamo.schemas.findings import RawFinding, RawFindingsBatch, Severity
+from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
 
 
 def _mock_client(batch: RawFindingsBatch) -> MagicMock:
     client = MagicMock()
-    client.messages.parse.return_value.parsed = batch
+    client.messages.parse.return_value = FakeParsedMessage(batch)
     return client
 
 
@@ -47,3 +51,16 @@ def test_run_research_includes_trigger_in_user_message():
 def test_run_research_empty_batch_returns_empty_list():
     client = _mock_client(RawFindingsBatch(findings=[]))
     assert run_research(Trigger.PROGRESS_STALL, client) == []
+
+
+def test_run_research_raises_when_parsed_is_none():
+    client = MagicMock()
+    client.messages.parse.return_value = FakeParsedMessage(
+        parsed_output=None,
+        stop_reason="tool_use",
+        content=[FakeContentBlock("tool_use")],
+    )
+    with pytest.raises(ResearchOutputError) as exc_info:
+        run_research(Trigger.MILESTONE_CANDIDATE, client)
+    assert exc_info.value.stop_reason == "tool_use"
+    assert "trigger='milestone_candidate'" in exc_info.value.detail

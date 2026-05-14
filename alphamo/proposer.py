@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo.errors import ProposerOutputError
 from alphamo.evaluator._common import MAX_TOKENS_MEDIUM, OPUS_MODEL, cached_system
 from alphamo.prompts.proposer_prompt import PROPOSER_SYSTEM, render_seeds
 from alphamo.schemas import Architecture
@@ -25,4 +26,7 @@ class Proposer:
             messages=[{"role": "user", "content": render_seeds(seeds)}],
             output_format=Architecture,
         )
-        return result.parsed
+        parsed = result.parsed_output
+        if parsed is None:
+            raise ProposerOutputError.from_response(result)
+        return parsed

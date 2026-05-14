@@ -143,10 +143,14 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
         falsification_condition="if regulators sign off",
         severity=Severity.MEDIUM,
     )
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
     classify_client = MagicMock()
-    classify_client.messages.parse.return_value.parsed = ClassificationVerdict(
-        classification=Classification.COSMETIC,
-        rationale=f"{LEAK_MARKER}: not blocking",
+    classify_client.messages.parse.return_value = FakeParsedMessage(
+        ClassificationVerdict(
+            classification=Classification.COSMETIC,
+            rationale=f"{LEAK_MARKER}: not blocking",
+        )
     )
     Curator(classify_client, audit).curate(
         [finding], trigger="milestone_candidate"

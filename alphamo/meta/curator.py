@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from alphamo.context.parent_goal import PARENT_GOAL
+from alphamo.errors import CuratorOutputError
 from alphamo.evaluator._common import MAX_TOKENS_MEDIUM, OPUS_MODEL, cached_system
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas.findings import (
@@ -92,7 +93,10 @@ class Curator:
             ],
             output_format=ClassificationVerdict,
         )
-        return result.parsed
+        parsed = result.parsed_output
+        if parsed is None:
+            raise CuratorOutputError.from_response(result)
+        return parsed
 
     def curate(
         self, findings: list[MetaFinding], trigger: str

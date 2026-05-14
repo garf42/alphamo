@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from alphamo.errors import CuratorOutputError
 from alphamo.meta.audit_log import AuditLog
 from alphamo.meta.curator import Curator
 from alphamo.schemas.findings import (
@@ -13,6 +16,7 @@ from alphamo.schemas.findings import (
     MetaFinding,
     Severity,
 )
+from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
 
 
 def _finding(claim: str = "x") -> MetaFinding:
@@ -31,12 +35,7 @@ def _client_with_classifications(
 ) -> MagicMock:
     """Mock client that returns verdicts in order on successive parse() calls."""
     client = MagicMock()
-    responses = []
-    for v in verdicts:
-        r = MagicMock()
-        r.parsed = v
-        responses.append(r)
-    client.messages.parse.side_effect = responses
+    client.messages.parse.side_effect = [FakeParsedMessage(v) for v in verdicts]
     return client
 
 
@@ -112,3 +111,18 @@ def test_classify_passes_finding_text_to_llm(tmp_path):
     )
     kwargs = client.messages.parse.call_args[1]
     assert "distinctive_claim_string" in kwargs["messages"][0]["content"]
+
+
+def test_classify_raises_curator_output_error_when_parsed_is_none(tmp_path):
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    client = MagicMock()
+    client.messages.parse.return_value = FakeParsedMessage(
+        parsed_output=None,
+        stop_reason="max_tokens",
+        content=[FakeContentBlock("text")],
+    )
+    with pytest.raises(CuratorOutputError) as exc_info:
+        Curator(client, audit).curate([_finding("x")], trigger="milestone_candidate")
+    assert exc_info.value.stop_reason == "max_tokens"
+    assert exc_info.value.content_block_types == ["text"]
+    assert audit.read_all() == []  # no audit event when classify fails

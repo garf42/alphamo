@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from alphamo.errors import RedTeamOutputError
 from alphamo.meta.redteam import _enforce_falsification, red_team_candidate
 from alphamo.prompts.redteam_prompts import DEFAULT_FRAMINGS, FRAMINGS
 from alphamo.schemas.findings import (
@@ -15,6 +16,7 @@ from alphamo.schemas.findings import (
     Severity,
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
+from tests.fixtures.parsed_message import FakeContentBlock, FakeParsedMessage
 
 
 def _raw(claim: str, falsifier: str = "if X were true") -> RawFinding:
@@ -32,13 +34,10 @@ def _client_with_batches(per_framing: dict[str, RawFindingsBatch]) -> MagicMock:
 
     def parse_side_effect(**kwargs):
         system_text = kwargs["system"][0]["text"]
-        response = MagicMock()
         for framing, batch in per_framing.items():
             if FRAMINGS[framing] in system_text:
-                response.parsed = batch
-                return response
-        response.parsed = RawFindingsBatch(findings=[])
-        return response
+                return FakeParsedMessage(batch)
+        return FakeParsedMessage(RawFindingsBatch(findings=[]))
 
     client.messages.parse.side_effect = parse_side_effect
     return client
@@ -113,3 +112,18 @@ def test_red_team_invalid_framing_raises():
         red_team_candidate(
             SATOSHI_FIXTURE.architecture, client, framings=["nonexistent"]
         )
+
+
+def test_red_team_raises_when_parsed_is_none():
+    client = MagicMock()
+    client.messages.parse.return_value = FakeParsedMessage(
+        parsed_output=None,
+        stop_reason="end_turn",
+        content=[FakeContentBlock("text")],
+    )
+    with pytest.raises(RedTeamOutputError) as exc_info:
+        red_team_candidate(
+            SATOSHI_FIXTURE.architecture, client, framings=["regulatory"]
+        )
+    assert exc_info.value.stop_reason == "end_turn"
+    assert "framing='regulatory'" in exc_info.value.detail

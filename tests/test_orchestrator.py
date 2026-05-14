@@ -64,26 +64,29 @@ def _stub_client(
     classification: Classification = Classification.COSMETIC,
 ) -> MagicMock:
     """Mock client routing parse() calls to Architecture or ClassificationVerdict."""
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
     client = MagicMock()
 
     def parse_side_effect(**kwargs):
-        response = MagicMock()
         output_format = kwargs.get("output_format")
         if output_format is Architecture:
-            response.parsed = Architecture(
-                name=architecture_name,
-                summary="s",
-                value_chain="vc",
-                capture_mechanism="cm",
-                entry_resources="er",
+            return FakeParsedMessage(
+                Architecture(
+                    name=architecture_name,
+                    summary="s",
+                    value_chain="vc",
+                    capture_mechanism="cm",
+                    entry_resources="er",
+                )
             )
-        elif output_format is ClassificationVerdict:
-            response.parsed = ClassificationVerdict(
-                classification=classification, rationale="stub"
+        if output_format is ClassificationVerdict:
+            return FakeParsedMessage(
+                ClassificationVerdict(
+                    classification=classification, rationale="stub"
+                )
             )
-        else:
-            response.parsed = MagicMock()
-        return response
+        return FakeParsedMessage(MagicMock())
 
     client.messages.parse.side_effect = parse_side_effect
     return client
@@ -264,3 +267,121 @@ def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path
         db, monkeypatch, tmp_path, hp=_hp(stall_window=5, stall_epsilon=0.001)
     )
     assert orch.detect_stall() is True
+
+
+def _client_that_raises_proposer_error_then_succeeds(failures: int) -> MagicMock:
+    """Mock client where the first `failures` proposer calls return None and the rest succeed."""
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
+    client = MagicMock()
+    call_state = {"proposer_calls": 0}
+
+    def parse_side_effect(**kwargs):
+        output_format = kwargs.get("output_format")
+        if output_format is Architecture:
+            call_state["proposer_calls"] += 1
+            if call_state["proposer_calls"] <= failures:
+                return FakeParsedMessage(
+                    parsed_output=None,
+                    stop_reason="refusal",
+                )
+            return FakeParsedMessage(
+                Architecture(
+                    name=f"variant-{call_state['proposer_calls']}",
+                    summary="s",
+                    value_chain="vc",
+                    capture_mechanism="cm",
+                    entry_resources="er",
+                )
+            )
+        if output_format is ClassificationVerdict:
+            return FakeParsedMessage(
+                ClassificationVerdict(
+                    classification=Classification.COSMETIC, rationale="stub"
+                )
+            )
+        return FakeParsedMessage(MagicMock())
+
+    client.messages.parse.side_effect = parse_side_effect
+    return client
+
+
+def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
+    """One failed eval → loop continues; next iteration scores a candidate."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    client = _client_that_raises_proposer_error_then_succeeds(failures=1)
+    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=5))
+
+    result = orch.run(max_generations=5)
+
+    assert result.stopped_reason == "max_generations"
+    assert result.consecutive_failures_at_stop == 0  # last 4 succeeded
+    failures = [e for e in result.events if e.failure_reason is not None and e.candidate_id is None]
+    inserts = [e for e in result.events if e.candidate_id is not None]
+    assert len(failures) == 1
+    assert len(inserts) == 4
+    assert "proposer" in failures[0].failure_reason
+
+
+def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
+    """N consecutive eval-side failures (no successful insert between them) halt the run."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    client = _client_that_raises_proposer_error_then_succeeds(failures=100)
+    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=3))
+
+    result = orch.run(max_generations=20)
+
+    assert result.stopped_reason == "consecutive_failures"
+    assert result.consecutive_failures_at_stop == 3
+    assert len(result.events) == 3
+    assert all(e.candidate_id is None for e in result.events)
+    assert all(e.failure_reason is not None for e in result.events)
+
+
+def test_consecutive_counter_resets_on_successful_insert(db, monkeypatch, tmp_path):
+    """A success between failures should reset the counter so the run doesn't halt."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
+    client = MagicMock()
+    pattern = iter([
+        False, False,  # 2 failures
+        True,          # success → reset counter
+        False, False,  # 2 more failures (counter at 2, below threshold of 3)
+        True, True, True,  # more successes
+    ])
+
+    def parse_side_effect(**kwargs):
+        output_format = kwargs.get("output_format")
+        if output_format is Architecture:
+            ok = next(pattern, True)
+            if not ok:
+                return FakeParsedMessage(parsed_output=None, stop_reason="refusal")
+            return FakeParsedMessage(
+                Architecture(name="ok", summary="s", value_chain="vc",
+                             capture_mechanism="cm", entry_resources="er")
+            )
+        return FakeParsedMessage(
+            ClassificationVerdict(classification=Classification.COSMETIC, rationale="x")
+        )
+
+    client.messages.parse.side_effect = parse_side_effect
+    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=3))
+
+    result = orch.run(max_generations=8)
+
+    assert result.stopped_reason == "max_generations"
+    inserts = [e for e in result.events if e.candidate_id is not None]
+    failures = [e for e in result.events if e.failure_reason is not None and e.candidate_id is None]
+    assert len(failures) == 4
+    assert len(inserts) >= 1

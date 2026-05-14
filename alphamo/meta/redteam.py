@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo.errors import RedTeamOutputError
 from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.prompts.redteam_prompts import (
     DEFAULT_FRAMINGS,
@@ -46,7 +47,11 @@ def red_team_candidate(
             messages=[{"role": "user", "content": render_candidate(architecture)}],
             output_format=RawFindingsBatch,
         )
-        batch: RawFindingsBatch = result.parsed
+        batch = result.parsed_output
+        if batch is None:
+            raise RedTeamOutputError.from_response(
+                result, detail=f"framing={framing!r}"
+            )
         for raw in batch.findings:
             all_findings.append(
                 MetaFinding(source="redteam", framing=framing, **raw.model_dump())

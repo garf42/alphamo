@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo.errors import ResearchOutputError
 from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.prompts.research_prompts import (
     RESEARCH_SYSTEM,
@@ -41,7 +42,11 @@ def run_research(
         messages=[{"role": "user", "content": render_research_trigger(trigger)}],
         output_format=RawFindingsBatch,
     )
-    batch: RawFindingsBatch = result.parsed
+    batch = result.parsed_output
+    if batch is None:
+        raise ResearchOutputError.from_response(
+            result, detail=f"trigger={trigger!r}"
+        )
     return [
         MetaFinding(source="research", framing=None, **raw.model_dump())
         for raw in batch.findings
