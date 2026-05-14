@@ -5,14 +5,17 @@ Subcommand surface:
   top                       — per-island top-k inspection (was 'query' before
                               run boundaries; renamed because 'query' now
                               lists runs)
-  query / runs              — list all runs in the DB
+  query                     — list all runs, or dump one run's JSON
   insert / generate         — manual or LLM-driven single-candidate insertion
-  seed / evolve / islands   — populate islands and run the inner loop
+                              into an existing run
+  islands                   — per-island fitness / diversity for one run
   run / harvest             — production runs and structured handoff
 
-Every command that creates candidates does so against a specific run_id.
-Use --resume <run_id> on `run` to continue an existing run, or --run <run_id>
-on `harvest` to pick which run to package.
+Only `alphamo run` creates new runs. Seeding (gen-0 from the canonical
+exemplar library) is the first action of every run — there is no separate
+`seed` command. Other subcommands operate against an existing run, either
+the one passed via --run or the latest run in the DB; they error out when
+the DB has no runs yet.
 """
 
 from __future__ import annotations
@@ -50,11 +53,13 @@ def _db_url(db_path: Path) -> str:
     return f"sqlite:///{db_path}"
 
 
-def _ensure_run_id(db: ProgramsDB, run_id: str | None) -> str:
-    """Resolve the run_id for commands that need one but don't own the run.
+def _resolve_run_id(db: ProgramsDB, run_id: str | None) -> str:
+    """Resolve the run_id for subcommands that operate against an existing run.
 
-    If `run_id` is None, fall back to the latest run in the DB; if there is
-    none, create a "manual" run on the fly so the command can still insert.
+    Validates `run_id` if given; otherwise falls back to the most recent run.
+    Errors if neither is available — the CLI never auto-creates runs except
+    via `alphamo run`. This keeps every Run row paired with a known starting
+    point and a (eventually) `stopped_reason` written by the orchestrator.
     """
     if run_id is not None:
         try:
@@ -63,14 +68,11 @@ def _ensure_run_id(db: ProgramsDB, run_id: str | None) -> str:
             raise click.ClickException(str(exc)) from exc
         return run_id
     latest = db.latest_run_id()
-    if latest is not None:
-        return latest
-    return db.create_run(
-        hyperparameters={},
-        parent_goal_version="manual",
-        verifier_version="manual",
-        notes="auto-created by CLI insert/generate (no orchestrator run open)",
-    )
+    if latest is None:
+        raise click.ClickException(
+            "no runs in this DB — start one with `alphamo run`, or pass --run <run_id>"
+        )
+    return latest
 
 
 @click.group()
@@ -108,8 +110,8 @@ def init(db_path: Path) -> None:
     "run_id",
     type=str,
     default=None,
-    help="Run id to associate the row with. Defaults to latest run, "
-    "or auto-creates a manual run if the DB has none.",
+    help="Run id to associate the row with. Defaults to latest run. "
+    "Errors if the DB has no runs — start one with `alphamo run` first.",
 )
 @_DB_OPTION
 def insert(
@@ -142,7 +144,7 @@ def insert(
         exemplar_similarity=exemplar_similarity,
         middle_class_accessible=middle_class_accessible,
     )
-    resolved_run_id = _ensure_run_id(db, run_id)
+    resolved_run_id = _resolve_run_id(db, run_id)
     new_id = db.insert(
         architecture,
         scores,
@@ -276,7 +278,7 @@ def generate(
 
     db = ProgramsDB(_db_url(db_path))
     client = anthropic.Anthropic()
-    resolved_run_id = _ensure_run_id(db, run_id)
+    resolved_run_id = _resolve_run_id(db, run_id)
 
     seeds = Sampler(db, run_id=resolved_run_id).draw(island_id=island_id, k=k_seeds)
     if not seeds:
@@ -309,30 +311,6 @@ def generate(
     "run_id",
     type=str,
     default=None,
-    help="Run id to seed. Defaults to latest run; auto-creates a manual run if none.",
-)
-@_DB_OPTION
-def seed(num_islands: int, run_id: str | None, db_path: Path) -> None:
-    """Seed every island with the canonical starter exemplars for a given run."""
-    from alphamo.evaluator.exemplar_library import STARTERS
-    from alphamo.islands import IslandsManager
-
-    db = ProgramsDB(_db_url(db_path))
-    resolved_run_id = _ensure_run_id(db, run_id)
-    IslandsManager(db, run_id=resolved_run_id, num_islands=num_islands).seed_all_islands(STARTERS)
-    click.echo(
-        f"seeded {num_islands} islands in run {resolved_run_id} "
-        f"with {len(STARTERS)} starter exemplars each"
-    )
-
-
-@cli.command()
-@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
-@click.option(
-    "--run",
-    "run_id",
-    type=str,
-    default=None,
     help="Restrict to one run. Defaults to latest run.",
 )
 @_DB_OPTION
@@ -341,7 +319,7 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     from alphamo.islands import IslandsManager
 
     db = ProgramsDB(_db_url(db_path))
-    resolved_run_id = _ensure_run_id(db, run_id)
+    resolved_run_id = _resolve_run_id(db, run_id)
     mgr = IslandsManager(db, run_id=resolved_run_id, num_islands=num_islands)
     means = db.mean_fitness_per_island(num_islands, run_id=resolved_run_id)
     diversity = mgr.diversity_summary()

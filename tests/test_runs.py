@@ -408,3 +408,141 @@ def test_migration_is_idempotent(tmp_path):
     with pytest.raises(KeyError):
         db2.get_run(LEGACY_RUN_ID)
     assert db2.count_candidates_in_run(rid) == 1
+
+
+# ----------------------------------------------------------- seeding is internal
+
+
+def test_fresh_run_creates_exactly_one_run_with_seeded_candidates(
+    db, tmp_path, monkeypatch
+):
+    """Phase 1.1: `alphamo run` on a fresh DB → one Run row + seed candidates.
+
+    No separate seed-run row, no orphaned hp={} run. The orchestrator's
+    seed_if_empty does the gen-0 seeding internally as the first step of run().
+    """
+    _stub_cascade(monkeypatch)
+    import alphamo.orchestrator as orch_mod
+    from alphamo.evaluator.exemplar_library import STARTERS
+
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+
+    hp = _hp(num_islands=4)
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=hp)
+    orch.run(max_generations=2)
+
+    runs = db.list_runs()
+    assert len(runs) == 1, (
+        f"expected exactly one run row; got {[(r.run_id, r.hyperparameters) for r in runs]}"
+    )
+    only_run = runs[0]
+    assert only_run.run_id == orch.run_id
+    assert only_run.hyperparameters["num_islands"] == 4
+    assert only_run.stopped_reason == "max_generations"
+
+    # Seed population is present and tagged to this run.
+    seed_count = 4 * len(STARTERS)  # num_islands × starter count
+    total_in_run = db.count_candidates_in_run(orch.run_id)
+    assert total_in_run >= seed_count
+    # No candidates should be untagged or in another run.
+    assert db.count_candidates() == total_in_run
+
+
+def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
+    """Phase 1.1: prior runs' candidates are invisible to a new run's sampler.
+
+    Lay down a prior run with a distinctive candidate, then start a fresh run.
+    The fresh run must seed its own gen-0 from STARTERS, and its sampler must
+    not be able to draw the prior run's candidate.
+    """
+    _stub_cascade(monkeypatch)
+    import alphamo.orchestrator as orch_mod
+    from alphamo.evaluator.exemplar_library import STARTERS
+
+    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+
+    # Prior run: just insert a distinctive candidate directly, simulating a
+    # leftover from an earlier session.
+    prior_run_id = db.create_run(
+        hyperparameters={"legacy": True},
+        parent_goal_version="v0",
+        verifier_version="v0",
+        notes="simulated prior run",
+    )
+    prior_id = db.insert(
+        Architecture(
+            name="ZOMBIE_FROM_PRIOR_RUN",
+            summary="should never appear in a new run's sampler",
+            value_chain="vc",
+            capture_mechanism="cm",
+            entry_resources="er",
+        ),
+        Scores(
+            feasibility=0.99,
+            structural=0.99,
+            exemplar_similarity=0.99,
+            middle_class_accessible=True,
+        ),
+        run_id=prior_run_id,
+        island_id=0,
+    )
+    db.complete_run(prior_run_id, "manual_simulation")
+
+    # Fresh run on the same DB.
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=2))
+    orch.run(max_generations=2)
+
+    # Fresh run has its own seed candidates (STARTERS × islands).
+    fresh_count = db.count_candidates_in_run(orch.run_id)
+    assert fresh_count >= 2 * len(STARTERS)
+
+    # The fresh run's sampler must NEVER see the zombie. Sampler is bound to
+    # orch.run_id; the prior candidate sits in a different run.
+    for island_id in range(orch.hp.num_islands):
+        rows = db.top_k_in_island(island_id=island_id, k=100, run_id=orch.run_id)
+        names = {r.architecture_spec["name"] for r in rows}
+        assert "ZOMBIE_FROM_PRIOR_RUN" not in names
+
+    # And confirm the zombie is still in the DB, tagged to the prior run.
+    zombie = db.get(prior_id)
+    assert zombie.run_id == prior_run_id
+    assert zombie.architecture_spec["name"] == "ZOMBIE_FROM_PRIOR_RUN"
+
+    # The DB has both runs visible in list_runs.
+    run_ids = {r.run_id for r in db.list_runs()}
+    assert {prior_run_id, orch.run_id}.issubset(run_ids)
+
+
+# ----------------------------------------------------------- CLI surface
+
+
+def test_seed_subcommand_no_longer_exists():
+    """alphamo seed was removed in Phase 1.1 (seeding is internal to `run`)."""
+    from alphamo.main import cli
+
+    assert "seed" not in cli.commands, (
+        f"`alphamo seed` should be gone; cli.commands={list(cli.commands)}"
+    )
+
+
+def test_resolve_run_id_errors_when_db_has_no_runs(db):
+    """The helper backing every read-only subcommand must not auto-create runs."""
+    import click as _click
+
+    from alphamo.main import _resolve_run_id
+
+    with pytest.raises(_click.ClickException, match="no runs in this DB"):
+        _resolve_run_id(db, None)
+
+
+def test_resolve_run_id_returns_latest_when_no_explicit_run(db):
+    older = db.create_run(hyperparameters={}, parent_goal_version="v1", verifier_version="v1")
+    newer = db.create_run(hyperparameters={}, parent_goal_version="v1", verifier_version="v1")
+    from alphamo.main import _resolve_run_id
+
+    assert _resolve_run_id(db, None) == newer
+    assert older != newer
