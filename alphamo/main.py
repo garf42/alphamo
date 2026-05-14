@@ -2,6 +2,7 @@
 
 Phase 01 surface: init / insert / query / show.
 Phase 03 surface: generate — draw seeds, propose, evaluate, insert.
+Phase 04 surface: seed / evolve / islands — populate islands and run the loop.
 """
 
 from __future__ import annotations
@@ -175,6 +176,107 @@ def generate(island_id: int, k_seeds: int, generation: int, db_path: Path) -> No
     click.echo(f"inserted id={new_id} fitness={row.fitness:.3f}")
     if result.early_exit:
         click.echo(f"early exit: {result.early_exit}")
+
+
+@cli.command()
+@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@_DB_OPTION
+def seed(num_islands: int, db_path: Path) -> None:
+    """Seed every island with the canonical starter exemplars."""
+    from alphamo.evaluator.exemplar_library import STARTERS
+    from alphamo.islands import IslandsManager
+
+    db = ProgramsDB(_db_url(db_path))
+    IslandsManager(db, num_islands=num_islands).seed_all_islands(STARTERS)
+    click.echo(
+        f"seeded {num_islands} islands with {len(STARTERS)} starter exemplars each"
+    )
+
+
+@cli.command()
+@click.option("--generations", type=int, default=10, show_default=True)
+@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@click.option(
+    "--reset-every",
+    "reset_every",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Reset bottom m/2 islands every N generations.",
+)
+@click.option("--k-seeds", "k_seeds", type=int, default=2, show_default=True)
+@_DB_OPTION
+def evolve(
+    generations: int,
+    num_islands: int,
+    reset_every: int,
+    k_seeds: int,
+    db_path: Path,
+) -> None:
+    """Run N generations of the inner loop across islands."""
+    import anthropic
+
+    from alphamo.evaluator import EvaluatorCascade
+    from alphamo.islands import IslandsManager
+    from alphamo.proposer import Proposer
+    from alphamo.sampler import Sampler
+
+    db = ProgramsDB(_db_url(db_path))
+    client = anthropic.Anthropic()
+    islands = IslandsManager(
+        db, num_islands=num_islands, reset_every_generations=reset_every
+    )
+    proposer = Proposer(client)
+    cascade = EvaluatorCascade(client)
+
+    for generation in range(1, generations + 1):
+        island_id = islands.pick_island()
+        seeds = Sampler(db).draw(island_id=island_id, k=k_seeds)
+        if not seeds:
+            click.echo(f"gen {generation:>3} island {island_id}: empty, skipping")
+            continue
+        architecture = proposer.propose(seeds)
+        result = cascade.evaluate(architecture)
+        new_id = db.insert(
+            architecture,
+            result.scores,
+            island_id=island_id,
+            generation=generation,
+        )
+        row = db.get(new_id)
+        marker = f"exit={result.early_exit}" if result.early_exit else "scored"
+        click.echo(
+            f"gen {generation:>3} island {island_id} id={new_id} "
+            f"fitness={row.fitness:.3f} {marker} :: {architecture.name}"
+        )
+        event = islands.maybe_reset(generation)
+        if event:
+            click.echo(
+                f"           reset islands {event.weak_islands} "
+                f"from {event.strong_islands} (seeds={event.seed_program_ids})"
+            )
+
+
+@cli.command()
+@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@_DB_OPTION
+def islands(num_islands: int, db_path: Path) -> None:
+    """Print per-island fitness and diversity statistics."""
+    from alphamo.islands import IslandsManager
+
+    db = ProgramsDB(_db_url(db_path))
+    mgr = IslandsManager(db, num_islands=num_islands)
+    means = db.mean_fitness_per_island(num_islands)
+    diversity = mgr.diversity_summary()
+
+    click.echo(f"{'island':>6}  {'mean_fit':>9}  {'diversity':>10}  top")
+    click.echo("-" * 60)
+    for i in range(num_islands):
+        top = db.top_k_in_island(island_id=i, k=1)
+        top_name = top[0].architecture_spec.get("name", "?") if top else "(empty)"
+        click.echo(
+            f"{i:>6}  {means[i]:>9.3f}  {diversity[i]:>10.3f}  {top_name}"
+        )
 
 
 if __name__ == "__main__":

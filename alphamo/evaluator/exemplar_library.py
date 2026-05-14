@@ -4,11 +4,14 @@ These are existence proofs for the parent goal: each represents a
 configuration where a single individual captured $1B+ in value from a
 middle-class-accessible starting position. The stage-3 evaluator scores
 candidates by how structurally similar they are to the closest exemplar.
+
+Canonical scores are attached so the islands manager can seed every island
+with the same calibrated starting population.
 """
 
 from __future__ import annotations
 
-from alphamo.schemas import Architecture
+from alphamo.schemas import Architecture, Scores
 
 SATOSHI = Architecture(
     name="Satoshi",
@@ -59,6 +62,33 @@ LEVELS = Architecture(
 )
 
 EXEMPLARS: list[Architecture] = [SATOSHI, ROWLING, LEVELS]
+
+SATOSHI_SCORES = Scores(
+    feasibility=0.95,
+    structural=0.95,
+    exemplar_similarity=1.00,
+    middle_class_accessible=True,
+)
+
+ROWLING_SCORES = Scores(
+    feasibility=0.85,
+    structural=0.90,
+    exemplar_similarity=0.95,
+    middle_class_accessible=True,
+)
+
+LEVELS_SCORES = Scores(
+    feasibility=0.90,
+    structural=0.80,
+    exemplar_similarity=0.85,
+    middle_class_accessible=True,
+)
+
+STARTERS: list[tuple[Architecture, Scores]] = [
+    (SATOSHI, SATOSHI_SCORES),
+    (ROWLING, ROWLING_SCORES),
+    (LEVELS, LEVELS_SCORES),
+]
 
 
 def format_exemplars_for_prompt() -> str:

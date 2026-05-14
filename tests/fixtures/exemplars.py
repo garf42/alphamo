@@ -16,7 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from alphamo.evaluator.exemplar_library import LEVELS, ROWLING, SATOSHI
+from alphamo.evaluator.exemplar_library import (
+    LEVELS,
+    LEVELS_SCORES,
+    ROWLING,
+    ROWLING_SCORES,
+    SATOSHI,
+    SATOSHI_SCORES,
+)
 from alphamo.schemas import Architecture, Scores
 
 
@@ -26,35 +33,9 @@ class Exemplar:
     scores: Scores
 
 
-SATOSHI_FIXTURE = Exemplar(
-    architecture=SATOSHI,
-    scores=Scores(
-        feasibility=0.95,
-        structural=0.95,
-        exemplar_similarity=1.00,
-        middle_class_accessible=True,
-    ),
-)
-
-ROWLING_FIXTURE = Exemplar(
-    architecture=ROWLING,
-    scores=Scores(
-        feasibility=0.85,
-        structural=0.90,
-        exemplar_similarity=0.95,
-        middle_class_accessible=True,
-    ),
-)
-
-LEVELS_FIXTURE = Exemplar(
-    architecture=LEVELS,
-    scores=Scores(
-        feasibility=0.90,
-        structural=0.80,
-        exemplar_similarity=0.85,
-        middle_class_accessible=True,
-    ),
-)
+SATOSHI_FIXTURE = Exemplar(architecture=SATOSHI, scores=SATOSHI_SCORES)
+ROWLING_FIXTURE = Exemplar(architecture=ROWLING, scores=ROWLING_SCORES)
+LEVELS_FIXTURE = Exemplar(architecture=LEVELS, scores=LEVELS_SCORES)
 
 PE_ROLLUP_FOIL = Exemplar(
     architecture=Architecture(
