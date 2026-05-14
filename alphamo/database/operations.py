@@ -85,6 +85,14 @@ class ProgramsDB:
             session.expunge(row)
             return row
 
+    def count_candidates(self, status: str | None = None) -> int:
+        """Total candidate rows, optionally filtered by status."""
+        stmt = select(func.count()).select_from(Candidate)
+        if status is not None:
+            stmt = stmt.where(Candidate.status == status)
+        with self._session() as session:
+            return int(session.scalar(stmt) or 0)
+
     def top_k_in_island(self, island_id: int, k: int) -> list[Candidate]:
         """Return the k highest-fitness *alive* candidates in the given island.
 

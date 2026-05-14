@@ -3,6 +3,7 @@
 Phase 01 surface: init / insert / query / show.
 Phase 03 surface: generate — draw seeds, propose, evaluate, insert.
 Phase 04 surface: seed / evolve / islands — populate islands and run the loop.
+Phase 06 surface: run / harvest — production runs and structured handoff.
 """
 
 from __future__ import annotations
@@ -277,6 +278,112 @@ def islands(num_islands: int, db_path: Path) -> None:
         click.echo(
             f"{i:>6}  {means[i]:>9.3f}  {diversity[i]:>10.3f}  {top_name}"
         )
+
+
+_AUDIT_OPTION = click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    envvar="ALPHAMO_AUDIT",
+    default="runs/audit.jsonl",
+    show_default=True,
+    help="Path to the JSONL drift log. Also reads ALPHAMO_AUDIT.",
+)
+
+
+@cli.command()
+@click.option("--generations", type=int, default=50, show_default=True)
+@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@click.option("--milestone", type=float, default=0.7, show_default=True)
+@click.option("--research-every", "research_every", type=int, default=50, show_default=True)
+@_DB_OPTION
+@_AUDIT_OPTION
+def run(
+    generations: int,
+    num_islands: int,
+    milestone: float,
+    research_every: int,
+    db_path: Path,
+    audit_path: Path,
+) -> None:
+    """Run a production loop end-to-end with islands, red-team, and curator."""
+    import anthropic
+
+    from alphamo.context.hyperparams import Hyperparameters
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import Orchestrator
+
+    db = ProgramsDB(_db_url(db_path))
+    audit = AuditLog(audit_path)
+    hp = Hyperparameters(
+        num_islands=num_islands,
+        milestone_fitness=milestone,
+        research_every_generations=research_every,
+    )
+    orchestrator = Orchestrator(db, anthropic.Anthropic(), audit, hp)
+
+    result = orchestrator.run(max_generations=generations)
+
+    click.echo(
+        f"completed {len(result.events)} iteration(s); "
+        f"stopped: {result.stopped_reason}"
+        + (" (paused for human)" if result.paused else "")
+    )
+    for event in result.events[-10:]:
+        if event.skipped_reason:
+            click.echo(
+                f"gen {event.generation:>3} island {event.island_id} "
+                f"skipped ({event.skipped_reason})"
+            )
+            continue
+        marker = f"exit={event.early_exit}" if event.early_exit else "scored"
+        meta = f" meta={event.meta_trigger}" if event.meta_trigger else ""
+        click.echo(
+            f"gen {event.generation:>3} island {event.island_id} "
+            f"id={event.candidate_id} fitness={event.fitness:.3f} "
+            f"{marker}{meta} :: {event.architecture_name}"
+        )
+
+
+@cli.command()
+@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default="runs/handoff.json",
+    show_default=True,
+)
+@_DB_OPTION
+@_AUDIT_OPTION
+def harvest(
+    num_islands: int, out_path: Path, db_path: Path, audit_path: Path
+) -> None:
+    """Build the handoff document from a finished run."""
+    import anthropic
+
+    from alphamo.evaluator import EvaluatorCascade
+    from alphamo.handoff import build_handoff
+    from alphamo.meta.audit_log import AuditLog
+
+    db = ProgramsDB(_db_url(db_path))
+    audit = AuditLog(audit_path)
+    cascade = EvaluatorCascade(anthropic.Anthropic())
+
+    handoff = build_handoff(db, audit, cascade, num_islands=num_islands)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(handoff.model_dump_json(indent=2))
+    click.echo(
+        f"winner: {handoff.winning_architecture.spec.name} "
+        f"(island {handoff.winning_architecture.island_of_origin}, "
+        f"generation {handoff.winning_architecture.generation})"
+    )
+    click.echo(
+        f"alternates: {len(handoff.alternates)} | "
+        f"drift log: {len(handoff.drift_log)} entries | "
+        f"eval count: {handoff.verification_trail.eval_count}"
+    )
+    click.echo(f"wrote {out_path}")
 
 
 if __name__ == "__main__":
