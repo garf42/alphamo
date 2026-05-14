@@ -1,9 +1,18 @@
 """AlphaMo CLI entry point.
 
-Phase 01 surface: init / insert / query / show.
-Phase 03 surface: generate — draw seeds, propose, evaluate, insert.
-Phase 04 surface: seed / evolve / islands — populate islands and run the loop.
-Phase 06 surface: run / harvest — production runs and structured handoff.
+Subcommand surface:
+  init / show               — db setup and one-row inspection
+  top                       — per-island top-k inspection (was 'query' before
+                              run boundaries; renamed because 'query' now
+                              lists runs)
+  query / runs              — list all runs in the DB
+  insert / generate         — manual or LLM-driven single-candidate insertion
+  seed / evolve / islands   — populate islands and run the inner loop
+  run / harvest             — production runs and structured handoff
+
+Every command that creates candidates does so against a specific run_id.
+Use --resume <run_id> on `run` to continue an existing run, or --run <run_id>
+on `harvest` to pick which run to package.
 """
 
 from __future__ import annotations
@@ -26,9 +35,42 @@ _DB_OPTION = click.option(
     help="Path to the SQLite database file. Also reads ALPHAMO_DB.",
 )
 
+_AUDIT_OPTION = click.option(
+    "--audit",
+    "audit_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    envvar="ALPHAMO_AUDIT",
+    default="runs/audit.jsonl",
+    show_default=True,
+    help="Path to the JSONL drift log. Also reads ALPHAMO_AUDIT.",
+)
+
 
 def _db_url(db_path: Path) -> str:
     return f"sqlite:///{db_path}"
+
+
+def _ensure_run_id(db: ProgramsDB, run_id: str | None) -> str:
+    """Resolve the run_id for commands that need one but don't own the run.
+
+    If `run_id` is None, fall back to the latest run in the DB; if there is
+    none, create a "manual" run on the fly so the command can still insert.
+    """
+    if run_id is not None:
+        try:
+            db.get_run(run_id)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+        return run_id
+    latest = db.latest_run_id()
+    if latest is not None:
+        return latest
+    return db.create_run(
+        hyperparameters={},
+        parent_goal_version="manual",
+        verifier_version="manual",
+        notes="auto-created by CLI insert/generate (no orchestrator run open)",
+    )
 
 
 @click.group()
@@ -61,6 +103,14 @@ def init(db_path: Path) -> None:
 )
 @click.option("--island", "island_id", type=int, default=0, show_default=True)
 @click.option("--generation", type=int, default=0, show_default=True)
+@click.option(
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Run id to associate the row with. Defaults to latest run, "
+    "or auto-creates a manual run if the DB has none.",
+)
 @_DB_OPTION
 def insert(
     name: str,
@@ -74,6 +124,7 @@ def insert(
     middle_class_accessible: bool,
     island_id: int,
     generation: int,
+    run_id: str | None,
     db_path: Path,
 ) -> None:
     """Insert one candidate."""
@@ -91,29 +142,89 @@ def insert(
         exemplar_similarity=exemplar_similarity,
         middle_class_accessible=middle_class_accessible,
     )
+    resolved_run_id = _ensure_run_id(db, run_id)
     new_id = db.insert(
-        architecture, scores, island_id=island_id, generation=generation
+        architecture,
+        scores,
+        run_id=resolved_run_id,
+        island_id=island_id,
+        generation=generation,
     )
     row = db.get(new_id)
-    click.echo(f"inserted id={new_id} fitness={row.fitness:.3f}")
+    click.echo(f"inserted id={new_id} run={resolved_run_id} fitness={row.fitness:.3f}")
 
 
 @cli.command()
 @click.option("--island", "island_id", type=int, default=0, show_default=True)
 @click.option("--k", type=int, default=5, show_default=True)
+@click.option(
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Restrict to one run. Defaults to all runs (no filter).",
+)
 @_DB_OPTION
-def query(island_id: int, k: int, db_path: Path) -> None:
+def top(island_id: int, k: int, run_id: str | None, db_path: Path) -> None:
     """Print top-k candidates in an island, highest fitness first."""
     db = ProgramsDB(_db_url(db_path))
-    rows = db.top_k_in_island(island_id=island_id, k=k)
+    rows = db.top_k_in_island(island_id=island_id, k=k, run_id=run_id)
     if not rows:
-        click.echo(f"(no candidates in island {island_id})")
+        scope = f"run {run_id}" if run_id else "any run"
+        click.echo(f"(no candidates in island {island_id} for {scope})")
         return
-    click.echo(f"{'id':>4}  {'fitness':>8}  name")
-    click.echo("-" * 40)
+    click.echo(f"{'id':>4}  {'run':<14}  {'fitness':>8}  name")
+    click.echo("-" * 60)
     for row in rows:
         name = row.architecture_spec.get("name", "?")
-        click.echo(f"{row.id:>4}  {row.fitness:>8.3f}  {name}")
+        click.echo(f"{row.id:>4}  {(row.run_id or ''):<14}  {row.fitness:>8.3f}  {name}")
+
+
+@cli.command()
+@click.argument("run_id", type=str, required=False)
+@_DB_OPTION
+def query(run_id: str | None, db_path: Path) -> None:
+    """List runs in the DB. With a run_id argument, dump that run's full JSON."""
+    db = ProgramsDB(_db_url(db_path))
+    if run_id is not None:
+        try:
+            run = db.get_run(run_id)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+        payload = {
+            "run_id": run.run_id,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "last_resumed_at": run.last_resumed_at.isoformat() if run.last_resumed_at else None,
+            "stopped_reason": run.stopped_reason,
+            "parent_goal_version": run.parent_goal_version,
+            "verifier_version": run.verifier_version,
+            "hyperparameters": run.hyperparameters,
+            "notes": run.notes,
+            "alive_candidates": db.count_candidates_in_run(run.run_id, status="alive"),
+            "total_candidates": db.count_candidates_in_run(run.run_id),
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    runs = db.list_runs()
+    if not runs:
+        click.echo("(no runs in this DB)")
+        return
+    header = f"{'run_id':<14}  {'created_at':<25}  {'pg':<8}  {'ver':<8}  {'stopped':<22}  {'alive':>6}  {'total':>6}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for run in runs:
+        alive = db.count_candidates_in_run(run.run_id, status="alive")
+        total = db.count_candidates_in_run(run.run_id)
+        click.echo(
+            f"{run.run_id:<14}  "
+            f"{run.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'):<25}  "
+            f"{run.parent_goal_version:<8}  "
+            f"{run.verifier_version:<8}  "
+            f"{(run.stopped_reason or '(running)'):<22}  "
+            f"{alive:>6}  {total:>6}"
+        )
 
 
 @cli.command()
@@ -128,6 +239,7 @@ def show(candidate_id: int, db_path: Path) -> None:
         raise click.ClickException(str(exc)) from exc
     payload = {
         "id": row.id,
+        "run_id": row.run_id,
         "architecture_spec": row.architecture_spec,
         "scores": row.scores,
         "fitness": row.fitness,
@@ -144,8 +256,17 @@ def show(candidate_id: int, db_path: Path) -> None:
 @click.option("--island", "island_id", type=int, default=0, show_default=True)
 @click.option("--k-seeds", "k_seeds", type=int, default=2, show_default=True)
 @click.option("--generation", type=int, default=1, show_default=True)
+@click.option(
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Run id to draw seeds from and insert into. Defaults to latest run.",
+)
 @_DB_OPTION
-def generate(island_id: int, k_seeds: int, generation: int, db_path: Path) -> None:
+def generate(
+    island_id: int, k_seeds: int, generation: int, run_id: str | None, db_path: Path
+) -> None:
     """Draw seeds from an island, propose a new candidate, evaluate, and insert."""
     import anthropic
 
@@ -155,11 +276,12 @@ def generate(island_id: int, k_seeds: int, generation: int, db_path: Path) -> No
 
     db = ProgramsDB(_db_url(db_path))
     client = anthropic.Anthropic()
+    resolved_run_id = _ensure_run_id(db, run_id)
 
-    seeds = Sampler(db).draw(island_id=island_id, k=k_seeds)
+    seeds = Sampler(db, run_id=resolved_run_id).draw(island_id=island_id, k=k_seeds)
     if not seeds:
         raise click.ClickException(
-            f"island {island_id} is empty — insert some candidates first"
+            f"island {island_id} in run {resolved_run_id} is empty — insert candidates first"
         )
 
     click.echo(f"seeds: {[s.name for s in seeds]}")
@@ -170,125 +292,69 @@ def generate(island_id: int, k_seeds: int, generation: int, db_path: Path) -> No
     new_id = db.insert(
         architecture,
         result.scores,
+        run_id=resolved_run_id,
         island_id=island_id,
         generation=generation,
     )
     row = db.get(new_id)
-    click.echo(f"inserted id={new_id} fitness={row.fitness:.3f}")
+    click.echo(f"inserted id={new_id} run={resolved_run_id} fitness={row.fitness:.3f}")
     if result.early_exit:
         click.echo(f"early exit: {result.early_exit}")
 
 
 @cli.command()
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@click.option(
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Run id to seed. Defaults to latest run; auto-creates a manual run if none.",
+)
 @_DB_OPTION
-def seed(num_islands: int, db_path: Path) -> None:
-    """Seed every island with the canonical starter exemplars."""
+def seed(num_islands: int, run_id: str | None, db_path: Path) -> None:
+    """Seed every island with the canonical starter exemplars for a given run."""
     from alphamo.evaluator.exemplar_library import STARTERS
     from alphamo.islands import IslandsManager
 
     db = ProgramsDB(_db_url(db_path))
-    IslandsManager(db, num_islands=num_islands).seed_all_islands(STARTERS)
+    resolved_run_id = _ensure_run_id(db, run_id)
+    IslandsManager(db, run_id=resolved_run_id, num_islands=num_islands).seed_all_islands(STARTERS)
     click.echo(
-        f"seeded {num_islands} islands with {len(STARTERS)} starter exemplars each"
+        f"seeded {num_islands} islands in run {resolved_run_id} "
+        f"with {len(STARTERS)} starter exemplars each"
     )
 
 
 @cli.command()
-@click.option("--generations", type=int, default=10, show_default=True)
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
 @click.option(
-    "--reset-every",
-    "reset_every",
-    type=int,
-    default=20,
-    show_default=True,
-    help="Reset bottom m/2 islands every N generations.",
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Restrict to one run. Defaults to latest run.",
 )
-@click.option("--k-seeds", "k_seeds", type=int, default=2, show_default=True)
 @_DB_OPTION
-def evolve(
-    generations: int,
-    num_islands: int,
-    reset_every: int,
-    k_seeds: int,
-    db_path: Path,
-) -> None:
-    """Run N generations of the inner loop across islands."""
-    import anthropic
-
-    from alphamo.evaluator import EvaluatorCascade
-    from alphamo.islands import IslandsManager
-    from alphamo.proposer import Proposer
-    from alphamo.sampler import Sampler
-
-    db = ProgramsDB(_db_url(db_path))
-    client = anthropic.Anthropic()
-    islands = IslandsManager(
-        db, num_islands=num_islands, reset_every_generations=reset_every
-    )
-    proposer = Proposer(client)
-    cascade = EvaluatorCascade(client)
-
-    for generation in range(1, generations + 1):
-        island_id = islands.pick_island()
-        seeds = Sampler(db).draw(island_id=island_id, k=k_seeds)
-        if not seeds:
-            click.echo(f"gen {generation:>3} island {island_id}: empty, skipping")
-            continue
-        architecture = proposer.propose(seeds)
-        result = cascade.evaluate(architecture)
-        new_id = db.insert(
-            architecture,
-            result.scores,
-            island_id=island_id,
-            generation=generation,
-        )
-        row = db.get(new_id)
-        marker = f"exit={result.early_exit}" if result.early_exit else "scored"
-        click.echo(
-            f"gen {generation:>3} island {island_id} id={new_id} "
-            f"fitness={row.fitness:.3f} {marker} :: {architecture.name}"
-        )
-        event = islands.maybe_reset(generation)
-        if event:
-            click.echo(
-                f"           reset islands {event.weak_islands} "
-                f"from {event.strong_islands} (seeds={event.seed_program_ids})"
-            )
-
-
-@cli.command()
-@click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
-@_DB_OPTION
-def islands(num_islands: int, db_path: Path) -> None:
-    """Print per-island fitness and diversity statistics."""
+def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
+    """Print per-island fitness and diversity statistics for a run."""
     from alphamo.islands import IslandsManager
 
     db = ProgramsDB(_db_url(db_path))
-    mgr = IslandsManager(db, num_islands=num_islands)
-    means = db.mean_fitness_per_island(num_islands)
+    resolved_run_id = _ensure_run_id(db, run_id)
+    mgr = IslandsManager(db, run_id=resolved_run_id, num_islands=num_islands)
+    means = db.mean_fitness_per_island(num_islands, run_id=resolved_run_id)
     diversity = mgr.diversity_summary()
 
+    click.echo(f"run: {resolved_run_id}")
     click.echo(f"{'island':>6}  {'mean_fit':>9}  {'diversity':>10}  top")
     click.echo("-" * 60)
     for i in range(num_islands):
-        top = db.top_k_in_island(island_id=i, k=1)
+        top = db.top_k_in_island(island_id=i, k=1, run_id=resolved_run_id)
         top_name = top[0].architecture_spec.get("name", "?") if top else "(empty)"
         click.echo(
             f"{i:>6}  {means[i]:>9.3f}  {diversity[i]:>10.3f}  {top_name}"
         )
-
-
-_AUDIT_OPTION = click.option(
-    "--audit",
-    "audit_path",
-    type=click.Path(dir_okay=False, path_type=Path),
-    envvar="ALPHAMO_AUDIT",
-    default="runs/audit.jsonl",
-    show_default=True,
-    help="Path to the JSONL drift log. Also reads ALPHAMO_AUDIT.",
-)
 
 
 @cli.command()
@@ -296,6 +362,13 @@ _AUDIT_OPTION = click.option(
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
 @click.option("--milestone", type=float, default=0.7, show_default=True)
 @click.option("--research-every", "research_every", type=int, default=50, show_default=True)
+@click.option(
+    "--resume",
+    "resume_id",
+    type=str,
+    default=None,
+    help="Continue an existing run by id. Otherwise a fresh run is created.",
+)
 @_DB_OPTION
 @_AUDIT_OPTION
 def run(
@@ -303,6 +376,7 @@ def run(
     num_islands: int,
     milestone: float,
     research_every: int,
+    resume_id: str | None,
     db_path: Path,
     audit_path: Path,
 ) -> None:
@@ -315,17 +389,27 @@ def run(
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
-    hp = Hyperparameters(
-        num_islands=num_islands,
-        milestone_fitness=milestone,
-        research_every_generations=research_every,
-    )
-    orchestrator = Orchestrator(db, anthropic.Anthropic(), audit, hp)
+    client = anthropic.Anthropic()
+
+    if resume_id is not None:
+        try:
+            orchestrator = Orchestrator.resume_run(db, client, audit, resume_id)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"resuming run {resume_id}")
+    else:
+        hp = Hyperparameters(
+            num_islands=num_islands,
+            milestone_fitness=milestone,
+            research_every_generations=research_every,
+        )
+        orchestrator = Orchestrator.for_new_run(db, client, audit, hp=hp)
+        click.echo(f"started run {orchestrator.run_id}")
 
     result = orchestrator.run(max_generations=generations)
 
     click.echo(
-        f"completed {len(result.events)} iteration(s); "
+        f"completed {len(result.events)} iteration(s) for {orchestrator.run_id}; "
         f"stopped: {result.stopped_reason}"
         + (" (paused for human)" if result.paused else "")
     )
@@ -338,15 +422,23 @@ def run(
             continue
         marker = f"exit={event.early_exit}" if event.early_exit else "scored"
         meta = f" meta={event.meta_trigger}" if event.meta_trigger else ""
+        fitness = f"{event.fitness:.3f}" if event.fitness is not None else "  -  "
         click.echo(
             f"gen {event.generation:>3} island {event.island_id} "
-            f"id={event.candidate_id} fitness={event.fitness:.3f} "
+            f"id={event.candidate_id} fitness={fitness} "
             f"{marker}{meta} :: {event.architecture_name}"
         )
 
 
 @cli.command()
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
+@click.option(
+    "--run",
+    "run_id",
+    type=str,
+    default=None,
+    help="Run id to harvest. Defaults to the most recent run in the DB.",
+)
 @click.option(
     "--out",
     "out_path",
@@ -357,9 +449,13 @@ def run(
 @_DB_OPTION
 @_AUDIT_OPTION
 def harvest(
-    num_islands: int, out_path: Path, db_path: Path, audit_path: Path
+    num_islands: int,
+    run_id: str | None,
+    out_path: Path,
+    db_path: Path,
+    audit_path: Path,
 ) -> None:
-    """Build the handoff document from a finished run."""
+    """Build the handoff document for a finished run."""
     import anthropic
 
     from alphamo.evaluator import EvaluatorCascade
@@ -370,10 +466,17 @@ def harvest(
     audit = AuditLog(audit_path)
     cascade = EvaluatorCascade(anthropic.Anthropic())
 
-    handoff = build_handoff(db, audit, cascade, num_islands=num_islands)
+    resolved_run_id = run_id or db.latest_run_id()
+    if resolved_run_id is None:
+        raise click.ClickException("no runs in this DB — nothing to harvest")
+
+    handoff = build_handoff(
+        db, audit, cascade, num_islands=num_islands, run_id=resolved_run_id
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(handoff.model_dump_json(indent=2))
     click.echo(
+        f"run: {resolved_run_id}\n"
         f"winner: {handoff.winning_architecture.spec.name} "
         f"(island {handoff.winning_architecture.island_of_origin}, "
         f"generation {handoff.winning_architecture.generation})"

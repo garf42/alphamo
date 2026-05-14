@@ -13,7 +13,12 @@ One Orchestrator drives a run. Each iteration:
      and pass findings to the curator.
 
 Termination: max_generations reached, OR curator returns PAUSE_FOR_HUMAN
-on a structural finding.
+on a structural finding, OR `max_consecutive_failures` LLM output failures.
+
+Every Orchestrator owns exactly one `run_id`. Every insert / read / audit
+event is scoped to that run. Construct via `Orchestrator.for_new_run(...)`
+to start a fresh run; via `Orchestrator.resume_run(...)` to attach to an
+existing one.
 
 The orchestrator never lets meta-layer state into the proposer's prompt —
 that isolation is enforced by the seam between Proposer (which reads only
@@ -24,11 +29,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Any
 
 import anthropic
 
 from alphamo.context.hyperparams import Hyperparameters
+from alphamo.context.parent_goal import PARENT_GOAL_VERSION
+from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
 from alphamo.errors import LLMOutputError
 from alphamo.evaluator import EvaluatorCascade
@@ -78,24 +84,29 @@ class RunResult:
 
 
 class Orchestrator:
-    """Drives one production run end-to-end."""
+    """Drives one production run end-to-end, scoped to one `run_id`."""
 
     def __init__(
         self,
         db: ProgramsDB,
         client: anthropic.Anthropic,
         audit_log: AuditLog,
+        run_id: str,
         hp: Hyperparameters | None = None,
         rng: random.Random | None = None,
     ) -> None:
+        if not run_id:
+            raise ValueError("run_id is required for Orchestrator")
         self.db = db
         self.client = client
         self.audit_log = audit_log
+        self.run_id = run_id
         self.hp = hp or Hyperparameters()
         self.rng = rng or random.Random()
 
         self.islands = IslandsManager(
             db,
+            run_id=run_id,
             num_islands=self.hp.num_islands,
             reset_every_generations=self.hp.reset_every_generations,
             top_seed_count=self.hp.top_seed_count,
@@ -106,6 +117,7 @@ class Orchestrator:
             temperature=self.hp.sampling_temperature,
             pool_size=self.hp.pool_size,
             rng=self.rng,
+            run_id=run_id,
         )
         self.proposer = Proposer(client)
         self.cascade = EvaluatorCascade(
@@ -113,18 +125,66 @@ class Orchestrator:
             stage1_threshold=self.hp.stage1_threshold,
             stage2_threshold=self.hp.stage2_threshold,
         )
-        self.curator = Curator(client, audit_log)
+        self.curator = Curator(client, audit_log, run_id=run_id)
+
+    # ------------------------------------------------------------------ factories
+
+    @classmethod
+    def for_new_run(
+        cls,
+        db: ProgramsDB,
+        client: anthropic.Anthropic,
+        audit_log: AuditLog,
+        hp: Hyperparameters | None = None,
+        rng: random.Random | None = None,
+        notes: str | None = None,
+    ) -> "Orchestrator":
+        """Create a fresh Run row and return an Orchestrator bound to it."""
+        hp = hp or Hyperparameters()
+        run_id = db.create_run(
+            hyperparameters=hp.model_dump(),
+            parent_goal_version=PARENT_GOAL_VERSION,
+            verifier_version=VERIFIER_VERSION,
+            notes=notes,
+        )
+        return cls(db, client, audit_log, run_id=run_id, hp=hp, rng=rng)
+
+    @classmethod
+    def resume_run(
+        cls,
+        db: ProgramsDB,
+        client: anthropic.Anthropic,
+        audit_log: AuditLog,
+        run_id: str,
+        rng: random.Random | None = None,
+    ) -> "Orchestrator":
+        """Attach to an existing Run row. Hyperparameters come from the row.
+
+        Raises KeyError if run_id does not exist. Sets `last_resumed_at` on
+        the run so the handoff can report fresh-vs-resumed.
+        """
+        run = db.get_run(run_id)
+        hp = Hyperparameters(**run.hyperparameters) if run.hyperparameters else Hyperparameters()
+        db.mark_run_resumed(run_id)
+        return cls(db, client, audit_log, run_id=run_id, hp=hp, rng=rng)
+
+    # ------------------------------------------------------------------ loop
 
     def seed_if_empty(self) -> bool:
-        """Seed all islands with the canonical STARTERS if the DB has none alive."""
-        if self.db.count_candidates(status="alive") > 0:
+        """Seed canonical STARTERS into every island if THIS run has no candidates.
+
+        A fresh run starts with zero candidates for its run_id and gets
+        seeded. A resumed run sees its existing candidates and skips. Other
+        runs in the same DB are invisible.
+        """
+        if self.db.count_candidates_in_run(self.run_id) > 0:
             return False
         self.islands.seed_all_islands(STARTERS)
         return True
 
     def detect_stall(self) -> bool:
         """True if max fitness has barely moved over the last `stall_window` generations."""
-        history = self.db.fitness_history(self.hp.stall_window)
+        history = self.db.fitness_history(self.hp.stall_window, run_id=self.run_id)
         if len(history) < self.hp.stall_window:
             return False
         return max(history) - min(history) < self.hp.stall_epsilon
@@ -195,6 +255,7 @@ class Orchestrator:
         candidate_id = self.db.insert(
             architecture,
             result.scores,
+            run_id=self.run_id,
             island_id=island_id,
             generation=generation,
         )
@@ -236,8 +297,8 @@ class Orchestrator:
 
         Stops early on (a) a structural curator pause or (b) when
         consecutive eval-side failures reach `hp.max_consecutive_failures`.
-        A meta-side failure (candidate was inserted) does NOT count toward
-        the consecutive-failure threshold — forward progress is being made.
+        Stamps the run's `stopped_reason` and `completed_at` on the Run row
+        before returning.
         """
         self.seed_if_empty()
         result = RunResult()
@@ -253,6 +314,7 @@ class Orchestrator:
                 if consecutive_failures >= self.hp.max_consecutive_failures:
                     result.stopped_reason = "consecutive_failures"
                     result.consecutive_failures_at_stop = consecutive_failures
+                    self.db.complete_run(self.run_id, result.stopped_reason)
                     return result
 
             if (
@@ -262,8 +324,10 @@ class Orchestrator:
                 result.paused = True
                 result.stopped_reason = "curator_pause"
                 result.consecutive_failures_at_stop = consecutive_failures
+                self.db.complete_run(self.run_id, result.stopped_reason)
                 return result
         result.consecutive_failures_at_stop = consecutive_failures
+        self.db.complete_run(self.run_id, result.stopped_reason)
         return result
 
 

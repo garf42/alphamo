@@ -13,28 +13,55 @@ def _high_scores() -> Scores:
     )
 
 
-def test_top_k_in_island_filters_reset_status(db):
-    alive_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores)
-    db.insert(ROWLING_FIXTURE.architecture, ROWLING_FIXTURE.scores, status="reset")
+def test_top_k_in_island_filters_reset_status(db, default_run):
+    alive_id = db.insert(
+        SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, run_id=default_run
+    )
+    db.insert(
+        ROWLING_FIXTURE.architecture,
+        ROWLING_FIXTURE.scores,
+        run_id=default_run,
+        status="reset",
+    )
 
     rows = db.top_k_in_island(island_id=0, k=10)
     assert [r.id for r in rows] == [alive_id]
 
 
-def test_reset_island_marks_existing_alive_as_reset(db):
-    alive_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, island_id=1)
-    seed_id = db.insert(ROWLING_FIXTURE.architecture, ROWLING_FIXTURE.scores, island_id=0)
+def test_reset_island_marks_existing_alive_as_reset(db, default_run):
+    alive_id = db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        island_id=1,
+    )
+    seed_id = db.insert(
+        ROWLING_FIXTURE.architecture,
+        ROWLING_FIXTURE.scores,
+        run_id=default_run,
+        island_id=0,
+    )
 
-    db.reset_island(island_id=1, seed_programs=[seed_id])
+    db.reset_island(island_id=1, seed_programs=[seed_id], run_id=default_run)
 
     assert db.get(alive_id).status == "reset"
 
 
-def test_reset_island_inserts_copies_with_parent_lineage(db):
-    seed_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, island_id=0)
-    db.insert(LEVELS_FIXTURE.architecture, LEVELS_FIXTURE.scores, island_id=1)
+def test_reset_island_inserts_copies_with_parent_lineage(db, default_run):
+    seed_id = db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        island_id=0,
+    )
+    db.insert(
+        LEVELS_FIXTURE.architecture,
+        LEVELS_FIXTURE.scores,
+        run_id=default_run,
+        island_id=1,
+    )
 
-    db.reset_island(island_id=1, seed_programs=[seed_id])
+    db.reset_island(island_id=1, seed_programs=[seed_id], run_id=default_run)
 
     alive_in_1 = db.top_k_in_island(island_id=1, k=10)
     assert len(alive_in_1) == 1
@@ -43,24 +70,46 @@ def test_reset_island_inserts_copies_with_parent_lineage(db):
     assert copy.architecture_spec["name"] == "Satoshi"
     assert copy.parent_ids == [seed_id]
     assert copy.island_id == 1
+    assert copy.run_id == default_run
     assert copy.fitness == db.get(seed_id).fitness
 
 
-def test_top_programs_from_islands_orders_by_fitness(db):
-    a_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, island_id=0)
-    b_id = db.insert(LEVELS_FIXTURE.architecture, LEVELS_FIXTURE.scores, island_id=1)
-    db.insert(ROWLING_FIXTURE.architecture, ROWLING_FIXTURE.scores, island_id=2)
+def test_top_programs_from_islands_orders_by_fitness(db, default_run):
+    a_id = db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        island_id=0,
+    )
+    b_id = db.insert(
+        LEVELS_FIXTURE.architecture,
+        LEVELS_FIXTURE.scores,
+        run_id=default_run,
+        island_id=1,
+    )
+    db.insert(
+        ROWLING_FIXTURE.architecture,
+        ROWLING_FIXTURE.scores,
+        run_id=default_run,
+        island_id=2,
+    )
 
     top = db.top_programs_from_islands(island_ids=[0, 1], n=2)
     assert {r.id for r in top} == {a_id, b_id}
     assert top[0].fitness >= top[1].fitness
 
 
-def test_top_programs_from_islands_skips_reset_rows(db):
-    seed_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, island_id=0)
+def test_top_programs_from_islands_skips_reset_rows(db, default_run):
+    seed_id = db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        island_id=0,
+    )
     db.insert(
         ROWLING_FIXTURE.architecture,
         ROWLING_FIXTURE.scores,
+        run_id=default_run,
         island_id=0,
         status="reset",
     )
@@ -72,8 +121,13 @@ def test_top_programs_from_islands_empty_input(db):
     assert db.top_programs_from_islands(island_ids=[], n=5) == []
 
 
-def test_mean_fitness_per_island_defaults_missing_islands_to_zero(db):
-    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, island_id=1)
+def test_mean_fitness_per_island_defaults_missing_islands_to_zero(db, default_run):
+    db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        island_id=1,
+    )
     means = db.mean_fitness_per_island(num_islands=4)
     assert set(means) == {0, 1, 2, 3}
     assert means[0] == 0.0
@@ -81,10 +135,25 @@ def test_mean_fitness_per_island_defaults_missing_islands_to_zero(db):
     assert means[2] == 0.0
 
 
-def test_fitness_history_returns_max_per_generation(db):
-    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, generation=0)
-    db.insert(ROWLING_FIXTURE.architecture, ROWLING_FIXTURE.scores, generation=0)
-    db.insert(LEVELS_FIXTURE.architecture, LEVELS_FIXTURE.scores, generation=1)
+def test_fitness_history_returns_max_per_generation(db, default_run):
+    db.insert(
+        SATOSHI_FIXTURE.architecture,
+        SATOSHI_FIXTURE.scores,
+        run_id=default_run,
+        generation=0,
+    )
+    db.insert(
+        ROWLING_FIXTURE.architecture,
+        ROWLING_FIXTURE.scores,
+        run_id=default_run,
+        generation=0,
+    )
+    db.insert(
+        LEVELS_FIXTURE.architecture,
+        LEVELS_FIXTURE.scores,
+        run_id=default_run,
+        generation=1,
+    )
 
     history = db.fitness_history(generations=2)
     assert len(history) == 2
@@ -98,7 +167,7 @@ def test_fitness_history_empty_db(db):
     assert db.fitness_history(generations=5) == []
 
 
-def test_diversity_metric_zero_for_identical_candidates(db):
+def test_diversity_metric_zero_for_identical_candidates(db, default_run):
     arch = Architecture(
         name="dup",
         summary="x",
@@ -106,12 +175,12 @@ def test_diversity_metric_zero_for_identical_candidates(db):
         capture_mechanism="delta",
         entry_resources="x",
     )
-    db.insert(arch, _high_scores())
-    db.insert(arch, _high_scores())
+    db.insert(arch, _high_scores(), run_id=default_run)
+    db.insert(arch, _high_scores(), run_id=default_run)
     assert db.diversity_metric(island_id=0) == 0.0
 
 
-def test_diversity_metric_one_for_disjoint_candidates(db):
+def test_diversity_metric_one_for_disjoint_candidates(db, default_run):
     a = Architecture(
         name="a",
         summary="x",
@@ -126,11 +195,13 @@ def test_diversity_metric_one_for_disjoint_candidates(db):
         capture_mechanism="delta",
         entry_resources="x",
     )
-    db.insert(a, _high_scores())
-    db.insert(b, _high_scores())
+    db.insert(a, _high_scores(), run_id=default_run)
+    db.insert(b, _high_scores(), run_id=default_run)
     assert db.diversity_metric(island_id=0) == 1.0
 
 
-def test_diversity_metric_returns_zero_for_singleton_island(db):
-    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores)
+def test_diversity_metric_returns_zero_for_singleton_island(db, default_run):
+    db.insert(
+        SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, run_id=default_run
+    )
     assert db.diversity_metric(island_id=0) == 0.0

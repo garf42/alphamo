@@ -32,12 +32,12 @@ def anthropic_client():
     return anthropic.Anthropic()
 
 
-def test_single_generation_step(anthropic_client, db):
+def test_single_generation_step(anthropic_client, db, default_run):
     """Draw seeds, propose a new architecture, evaluate — must not raise."""
     for fixture in EXEMPLARS:
-        db.insert(fixture.architecture, fixture.scores)
+        db.insert(fixture.architecture, fixture.scores, run_id=default_run)
 
-    seeds = Sampler(db).draw(island_id=0, k=2)
+    seeds = Sampler(db, run_id=default_run).draw(island_id=0, k=2)
     assert len(seeds) > 0, "no seeds drawn — island seeding failed"
 
     architecture = Proposer(anthropic_client).propose(seeds)

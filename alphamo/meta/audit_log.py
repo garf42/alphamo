@@ -17,9 +17,14 @@ from pydantic import BaseModel, Field
 
 
 class AuditEvent(BaseModel):
-    """One row in the drift log."""
+    """One row in the drift log.
+
+    `run_id` ties each event to the specific Run row in the DB so the harvest
+    can filter the drift log down to a single run.
+    """
 
     timestamp: str
+    run_id: str
     trigger: str
     classification: str
     action: str

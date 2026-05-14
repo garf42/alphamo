@@ -43,6 +43,10 @@ class ExemplarComparison(BaseModel):
 class VerificationTrail(BaseModel):
     """How the winner was scored, for downstream auditability."""
 
+    run_id: str
+    hyperparameters: dict
+    parent_goal_version: str
+    verifier_version: str
     final_scores: Scores
     anchor_used: str
     eval_count: int

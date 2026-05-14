@@ -11,9 +11,9 @@ from tests.fixtures.exemplars import ALL_FIXTURES, FOILS
 
 
 @pytest.fixture()
-def populated_db(db):
+def populated_db(db, default_run):
     for fixture in ALL_FIXTURES:
-        db.insert(fixture.architecture, fixture.scores)
+        db.insert(fixture.architecture, fixture.scores, run_id=default_run)
     return db
 
 
@@ -23,10 +23,10 @@ def test_draw_returns_k_seeds(populated_db):
     assert len(seeds) == 2
 
 
-def test_draw_handles_pool_smaller_than_k(db):
+def test_draw_handles_pool_smaller_than_k(db, default_run):
     from tests.fixtures.exemplars import SATOSHI_FIXTURE
 
-    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores)
+    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, run_id=default_run)
     sampler = Sampler(db)
     seeds = sampler.draw(island_id=0, k=5)
     assert len(seeds) == 1
@@ -52,6 +52,22 @@ def test_draw_returns_architecture_objects(populated_db):
     seeds = Sampler(populated_db, rng=random.Random(0)).draw(island_id=0, k=1)
     assert len(seeds) == 1
     assert isinstance(seeds[0], Architecture)
+
+
+def test_draw_respects_run_id_filter(db, default_run):
+    """Sampler bound to a run_id must not see another run's candidates."""
+    from tests.fixtures.exemplars import SATOSHI_FIXTURE
+
+    other_run = db.create_run(
+        hyperparameters={}, parent_goal_version="test", verifier_version="test"
+    )
+    db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, run_id=other_run)
+
+    sampler = Sampler(db, run_id=default_run)
+    assert sampler.draw(island_id=0, k=2) == []
+
+    sampler_other = Sampler(db, run_id=other_run)
+    assert len(sampler_other.draw(island_id=0, k=1)) == 1
 
 
 def test_softmax_sums_to_one():

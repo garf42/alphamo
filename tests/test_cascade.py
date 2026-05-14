@@ -142,6 +142,11 @@ def test_cascade_aggregates_fitness_via_db(tmp_path, monkeypatch):
     from alphamo.database import ProgramsDB
 
     db = ProgramsDB(f"sqlite:///{tmp_path / 'a.db'}")
+    run_id = db.create_run(
+        hyperparameters={},
+        parent_goal_version="test",
+        verifier_version="test",
+    )
     cascade = EvaluatorCascade(client=MagicMock())
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, True)
@@ -154,7 +159,7 @@ def test_cascade_aggregates_fitness_via_db(tmp_path, monkeypatch):
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
-    new_id = db.insert(SATOSHI_FIXTURE.architecture, result.scores)
+    new_id = db.insert(SATOSHI_FIXTURE.architecture, result.scores, run_id=run_id)
 
     row = db.get(new_id)
     assert row.fitness == pytest.approx((0.9 + 0.85 + 0.92) / 3.0)

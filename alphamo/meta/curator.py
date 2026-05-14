@@ -67,16 +67,24 @@ def _render_finding_for_classification(finding: MetaFinding) -> str:
 
 
 class Curator:
-    """Classifies findings, decides actions, writes the audit trail."""
+    """Classifies findings, decides actions, writes the audit trail.
+
+    Every audit event written here is tagged with `run_id` so the harvest
+    can project the drift log down to a single run.
+    """
 
     def __init__(
         self,
         client: Any,
         audit_log: AuditLog,
+        run_id: str,
         model: str = OPUS_MODEL,
     ) -> None:
+        if not run_id:
+            raise ValueError("run_id is required for Curator")
         self.client = client
         self.audit_log = audit_log
+        self.run_id = run_id
         self.model = model
 
     def classify(self, finding: MetaFinding) -> ClassificationVerdict:
@@ -137,6 +145,7 @@ class Curator:
         self.audit_log.append(
             AuditEvent(
                 timestamp=AuditLog.now(),
+                run_id=self.run_id,
                 trigger=trigger,
                 classification=audit_classification,
                 action=action.value,

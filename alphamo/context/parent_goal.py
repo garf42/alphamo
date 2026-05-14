@@ -2,8 +2,12 @@
 
 Sharpened from IDD pre-run + middle-class entry constraint. This text is the
 verifiability anchor — change it only when the parent goal itself is
-re-framed by the meta-curator, not for prompt tuning.
+re-framed by the meta-curator, not for prompt tuning. PARENT_GOAL_VERSION
+must be bumped any time the text below changes so historical runs in the DB
+can be distinguished from runs under the new framing.
 """
+
+PARENT_GOAL_VERSION = "v1"
 
 PARENT_GOAL = """\
 Identify legal, structural, or protocol-level configurations in which a \

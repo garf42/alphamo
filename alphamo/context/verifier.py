@@ -9,9 +9,20 @@ imported as one cohesive unit; the implementation is in alphamo/evaluator/.
 
 from __future__ import annotations
 
+from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.evaluator import CascadeResult, EvaluatorCascade
 from alphamo.evaluator.exemplar_library import EXEMPLARS
 
-VERIFIER_ANCHOR = "PARENT_GOAL v1 + exemplar_library v1"
+# Bump when the cascade prompts or exemplar library change in a way that
+# would alter scoring of an identical candidate. Persisted on every Run row.
+VERIFIER_VERSION = "v1"
 
-__all__ = ["EvaluatorCascade", "CascadeResult", "EXEMPLARS", "VERIFIER_ANCHOR"]
+VERIFIER_ANCHOR = f"PARENT_GOAL {PARENT_GOAL_VERSION} + exemplar_library {VERIFIER_VERSION}"
+
+__all__ = [
+    "EvaluatorCascade",
+    "CascadeResult",
+    "EXEMPLARS",
+    "VERIFIER_ANCHOR",
+    "VERIFIER_VERSION",
+]

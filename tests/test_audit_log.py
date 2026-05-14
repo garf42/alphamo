@@ -5,9 +5,10 @@ from __future__ import annotations
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 
 
-def _event(rationale: str = "test", action: str = "continue") -> AuditEvent:
+def _event(rationale: str = "test", action: str = "continue", run_id: str = "run_test") -> AuditEvent:
     return AuditEvent(
         timestamp=AuditLog.now(),
+        run_id=run_id,
         trigger="test",
         classification="no_action",
         action=action,
@@ -49,6 +50,7 @@ def test_payload_roundtrips(tmp_path):
     log.append(
         AuditEvent(
             timestamp=AuditLog.now(),
+            run_id="run_test",
             trigger="t",
             classification="structural",
             action="pause_for_human",
@@ -58,3 +60,4 @@ def test_payload_roundtrips(tmp_path):
     )
     [event] = log.read_all()
     assert event.payload["findings"][0]["claim"] == "x"
+    assert event.run_id == "run_test"

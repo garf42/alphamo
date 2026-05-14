@@ -98,7 +98,9 @@ def test_curator_decision_does_not_leak_into_proposer(tmp_path):
             rationale=f"{DISTINCTIVE_LEAK_MARKER}: must pause",
         )
     )
-    decision = Curator(classify_client, audit).curate([finding], trigger="t")
+    decision = Curator(classify_client, audit, run_id="run_test").curate(
+        [finding], trigger="t"
+    )
     assert decision.action == CuratorAction.PAUSE_FOR_HUMAN
 
     proposer, prop_client = _proposer_with_fake_output()
@@ -114,6 +116,7 @@ def test_audit_log_does_not_leak_into_proposer(tmp_path):
     audit.append(
         AuditEvent(
             timestamp=AuditLog.now(),
+            run_id="run_test",
             trigger="t",
             classification="structural",
             action="pause_for_human",

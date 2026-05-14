@@ -89,13 +89,24 @@ def test_reset_island_only_copies_whitelisted_fields():
 
 
 def test_audit_event_has_no_candidate_foreign_key():
-    """AuditEvent must not reference a candidate row by id."""
+    """AuditEvent must not reference a *candidate* row by id.
+
+    `run_id` is allowed and required — it points at runs.run_id, never at a
+    candidate. The reseed-isolation guarantee is that meta state has no path
+    back to a specific candidate, not that audit events can't carry any id.
+    """
     from alphamo.meta.audit_log import AuditEvent
 
     fields = set(AuditEvent.model_fields)
-    suspect = {f for f in fields if "candidate" in f.lower() or "_id" in f.lower()}
+    suspect = {f for f in fields if "candidate" in f.lower()}
     assert suspect == set(), (
         f"AuditEvent gained candidate-referencing fields: {suspect}"
+    )
+    # run_id is the only id-shaped field that should exist.
+    id_fields = {f for f in fields if "_id" in f.lower()}
+    assert id_fields == {"run_id"}, (
+        f"AuditEvent gained unexpected id-shaped fields beyond run_id: "
+        f"{id_fields - {'run_id'}}"
     )
 
 
@@ -108,7 +119,7 @@ def test_meta_finding_has_no_candidate_reference():
     )
 
 
-def test_reseed_after_curator_writes_audit_log(db, tmp_path):
+def test_reseed_after_curator_writes_audit_log(db, default_run, tmp_path):
     """Full path: candidate triggers curator → audit written → island reset → reseed.
 
     The reseed must inherit architecture/scores/lineage and nothing else; the
@@ -116,7 +127,7 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
     pointer (direct or indirect) into the audit entries.
     """
     src_arch, src_scores = _candidate_with_marker_in_notes("source-candidate")
-    src_id = db.insert(src_arch, src_scores, island_id=0)
+    src_id = db.insert(src_arch, src_scores, run_id=default_run, island_id=0)
     db.insert(
         Architecture(
             name="weak",
@@ -131,6 +142,7 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
             exemplar_similarity=0.1,
             middle_class_accessible=True,
         ),
+        run_id=default_run,
         island_id=1,
     )
 
@@ -152,7 +164,7 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
             rationale=f"{LEAK_MARKER}: not blocking",
         )
     )
-    Curator(classify_client, audit).curate(
+    Curator(classify_client, audit, run_id=default_run).curate(
         [finding], trigger="milestone_candidate"
     )
 
@@ -160,7 +172,7 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
     assert len(audit_before) == 1
     assert LEAK_MARKER in audit_before[0].payload["findings"][0]["finding"]["claim"]
 
-    db.reset_island(island_id=1, seed_programs=[src_id])
+    db.reset_island(island_id=1, seed_programs=[src_id], run_id=default_run)
 
     [reseed] = db.top_k_in_island(island_id=1, k=10)
     assert reseed.id != src_id
@@ -185,7 +197,7 @@ def test_reseed_after_curator_writes_audit_log(db, tmp_path):
     assert audit_after == audit_before, "reset_island must not touch the audit log"
 
 
-def test_reseed_preserves_clean_notes_but_does_not_invent_them(db, tmp_path):
+def test_reseed_preserves_clean_notes_but_does_not_invent_them(db, default_run, tmp_path):
     """architecture_spec.notes round-trips byte-for-byte across a reseed."""
     src_arch = Architecture(
         name="notes-source",
@@ -199,14 +211,15 @@ def test_reseed_preserves_clean_notes_but_does_not_invent_them(db, tmp_path):
         feasibility=0.9, structural=0.9, exemplar_similarity=0.9,
         middle_class_accessible=True,
     )
-    src_id = db.insert(src_arch, src_scores, island_id=0)
+    src_id = db.insert(src_arch, src_scores, run_id=default_run, island_id=0)
     db.insert(
         Architecture(name="w", summary="s", value_chain="vc", capture_mechanism="cm", entry_resources="er"),
         Scores(feasibility=0.1, structural=0.1, exemplar_similarity=0.1, middle_class_accessible=True),
+        run_id=default_run,
         island_id=1,
     )
 
-    db.reset_island(island_id=1, seed_programs=[src_id])
+    db.reset_island(island_id=1, seed_programs=[src_id], run_id=default_run)
     [reseed] = db.top_k_in_island(island_id=1, k=10)
 
     assert reseed.architecture_spec["notes"] == {"foo": "bar", "baz": "qux"}

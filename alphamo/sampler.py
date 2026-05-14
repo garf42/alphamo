@@ -46,7 +46,9 @@ class Sampler:
     """Softmax-weighted draw of k seed candidates from a Programs DB island.
 
     Zero-fitness candidates (those that failed the middle-class filter) are
-    excluded before weighting so they can never seed a new generation.
+    excluded before weighting so they can never seed a new generation. When
+    `run_id` is set, sampling is restricted to that run's candidates — the
+    sampler will not draw a seed from a prior run's population.
     """
 
     def __init__(
@@ -55,15 +57,19 @@ class Sampler:
         temperature: float = 1.0,
         pool_size: int = 8,
         rng: random.Random | None = None,
+        run_id: str | None = None,
     ) -> None:
         self.db = db
         self.temperature = temperature
         self.pool_size = pool_size
         self.rng = rng or random.Random()
+        self.run_id = run_id
 
     def draw(self, island_id: int, k: int = 2) -> list[Architecture]:
         """Return k architectures sampled by fitness-weighted softmax."""
-        rows = self.db.top_k_in_island(island_id=island_id, k=self.pool_size)
+        rows = self.db.top_k_in_island(
+            island_id=island_id, k=self.pool_size, run_id=self.run_id
+        )
         rows = [r for r in rows if r.fitness > 0.0]
         if not rows:
             return []

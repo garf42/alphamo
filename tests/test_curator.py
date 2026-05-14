@@ -58,7 +58,7 @@ def _structural(rationale: str = "blocks parent goal") -> ClassificationVerdict:
 def test_no_findings_returns_continue(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([])
-    decision = Curator(client, audit).curate([], trigger="scheduled_interval")
+    decision = Curator(client, audit, run_id="run_test").curate([], trigger="scheduled_interval")
     assert decision.action == CuratorAction.CONTINUE
     assert decision.classified == []
 
@@ -66,7 +66,7 @@ def test_no_findings_returns_continue(tmp_path):
 def test_all_cosmetic_returns_continue(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([_cosmetic(), _cosmetic()])
-    decision = Curator(client, audit).curate(
+    decision = Curator(client, audit, run_id="run_test").curate(
         [_finding("a"), _finding("b")], trigger="scheduled_interval"
     )
     assert decision.action == CuratorAction.CONTINUE
@@ -77,7 +77,7 @@ def test_all_cosmetic_returns_continue(tmp_path):
 def test_any_structural_pauses_for_human(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([_cosmetic(), _structural()])
-    decision = Curator(client, audit).curate(
+    decision = Curator(client, audit, run_id="run_test").curate(
         [_finding("a"), _finding("b")], trigger="milestone_candidate"
     )
     assert decision.action == CuratorAction.PAUSE_FOR_HUMAN
@@ -86,7 +86,7 @@ def test_any_structural_pauses_for_human(tmp_path):
 def test_curate_writes_audit_event(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([_cosmetic()])
-    Curator(client, audit).curate(
+    Curator(client, audit, run_id="run_test").curate(
         [_finding("a")], trigger="progress_stall"
     )
     events = audit.read_all()
@@ -99,7 +99,7 @@ def test_curate_writes_audit_event(tmp_path):
 def test_audit_event_records_structural_classification(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([_structural()])
-    Curator(client, audit).curate(
+    Curator(client, audit, run_id="run_test").curate(
         [_finding("a")], trigger="milestone_candidate"
     )
     [event] = audit.read_all()
@@ -110,7 +110,7 @@ def test_audit_event_records_structural_classification(tmp_path):
 def test_classify_passes_finding_text_to_llm(tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_with_classifications([_cosmetic()])
-    Curator(client, audit).curate(
+    Curator(client, audit, run_id="run_test").curate(
         [_finding("distinctive_claim_string")], trigger="t"
     )
     kwargs = client.messages.parse.call_args[1]
@@ -126,7 +126,7 @@ def test_classify_raises_curator_output_error_when_parsed_is_none(tmp_path):
         content=[FakeContentBlock("text")],
     )
     with pytest.raises(CuratorOutputError) as exc_info:
-        Curator(client, audit).curate([_finding("x")], trigger="milestone_candidate")
+        Curator(client, audit, run_id="run_test").curate([_finding("x")], trigger="milestone_candidate")
     assert exc_info.value.stop_reason == "max_tokens"
     assert exc_info.value.content_block_types == ["text"]
     assert audit.read_all() == []  # no audit event when classify fails
@@ -138,7 +138,7 @@ def test_classify_raises_curator_output_error_on_truncated_json(tmp_path):
     client = MagicMock()
     client.messages.parse.side_effect = make_truncation_error()
     with pytest.raises(CuratorOutputError) as exc_info:
-        Curator(client, audit).curate([_finding("x")], trigger="t")
+        Curator(client, audit, run_id="run_test").curate([_finding("x")], trigger="t")
     assert exc_info.value.stop_reason == "parse_error"
     assert "validation failed" in exc_info.value.detail
     assert audit.read_all() == []

@@ -21,17 +21,20 @@ def _names(rows) -> list[str]:
     return [row.architecture_spec["name"] for row in rows]
 
 
-def test_insert_returns_id_and_positive_fitness(db: ProgramsDB) -> None:
-    new_id = db.insert(SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores)
+def test_insert_returns_id_and_positive_fitness(db: ProgramsDB, default_run: str) -> None:
+    new_id = db.insert(
+        SATOSHI_FIXTURE.architecture, SATOSHI_FIXTURE.scores, run_id=default_run
+    )
     assert isinstance(new_id, int) and new_id > 0
     row = db.get(new_id)
     assert row.fitness > 0
     assert row.architecture_spec["name"] == "Satoshi"
+    assert row.run_id == default_run
 
 
-def test_top_k_returns_exemplars_in_order(db: ProgramsDB) -> None:
+def test_top_k_returns_exemplars_in_order(db: ProgramsDB, default_run: str) -> None:
     for fixture in ALL_FIXTURES:
-        db.insert(fixture.architecture, fixture.scores)
+        db.insert(fixture.architecture, fixture.scores, run_id=default_run)
 
     top3 = db.top_k_in_island(island_id=0, k=3)
 
@@ -39,9 +42,13 @@ def test_top_k_returns_exemplars_in_order(db: ProgramsDB) -> None:
     assert top3[0].fitness > top3[1].fitness > top3[2].fitness
 
 
-def test_foils_filtered_by_middle_class_constraint(db: ProgramsDB) -> None:
+def test_foils_filtered_by_middle_class_constraint(
+    db: ProgramsDB, default_run: str
+) -> None:
     ids = {
-        fixture.architecture.name: db.insert(fixture.architecture, fixture.scores)
+        fixture.architecture.name: db.insert(
+            fixture.architecture, fixture.scores, run_id=default_run
+        )
         for fixture in ALL_FIXTURES
     }
 

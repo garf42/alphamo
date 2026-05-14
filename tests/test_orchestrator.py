@@ -111,7 +111,7 @@ def _make_orchestrator(
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = client or _stub_client()
-    return Orchestrator(db, client, audit, hp or _hp())
+    return Orchestrator.for_new_run(db, client, audit, hp=hp or _hp())
 
 
 def test_seed_if_empty_seeds_when_db_is_empty(db, monkeypatch, tmp_path):
@@ -154,8 +154,8 @@ def test_step_does_not_invoke_red_team_below_milestone(db, monkeypatch, tmp_path
     _stub_cascade(monkeypatch, feasibility=0.9, structural=0.85, similarity=0.9)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch = Orchestrator(
-        db, _stub_client(), audit, _hp(milestone_fitness=0.99)
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit, hp=_hp(milestone_fitness=0.99)
     )
     orch.seed_if_empty()
     orch.step(generation=1)
@@ -172,8 +172,8 @@ def test_step_invokes_red_team_at_or_above_milestone(db, monkeypatch, tmp_path):
     _stub_cascade(monkeypatch, feasibility=0.9, structural=0.9, similarity=0.9)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch = Orchestrator(
-        db, _stub_client(), audit, _hp(milestone_fitness=0.5)
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit, hp=_hp(milestone_fitness=0.5)
     )
     orch.seed_if_empty()
     event = orch.step(generation=1)
@@ -189,11 +189,11 @@ def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
     )
     _stub_cascade(monkeypatch, feasibility=0.5, structural=0.6, similarity=0.6)
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch = Orchestrator(
+    orch = Orchestrator.for_new_run(
         db,
         _stub_client(),
         audit,
-        _hp(milestone_fitness=1.0, research_every_generations=5),
+        hp=_hp(milestone_fitness=1.0, research_every_generations=5),
     )
     orch.seed_if_empty()
     event = orch.step(generation=5)
@@ -228,7 +228,7 @@ def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _stub_client(classification=Classification.STRUCTURAL)
-    orch = Orchestrator(db, client, audit, _hp(milestone_fitness=0.5))
+    orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(milestone_fitness=0.5))
     result = orch.run(max_generations=10)
     assert result.paused is True
     assert result.stopped_reason == "curator_pause"
@@ -245,7 +245,10 @@ def test_detect_stall_returns_false_with_short_history(db, monkeypatch, tmp_path
 def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path):
     from alphamo.schemas import Scores
 
-    # Insert flat fitness rows across many generations.
+    orch = _make_orchestrator(
+        db, monkeypatch, tmp_path, hp=_hp(stall_window=5, stall_epsilon=0.001)
+    )
+    # Insert flat fitness rows across many generations into THIS orchestrator's run.
     for g in range(1, 6):
         db.insert(
             Architecture(
@@ -261,11 +264,9 @@ def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path
                 exemplar_similarity=0.5,
                 middle_class_accessible=True,
             ),
+            run_id=orch.run_id,
             generation=g,
         )
-    orch = _make_orchestrator(
-        db, monkeypatch, tmp_path, hp=_hp(stall_window=5, stall_epsilon=0.001)
-    )
     assert orch.detect_stall() is True
 
 
@@ -313,7 +314,7 @@ def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_that_raises_proposer_error_then_succeeds(failures=1)
-    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=5))
+    orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(max_consecutive_failures=5))
 
     result = orch.run(max_generations=5)
 
@@ -333,7 +334,7 @@ def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_that_raises_proposer_error_then_succeeds(failures=100)
-    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=3))
+    orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(max_consecutive_failures=3))
 
     result = orch.run(max_generations=20)
 
@@ -376,7 +377,7 @@ def test_consecutive_counter_resets_on_successful_insert(db, monkeypatch, tmp_pa
         )
 
     client.messages.parse.side_effect = parse_side_effect
-    orch = Orchestrator(db, client, audit, _hp(max_consecutive_failures=3))
+    orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(max_consecutive_failures=3))
 
     result = orch.run(max_generations=8)
 
