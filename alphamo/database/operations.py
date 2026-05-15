@@ -27,15 +27,30 @@ LEGACY_RUN_ID = "run_legacy"
 
 
 def aggregate_fitness(scores: Scores) -> float:
-    """Average of the three stage scores, zeroed when the middle-class filter fails.
+    """Average of present score dimensions, zeroed when the middle-class filter fails.
 
-    The modal's evaluator node calls the middle-class constraint a *filter, not a
-    penalty* — candidates that fail it must not appear above accessible
-    candidates regardless of how well they score elsewhere.
+    The middle-class constraint is a *filter, not a penalty* — candidates
+    that fail it must not appear above accessible candidates regardless of
+    how well they score elsewhere.
+
+    Aggregation rule (Phase 2):
+      - middle_class_accessible=False ⇒ fitness = 0.0 (filter)
+      - else: average over dimensions actually evaluated. `robustness` is
+        included when present and skipped when None. This preserves
+        backward compatibility with pre-Stage-4 candidates (which average
+        over 3 dimensions, matching the original behavior) and gives
+        Stage-4-scrutinised candidates a true 4-way average.
     """
     if not scores.middle_class_accessible:
         return 0.0
-    return (scores.feasibility + scores.structural + scores.exemplar_similarity) / 3.0
+    dims: list[float] = [
+        scores.feasibility,
+        scores.structural,
+        scores.exemplar_similarity,
+    ]
+    if scores.robustness is not None:
+        dims.append(scores.robustness)
+    return sum(dims) / len(dims)
 
 
 def _generate_run_id() -> str:

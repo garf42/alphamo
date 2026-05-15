@@ -11,7 +11,14 @@ from alphamo.evaluator import EvaluatorCascade, cascade as cascade_mod
 from alphamo.handoff import build_handoff
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas import Architecture, Scores
-from alphamo.schemas.findings import Stage1Finding, Stage2Finding, Stage3Finding
+from alphamo.schemas.findings import (
+    Severity,
+    Stage1Finding,
+    Stage2Finding,
+    Stage3Finding,
+    Stage4Finding,
+    StructuralConcern,
+)
 from tests.fixtures.exemplars import (
     LEVELS_FIXTURE,
     ROWLING_FIXTURE,
@@ -46,6 +53,23 @@ def cascade(monkeypatch) -> EvaluatorCascade:
             closest_exemplar="Satoshi",
             similarity=0.95,
             reasoning="s3 ok",
+        ),
+    )
+    monkeypatch.setattr(
+        cascade_mod,
+        "stage4_adversarial",
+        lambda a, c: Stage4Finding(
+            robustness=0.85,
+            concerns=[
+                StructuralConcern(
+                    framing="legal_exposure",
+                    claim="harvest-time stub concern",
+                    evidence="stub",
+                    falsification_condition="if x",
+                    severity=Severity.LOW,
+                )
+            ],
+            reasoning="s4 ok",
         ),
     )
     return EvaluatorCascade(client=MagicMock())

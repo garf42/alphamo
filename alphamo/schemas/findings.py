@@ -85,7 +85,7 @@ class Stage3Finding(BaseModel):
 
 
 class Severity(str, Enum):
-    """Per-finding severity tag from the research/red-team agents."""
+    """Per-finding severity tag from the research / Stage 4 adversarial agents."""
 
     LOW = "low"
     MEDIUM = "medium"
@@ -130,15 +130,60 @@ class RawFindingsBatch(BaseModel):
 class MetaFinding(BaseModel):
     """Python-side finding: a RawFinding tagged with its source and framing."""
 
-    source: str = Field(description='"research" or "redteam".')
+    source: str = Field(description='"research" or "stage4_adversarial".')
     framing: str | None = Field(
         default=None,
-        description="Red-team framing tag (regulatory, economic, …) or None.",
+        description="Adversarial framing tag (regulatory, economic, …) or None.",
     )
     claim: str
     evidence: str
     falsification_condition: str
     severity: Severity
+
+
+class StructuralConcern(BaseModel):
+    """One concern surfaced by Stage 4 adversarial scrutiny.
+
+    Same shape as RawFinding plus a `framing` tag identifying which of the
+    eight adversarial lenses surfaced it. Persisted alongside Stage 4 output
+    on the candidate and projected into the handoff trail.
+    """
+
+    framing: str = Field(
+        description="Which Stage 4 framing surfaced this concern.",
+    )
+    claim: str
+    evidence: str
+    falsification_condition: str
+    severity: Severity
+
+
+class Stage4Finding(BaseModel):
+    """Stage 4 — adversarial robustness scoring + concerns."""
+
+    robustness: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Aggregate robustness, derived deterministically from the "
+            "severity of structural concerns surfaced across all framings. "
+            "1.0 = airtight (no concerns); decays linearly with severity-"
+            "weighted concern count."
+        ),
+    )
+    concerns: list[StructuralConcern] = Field(
+        description=(
+            "Every well-formed concern surfaced across all framings. "
+            "Falsification-condition-less concerns are dropped before this "
+            "list is assembled."
+        ),
+    )
+    reasoning: str = Field(
+        description=(
+            "One or two sentences summarising which framings produced "
+            "concerns and which came back clean."
+        ),
+    )
 
 
 class Classification(str, Enum):

@@ -40,18 +40,41 @@ from alphamo.database.operations import aggregate_fitness
 from alphamo.errors import LLMOutputError
 from alphamo.evaluator import EvaluatorCascade
 from alphamo.evaluator.exemplar_library import STARTERS
-
-SEED_BASELINE_KEY = "seed_baseline_fitness"
 from alphamo.islands import IslandsManager, ResetEvent
-from alphamo.meta.audit_log import AuditLog
+from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.meta.curator import Curator
-from alphamo.meta.redteam import red_team_candidate
 from alphamo.meta.research import run_research
 from alphamo.prompts.research_prompts import Trigger
 from alphamo.proposer import Proposer
 from alphamo.sampler import Sampler
 from alphamo.schemas import Architecture
-from alphamo.schemas.findings import CuratorAction, CuratorDecision
+from alphamo.schemas.findings import (
+    CuratorAction,
+    CuratorDecision,
+    MetaFinding,
+    Stage4Finding,
+    StructuralConcern,
+)
+
+SEED_BASELINE_KEY = "seed_baseline_fitness"
+STAGE4_AUDIT_TRIGGER = "stage4_routine"
+
+
+def _stage4_concerns_as_meta_findings(
+    concerns: list[StructuralConcern],
+) -> list[MetaFinding]:
+    """Adapt Stage 4 concerns to the curator's MetaFinding interface."""
+    return [
+        MetaFinding(
+            source="stage4_adversarial",
+            framing=c.framing,
+            claim=c.claim,
+            evidence=c.evidence,
+            falsification_condition=c.falsification_condition,
+            severity=c.severity,
+        )
+        for c in concerns
+    ]
 
 
 @dataclass
@@ -213,32 +236,79 @@ class Orchestrator:
             return False
         return max(history) - min(history) < self.hp.stall_epsilon
 
-    def _maybe_red_team(
-        self,
-        generation: int,
-        architecture: Architecture,
-        fitness: float,
-    ) -> tuple[str, CuratorDecision] | None:
-        """Fire the red-team agent only when the candidate is BOTH:
+    def _is_milestone(self, generation: int, fitness: float) -> bool:
+        """A candidate is a milestone iff BOTH conditions hold:
 
           (1) past the early-generation warmup (`milestone_min_generation`), and
-          (2) decisively above the seed baseline (`seed_baseline_fitness +
-              milestone_fitness_delta`).
-
-        Phase 2 replaced the absolute `milestone_fitness` floor — that
-        version fired on candidates BELOW the seed exemplars (Satoshi=0.967,
-        Rowling=0.900) because 0.7 sits well under them.
+          (2) decisively above the seed baseline
+              (`seed_baseline_fitness + milestone_fitness_delta`).
         """
         if generation < self.hp.milestone_min_generation:
-            return None
+            return False
         if self.seed_baseline_fitness is None:
-            # No baseline persisted yet (only reachable if seed_if_empty
-            # wasn't called before step()). Be conservative: don't fire.
+            # No baseline persisted yet — be conservative and don't trigger.
+            return False
+        return fitness > self.seed_baseline_fitness + self.hp.milestone_fitness_delta
+
+    def _log_stage4_routine(
+        self, candidate_id: int, stage4: Stage4Finding
+    ) -> None:
+        """Record a Stage 4 firing in the audit log, regardless of milestone status.
+
+        Every Stage 4 firing logs its robustness, concern counts, and
+        framings that surfaced concerns. Milestone-routed curator events
+        are logged separately by the Curator itself.
+        """
+        framings_with_concerns = sorted({c.framing for c in stage4.concerns})
+        n_high = sum(1 for c in stage4.concerns if c.severity.value == "high")
+        n_med = sum(1 for c in stage4.concerns if c.severity.value == "medium")
+        n_low = sum(1 for c in stage4.concerns if c.severity.value == "low")
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=STAGE4_AUDIT_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"candidate={candidate_id} robustness={stage4.robustness:.3f} "
+                    f"concerns={len(stage4.concerns)} (high={n_high} med={n_med} low={n_low}) "
+                    f"framings_with_concerns={framings_with_concerns}"
+                ),
+                payload={
+                    "candidate_id": candidate_id,
+                    "robustness": stage4.robustness,
+                    "concerns": [c.model_dump(mode="json") for c in stage4.concerns],
+                    "reasoning": stage4.reasoning,
+                },
+            )
+        )
+
+    def _maybe_milestone_curate(
+        self,
+        generation: int,
+        candidate_id: int,
+        fitness: float,
+        stage4: Stage4Finding,
+    ) -> tuple[str, CuratorDecision] | None:
+        """If the candidate is a milestone AND Stage 4 surfaced concerns,
+        invoke the curator's classify-and-gate path.
+
+        Per Decision 3: only STRUCTURAL concerns trigger pause. The curator's
+        existing semantics handle that — it classifies each concern and pauses
+        on any STRUCTURAL classification, continues on cosmetic-only.
+
+        A milestone with empty Stage 4 concerns (clean adversarial pass) does
+        not invoke the curator — there's nothing to classify.
+        """
+        if not self._is_milestone(generation, fitness):
             return None
-        if fitness <= self.seed_baseline_fitness + self.hp.milestone_fitness_delta:
+        if not stage4.concerns:
             return None
-        findings = red_team_candidate(architecture, self.client)
-        decision = self.curator.curate(findings, trigger=Trigger.MILESTONE_CANDIDATE)
+        meta_findings = _stage4_concerns_as_meta_findings(stage4.concerns)
+        decision = self.curator.curate(
+            meta_findings, trigger=Trigger.MILESTONE_CANDIDATE
+        )
         return Trigger.MILESTONE_CANDIDATE, decision
 
     def _maybe_research(
@@ -301,15 +371,26 @@ class Orchestrator:
         )
         row = self.db.get(candidate_id)
 
+        # Every Stage 4 firing is recorded in the audit log, milestone or not.
+        # This is the routine selection-pressure path: robustness is already
+        # in the candidate's scores, but the per-framing diagnostic trail is
+        # the only place the concerns themselves get persisted.
+        if result.stage4 is not None:
+            self._log_stage4_routine(candidate_id, result.stage4)
+
         meta_trigger: str | None = None
         meta_decision: CuratorDecision | None = None
         meta_failure: str | None = None
         try:
-            red_team_outcome = self._maybe_red_team(
-                generation, architecture, row.fitness
+            milestone_outcome = (
+                self._maybe_milestone_curate(
+                    generation, candidate_id, row.fitness, result.stage4
+                )
+                if result.stage4 is not None
+                else None
             )
-            if red_team_outcome is not None:
-                meta_trigger, meta_decision = red_team_outcome
+            if milestone_outcome is not None:
+                meta_trigger, meta_decision = milestone_outcome
             else:
                 research_outcome = self._maybe_research(generation)
                 if research_outcome is not None:

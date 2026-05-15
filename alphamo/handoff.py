@@ -120,6 +120,12 @@ def build_handoff(
             )
         )
 
+    adversarial_concerns = (
+        list(cascade_result.stage4.concerns)
+        if cascade_result.stage4 is not None
+        else []
+    )
+
     parent_goal_alignment = _parent_goal_alignment_text(cascade_result)
     middle_class_check = _middle_class_check(cascade_result, winner_arch)
 
@@ -143,6 +149,7 @@ def build_handoff(
             anchor_used=VERIFIER_ANCHOR,
             eval_count=db.count_candidates(run_id=run_id),
             exemplar_comparisons=exemplar_comparisons,
+            adversarial_concerns=adversarial_concerns,
         ),
         drift_log=_drift_log_from_audit(audit_log, run_id=run_id),
         parent_goal_alignment=parent_goal_alignment,

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo._concurrent import run_parallel
 from alphamo.context.parent_goal import PARENT_GOAL
 from alphamo.errors import CuratorOutputError, parse_or_raise
 from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
@@ -107,17 +108,23 @@ class Curator:
     def curate(
         self, findings: list[MetaFinding], trigger: str
     ) -> CuratorDecision:
-        """Classify every finding, derive a decision, log to the drift log."""
-        classified: list[ClassifiedFinding] = []
-        for finding in findings:
-            verdict = self.classify(finding)
-            classified.append(
-                ClassifiedFinding(
-                    finding=finding,
-                    classification=verdict.classification,
-                    rationale=verdict.rationale,
-                )
+        """Classify every finding, derive a decision, log to the drift log.
+
+        Classification is per-finding and stateless, so the calls run
+        concurrently via run_parallel — wall-clock for N findings drops from
+        N sequential Opus calls to ceil(N / max_workers) rounds.
+        """
+        verdicts = run_parallel(
+            [(lambda f=f: self.classify(f)) for f in findings]
+        )
+        classified: list[ClassifiedFinding] = [
+            ClassifiedFinding(
+                finding=f,
+                classification=v.classification,
+                rationale=v.rationale,
             )
+            for f, v in zip(findings, verdicts)
+        ]
 
         structural = [
             c for c in classified if c.classification == Classification.STRUCTURAL

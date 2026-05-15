@@ -19,6 +19,7 @@ from alphamo.schemas.findings import (
     Stage1Finding,
     Stage2Finding,
     Stage3Finding,
+    Stage4Finding,
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
 from tests.fixtures.parsed_message import FakeParsedMessage
@@ -51,6 +52,13 @@ def _stub_cascade(monkeypatch, fit=0.85):
         "stage3_exemplars",
         lambda a, c: Stage3Finding(
             closest_exemplar="Satoshi", similarity=fit, reasoning="ok"
+        ),
+    )
+    monkeypatch.setattr(
+        cascade_mod,
+        "stage4_adversarial",
+        lambda a, c: Stage4Finding(
+            robustness=0.85, concerns=[], reasoning="stub stage4"
         ),
     )
 
@@ -218,7 +226,6 @@ def test_two_orchestrator_runs_against_same_db_are_isolated(db, tmp_path, monkey
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
 
-    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -248,7 +255,6 @@ def test_resume_run_appends_without_reseeding(db, tmp_path, monkeypatch):
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
 
-    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -288,7 +294,6 @@ def test_orchestrator_completion_stamps_stopped_reason(db, tmp_path, monkeypatch
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
 
-    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -425,7 +430,6 @@ def test_fresh_run_creates_exactly_one_run_with_seeded_candidates(
     import alphamo.orchestrator as orch_mod
     from alphamo.evaluator.exemplar_library import STARTERS
 
-    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
@@ -461,7 +465,6 @@ def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
     import alphamo.orchestrator as orch_mod
     from alphamo.evaluator.exemplar_library import STARTERS
 
-    monkeypatch.setattr(orch_mod, "red_team_candidate", lambda *a, **k: [])
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
     # Prior run: just insert a distinctive candidate directly, simulating a

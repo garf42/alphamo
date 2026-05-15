@@ -96,10 +96,6 @@ class CuratorOutputError(LLMOutputError):
     COMPONENT = "curator"
 
 
-class RedTeamOutputError(LLMOutputError):
-    COMPONENT = "redteam"
-
-
 class ResearchOutputError(LLMOutputError):
     COMPONENT = "research"
 
@@ -114,6 +110,10 @@ class Stage2OutputError(LLMOutputError):
 
 class Stage3OutputError(LLMOutputError):
     COMPONENT = "stage3_exemplars"
+
+
+class Stage4OutputError(LLMOutputError):
+    COMPONENT = "stage4_adversarial"
 
 
 def parse_or_raise(

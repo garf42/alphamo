@@ -10,6 +10,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from alphamo.schemas.architecture import Architecture
+from alphamo.schemas.findings import StructuralConcern
 from alphamo.schemas.scores import Scores
 
 
@@ -51,6 +52,10 @@ class VerificationTrail(BaseModel):
     anchor_used: str
     eval_count: int
     exemplar_comparisons: list[ExemplarComparison]
+    adversarial_concerns: list[StructuralConcern] = Field(default_factory=list)
+    """Stage 4 concerns surfaced when the cascade was re-run on the winner at
+    harvest time. Empty list for legacy / pre-Stage-4 winners, or for winners
+    whose Stage 4 came back clean."""
 
 
 class DriftLogEntry(BaseModel):
