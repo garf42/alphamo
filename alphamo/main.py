@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -482,6 +483,217 @@ def harvest(
         f"eval count: {handoff.verification_trail.eval_count}"
     )
     click.echo(f"wrote {out_path}")
+
+
+def _format_concern_lines(concerns: list, max_per_severity: int = 3) -> list[str]:
+    """Render Stage 4 concerns into stdout-friendly lines, capped to keep
+    the output readable. Up to `max_per_severity` shown per severity bucket.
+    """
+    by_severity: dict[str, list] = {"high": [], "medium": [], "low": []}
+    for c in concerns:
+        by_severity[c.severity.value].append(c)
+    lines: list[str] = []
+    for sev in ("high", "medium", "low"):
+        bucket = by_severity[sev]
+        if not bucket:
+            continue
+        lines.append(f"    {sev.upper()} concerns ({len(bucket)}):")
+        for c in bucket[:max_per_severity]:
+            claim = c.claim if len(c.claim) <= 220 else c.claim[:217] + "..."
+            lines.append(f"      [{c.framing}] {claim}")
+            falsifier = c.falsification_condition
+            if len(falsifier) > 200:
+                falsifier = falsifier[:197] + "..."
+            lines.append(f"        falsifier: {falsifier}")
+        if len(bucket) > max_per_severity:
+            lines.append(
+                f"      … +{len(bucket) - max_per_severity} more {sev.upper()} concerns"
+            )
+    return lines
+
+
+def _print_seed_cascade_result(name: str, result) -> None:
+    """Verbose stdout report of every stage's output for one seed."""
+    import click
+
+    click.echo(f"\n=== {name} ===")
+
+    if result.stage1 is not None:
+        s1 = result.stage1
+        click.echo(
+            f"  Stage 1 (Haiku — feasibility + middle-class):\n"
+            f"    feasibility            = {s1.feasibility:.4f}\n"
+            f"    middle_class_accessible = {s1.middle_class_accessible}\n"
+            f"    reasoning: {s1.reasoning}"
+        )
+    if result.early_exit:
+        click.echo(f"  EARLY EXIT: {result.early_exit}")
+
+    if result.stage2 is not None:
+        s2 = result.stage2
+        click.echo(
+            f"  Stage 2 (Sonnet — structural criteria):\n"
+            f"    one_person_threshold     = {s2.one_person_threshold:.4f}\n"
+            f"    billion_dollar_potential = {s2.billion_dollar_potential:.4f}\n"
+            f"    labor_separation         = {s2.labor_separation:.4f}\n"
+            f"    structural (aggregate)   = {s2.structural:.4f}\n"
+            f"    reasoning: {s2.reasoning}"
+        )
+
+    if result.stage3 is not None:
+        s3 = result.stage3
+        click.echo(
+            f"  Stage 3 (Opus — exemplar similarity):\n"
+            f"    closest_exemplar = {s3.closest_exemplar}\n"
+            f"    similarity       = {s3.similarity:.4f}\n"
+            f"    reasoning: {s3.reasoning}"
+        )
+
+    if result.stage4 is not None:
+        s4 = result.stage4
+        framings_seen = sorted({c.framing for c in s4.concerns})
+        n_high = sum(1 for c in s4.concerns if c.severity.value == "high")
+        n_med = sum(1 for c in s4.concerns if c.severity.value == "medium")
+        n_low = sum(1 for c in s4.concerns if c.severity.value == "low")
+        click.echo(
+            f"  Stage 4 (Opus × 8 framings — adversarial):\n"
+            f"    robustness    = {s4.robustness:.4f}\n"
+            f"    concerns      = {len(s4.concerns)} (high={n_high} medium={n_med} low={n_low})\n"
+            f"    framings_with_concerns = {framings_seen}\n"
+            f"    reasoning: {s4.reasoning}"
+        )
+        for line in _format_concern_lines(s4.concerns):
+            click.echo(line)
+
+    final = result.scores
+    click.echo(
+        f"  Final aggregate scores:\n"
+        f"    feasibility            = {final.feasibility:.4f}\n"
+        f"    structural             = {final.structural:.4f}\n"
+        f"    exemplar_similarity    = {final.exemplar_similarity:.4f}\n"
+        f"    robustness             = "
+        + (f"{final.robustness:.4f}" if final.robustness is not None else "None")
+        + "\n"
+        f"    middle_class_accessible = {final.middle_class_accessible}"
+    )
+
+
+@cli.command("score-seeds")
+@click.option(
+    "--write/--no-write",
+    "write_back",
+    default=True,
+    show_default=True,
+    help="Write updated scores back to exemplar_library.py. --no-write for dry-run.",
+)
+@click.option(
+    "--decay-k",
+    "decay_k",
+    type=float,
+    default=0.15,
+    show_default=True,
+    help="Stage 4 exponential-decay rate.",
+)
+@click.option(
+    "--report-out",
+    "report_out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional path to write a structured JSON report of the cascade output.",
+)
+def score_seeds(write_back: bool, decay_k: float, report_out: Path | None) -> None:
+    """Run each STARTER through the full cascade and overwrite
+    exemplar_library.py with the cascade-produced scores.
+
+    Once-off operation. Costs ~$2-3 in LLM calls and ~6-12 min wall time
+    for the current 4 seeds. Re-run when the cascade prompts, models, or
+    severity weights change.
+
+    On seeds that fail Stage 1 (middle-class filter rejection) or
+    short-circuit elsewhere, the cascade-produced (degenerate) scores
+    are reported and written verbatim — the whole point is to see what
+    the cascade actually says, not to suppress signal.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    import anthropic
+
+    from alphamo.context.parent_goal import PARENT_GOAL_VERSION
+    from alphamo.context.verifier import VERIFIER_VERSION
+    from alphamo.evaluator import EvaluatorCascade
+    from alphamo.evaluator.exemplar_library import STARTERS
+    from alphamo.evaluator.seed_scoring import rewrite_exemplar_library_text
+
+    client = anthropic.Anthropic()
+    cascade = EvaluatorCascade(client, stage4_decay_k=decay_k)
+
+    click.echo(
+        f"Scoring {len(STARTERS)} seeds through the cascade. "
+        f"decay_k={decay_k}, parent_goal={PARENT_GOAL_VERSION}, "
+        f"verifier={VERIFIER_VERSION}."
+    )
+
+    results: list[tuple[Any, Any]] = []
+    for arch, _ in STARTERS:
+        result = cascade.evaluate(arch)
+        results.append((arch, result))
+        _print_seed_cascade_result(arch.name, result)
+
+    new_scores_by_prefix = {
+        arch.name.upper(): result.scores.model_dump()
+        for arch, result in results
+    }
+
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if report_out is not None:
+        report_payload = {
+            "generated_at": generated_at,
+            "parent_goal_version": PARENT_GOAL_VERSION,
+            "verifier_version": VERIFIER_VERSION,
+            "decay_k": decay_k,
+            "seeds": [
+                {
+                    "name": arch.name,
+                    "scores": result.scores.model_dump(),
+                    "early_exit": result.early_exit,
+                    "stage1": (
+                        result.stage1.model_dump() if result.stage1 else None
+                    ),
+                    "stage2": (
+                        result.stage2.model_dump() if result.stage2 else None
+                    ),
+                    "stage3": (
+                        result.stage3.model_dump() if result.stage3 else None
+                    ),
+                    "stage4": (
+                        result.stage4.model_dump() if result.stage4 else None
+                    ),
+                }
+                for arch, result in results
+            ],
+        }
+        report_out.parent.mkdir(parents=True, exist_ok=True)
+        report_out.write_text(json.dumps(report_payload, indent=2, default=str))
+        click.echo(f"\nWrote structured report to {report_out}")
+
+    if not write_back:
+        click.echo("\n--no-write: skipped writing exemplar_library.py")
+        return
+
+    import alphamo.evaluator.exemplar_library as exlib_module
+
+    library_path = Path(exlib_module.__file__)
+    original_text = library_path.read_text()
+    new_text = rewrite_exemplar_library_text(
+        original_text,
+        new_scores_by_prefix,
+        generated_at=generated_at,
+        parent_goal_version=PARENT_GOAL_VERSION,
+        verifier_version=VERIFIER_VERSION,
+    )
+    library_path.write_text(new_text)
+    click.echo(f"\nUpdated {library_path} with cascade-produced scores.")
 
 
 @cli.command("backfill-stage4")
