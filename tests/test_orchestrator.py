@@ -178,7 +178,7 @@ def _concern(framing: str = "regulatory", severity: Severity = Severity.MEDIUM) 
 
 def test_step_does_not_invoke_curator_below_baseline_delta(db, monkeypatch, tmp_path):
     """A candidate below baseline+delta must not invoke the curator, even with concerns."""
-    # Seed baseline (max of STARTERS) ≈ 0.91 with robustness=0.85 backfill.
+    # Seed baseline (max of STARTERS) ≈ 0.888 with cascade-produced robustness.
     # Stub fitness ≈ 0.88, below baseline + delta. Stage 4 surfaces concerns,
     # but they should not be routed to the curator because the candidate
     # is not a milestone.
@@ -251,8 +251,8 @@ def test_step_does_not_invoke_curator_when_stage4_clean_on_milestone(
 
 def test_step_invokes_curator_on_milestone_with_concerns(db, monkeypatch, tmp_path):
     """Past min-generation AND above baseline+delta AND Stage 4 has concerns → curator fires."""
-    # 4-way fitness = (0.99 * 4) / 4 = 0.99, comfortably above the new
-    # Satoshi-based seed baseline of ~0.94 + delta 0.02 = 0.96.
+    # 4-way fitness = (0.99 * 4) / 4 = 0.99, comfortably above the
+    # cascade-produced Satoshi seed baseline of ~0.888 + delta 0.02 = 0.908.
     _stub_cascade(
         monkeypatch,
         feasibility=0.99,
@@ -284,9 +284,9 @@ def test_seed_baseline_is_persisted_in_run_hyperparameters(db, monkeypatch, tmp_
     orch.seed_if_empty()
     run = db.get_run(orch.run_id)
     assert "seed_baseline_fitness" in run.hyperparameters
-    # Phase 2 (Stage 4): Satoshi's hand-picked aggregate is now 4-way:
-    # (0.95 + 0.95 + 1.00 + 0.85) / 4.0 = 0.9375
-    assert run.hyperparameters["seed_baseline_fitness"] == pytest.approx(0.9375, abs=0.005)
+    # Cascade-produced canonical scores: Satoshi remains the highest aggregate.
+    # (0.9500 + 0.9700 + 1.0000 + 0.6319) / 4.0 = 0.887975
+    assert run.hyperparameters["seed_baseline_fitness"] == pytest.approx(0.887975, abs=0.005)
 
 
 def test_resumed_run_inherits_seed_baseline(db, monkeypatch, tmp_path):

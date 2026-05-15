@@ -1,7 +1,8 @@
 """Integration tests for Stage 4's selection-pressure and curator-gate semantics.
 
 Verifies:
-  - Decision 1: STARTERS carry robustness=0.85.
+  - Decision 1: STARTERS carry cascade-produced robustness values
+    (see exemplar_library.py for provenance and rationale).
   - Decision 2: aggregate_fitness averages over present dimensions; legacy
     candidates (robustness=None) get 3-way average; new candidates get 4-way.
   - Decision 3: cosmetic-only Stage 4 concerns on a milestone candidate
@@ -45,23 +46,32 @@ from tests.fixtures.parsed_message import FakeParsedMessage
 # --------------------------------------------------------------------- Decision 1
 
 
-def test_all_starters_carry_robustness_0_85():
+def test_all_starters_carry_cascade_robustness():
+    """Every STARTER must carry a cascade-produced robustness value (not None,
+    not the old hand-set 0.85 placeholder). Specific values are in
+    exemplar_library.py; this test guards the invariant that robustness is
+    populated and within [0, 1]."""
     for arch, scores in STARTERS:
-        assert scores.robustness == 0.85, (
-            f"{arch.name} STARTER missing robustness=0.85 backfill"
+        assert scores.robustness is not None, (
+            f"{arch.name} STARTER missing cascade-produced robustness"
+        )
+        assert 0.0 <= scores.robustness <= 1.0
+        assert scores.robustness != 0.85, (
+            f"{arch.name} STARTER still carries the old hand-picked 0.85 "
+            "placeholder; re-run `alphamo score-seeds --write`"
         )
 
 
 def test_satoshi_aggregate_fitness_is_four_way_with_robustness():
-    # (0.95 + 0.95 + 1.00 + 0.85) / 4 = 0.9375
-    assert aggregate_fitness(SATOSHI_SCORES) == pytest.approx(0.9375)
+    # (0.9500 + 0.9700 + 1.0000 + 0.6319) / 4 = 0.887975
+    assert aggregate_fitness(SATOSHI_SCORES) == pytest.approx(0.887975)
 
 
 def test_rowling_levels_aggregates_with_robustness():
-    # Rowling: (0.85 + 0.90 + 0.95 + 0.85) / 4 = 0.8875
-    assert aggregate_fitness(ROWLING_SCORES) == pytest.approx(0.8875)
-    # Levels: (0.90 + 0.80 + 0.85 + 0.85) / 4 = 0.85
-    assert aggregate_fitness(LEVELS_SCORES) == pytest.approx(0.85)
+    # Rowling: (0.9500 + 0.9400 + 1.0000 + 0.6561) / 4 = 0.886525
+    assert aggregate_fitness(ROWLING_SCORES) == pytest.approx(0.886525)
+    # Levels: (0.9200 + 0.6500 + 1.0000 + 0.4133) / 4 = 0.745825
+    assert aggregate_fitness(LEVELS_SCORES) == pytest.approx(0.745825)
 
 
 # --------------------------------------------------------------------- Decision 2
