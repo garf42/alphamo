@@ -58,10 +58,12 @@ class EvaluatorCascade:
         client: anthropic.Anthropic | None = None,
         stage1_threshold: float = 0.4,
         stage2_threshold: float = 0.5,
+        stage4_decay_k: float = 0.15,
     ) -> None:
         self.client = client or anthropic.Anthropic()
         self.stage1_threshold = stage1_threshold
         self.stage2_threshold = stage2_threshold
+        self.stage4_decay_k = stage4_decay_k
 
     def evaluate(self, architecture: Architecture) -> CascadeResult:
         s1 = stage1_feasibility(architecture, self.client)
@@ -120,7 +122,9 @@ class EvaluatorCascade:
         s3, s4 = run_parallel(
             [
                 lambda: stage3_exemplars(architecture, self.client),
-                lambda: stage4_adversarial(architecture, self.client),
+                lambda: stage4_adversarial(
+                    architecture, self.client, decay_k=self.stage4_decay_k
+                ),
             ],
             max_workers=2,
         )

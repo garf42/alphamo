@@ -58,7 +58,7 @@ def cascade(monkeypatch) -> EvaluatorCascade:
     monkeypatch.setattr(
         cascade_mod,
         "stage4_adversarial",
-        lambda a, c: Stage4Finding(
+        lambda a, c, **kw: Stage4Finding(
             robustness=0.85,
             concerns=[
                 StructuralConcern(

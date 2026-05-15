@@ -85,11 +85,14 @@ class ProgramsDB:
     # ------------------------------------------------------------------ migration
 
     def _migrate_legacy_candidates(self) -> None:
-        """One-shot migration: add run_id to candidates and backfill any NULL rows.
+        """One-shot migration: add run_id and stage4_findings columns; backfill any NULL run_ids.
 
-        Idempotent. Runs on every ProgramsDB construction. Pre-existing
-        candidates that lack a run_id are assigned to the legacy run, which
-        is created lazily if needed.
+        Idempotent. Runs on every ProgramsDB construction.
+          - Pre-Phase-1 candidates lack run_id; assigned to the LEGACY_RUN_ID
+            run, lazily created.
+          - Pre-Sprint-1 candidates lack stage4_findings; the column is added
+            but rows stay NULL. Backfill from the audit log is a separate
+            operation (`backfill_stage4_from_audit`).
         """
         inspector = inspect(self.engine)
         if "candidates" not in inspector.get_table_names():
@@ -99,6 +102,11 @@ class ProgramsDB:
         if "run_id" not in column_names:
             with self.engine.begin() as conn:
                 conn.execute(text("ALTER TABLE candidates ADD COLUMN run_id TEXT"))
+        if "stage4_findings" not in column_names:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE candidates ADD COLUMN stage4_findings JSON")
+                )
 
         with self._session() as session:
             null_count = session.scalar(
@@ -202,6 +210,72 @@ class ProgramsDB:
             if result.rowcount == 0:
                 raise KeyError(f"no run with run_id={run_id!r}")
 
+    def backfill_stage4_from_audit(
+        self,
+        audit_events: "list[Any]",
+        decay_k: float = 0.15,
+    ) -> dict[str, int]:
+        """One-shot migration: populate stage4_findings on existing candidates
+        from `trigger='stage4_routine'` events in the audit log.
+
+        For each event:
+          - Extract `payload.candidate_id` and `payload.concerns`.
+          - Skip if the candidate already has a non-NULL stage4_findings
+            (the operation is idempotent — re-running is safe).
+          - Skip if no candidate with that id exists (audit and DB drifted).
+          - Else: write the concerns list, recompute robustness via the
+            current `compute_robustness` formula, recompute fitness via
+            `aggregate_fitness`, update all three columns in one row.
+
+        Returns a stats dict: {"updated": N, "skipped_existing": N,
+        "skipped_missing": N, "skipped_non_stage4": N}.
+
+        Importing the audit log live here would pull in alphamo.meta — we
+        keep the DB module dependency-light by taking already-loaded events.
+        """
+        from alphamo.evaluator.stage4_adversarial import compute_robustness
+        from alphamo.schemas import Scores
+        from alphamo.schemas.findings import StructuralConcern
+
+        stats = {
+            "updated": 0,
+            "skipped_existing": 0,
+            "skipped_missing": 0,
+            "skipped_non_stage4": 0,
+        }
+        with self._session() as session:
+            for event in audit_events:
+                if event.trigger != "stage4_routine":
+                    stats["skipped_non_stage4"] += 1
+                    continue
+                payload = event.payload or {}
+                candidate_id = payload.get("candidate_id")
+                concerns_data = payload.get("concerns")
+                if candidate_id is None or concerns_data is None:
+                    stats["skipped_non_stage4"] += 1
+                    continue
+
+                row = session.get(Candidate, candidate_id)
+                if row is None:
+                    stats["skipped_missing"] += 1
+                    continue
+                if row.stage4_findings is not None:
+                    stats["skipped_existing"] += 1
+                    continue
+
+                concerns = [StructuralConcern(**c) for c in concerns_data]
+                new_robustness = compute_robustness(concerns, decay_k=decay_k)
+
+                merged_scores = dict(row.scores)
+                merged_scores["robustness"] = new_robustness
+                new_fitness = aggregate_fitness(Scores(**merged_scores))
+
+                row.stage4_findings = concerns_data
+                row.scores = merged_scores
+                row.fitness = new_fitness
+                stats["updated"] += 1
+        return stats
+
     def patch_run_hyperparameters(
         self, run_id: str, patch: dict[str, Any]
     ) -> None:
@@ -232,14 +306,22 @@ class ProgramsDB:
         generation: int = 0,
         parent_ids: list[int] | None = None,
         status: str = "alive",
+        stage4_findings: list[dict[str, Any]] | None = None,
     ) -> int:
-        """Insert one candidate. Returns the new row id. `run_id` is required."""
+        """Insert one candidate. Returns the new row id. `run_id` is required.
+
+        `stage4_findings` is an optional list of StructuralConcern dicts (the
+        Pydantic model_dump form). Pass it when Stage 4 ran on this candidate
+        and produced concerns; leave None for short-circuit-exit candidates
+        or for ad-hoc inserts that bypass the cascade.
+        """
         if not run_id:
             raise ValueError("run_id is required on insert")
         candidate = Candidate(
             run_id=run_id,
             architecture_spec=architecture.model_dump(),
             scores=scores.model_dump(),
+            stage4_findings=stage4_findings,
             fitness=aggregate_fitness(scores),
             island_id=island_id,
             generation=generation,
@@ -428,6 +510,7 @@ class ProgramsDB:
                         run_id=run_id,
                         architecture_spec=source.architecture_spec,
                         scores=source.scores,
+                        stage4_findings=source.stage4_findings,
                         fitness=source.fitness,
                         island_id=island_id,
                         generation=source.generation,

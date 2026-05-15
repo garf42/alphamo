@@ -48,6 +48,19 @@ class Hyperparameters(BaseModel):
     stage1_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     stage2_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    stage4_decay_k: float = Field(
+        default=0.15,
+        gt=0.0,
+        description=(
+            "Exponential-decay rate for Stage 4's robustness score. "
+            "robustness = exp(-stage4_decay_k * weighted_concern_sum). "
+            "k=0.15 spans [0.21, 0.96] across the typical 1-50 concern "
+            "range; higher k punishes concerns more aggressively. Bug 1 "
+            "fix (Sprint 1): the prior linear formula clamped to 0.0 for "
+            "any non-trivial concern count."
+        ),
+    )
+
     milestone_fitness_delta: float = Field(
         default=0.02,
         ge=0.0,

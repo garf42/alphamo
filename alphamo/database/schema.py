@@ -7,6 +7,7 @@ Mirrors the schema sketch from the Programs DB modal:
       run_id TEXT,                          -- FK to runs.run_id (phase-run-boundaries)
       architecture_spec JSON NOT NULL,
       scores JSON NOT NULL,
+      stage4_findings JSON,                 -- list of StructuralConcern dicts; NULL for legacy / pre-Stage-4 / Stage-1-or-2-exit candidates
       fitness REAL NOT NULL,
       island_id INTEGER,
       generation INTEGER,
@@ -87,6 +88,13 @@ class Candidate(Base):
     )
     architecture_spec: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     scores: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    # stage4_findings: list of StructuralConcern dicts (claim, evidence,
+    # falsification_condition, severity, framing). NULL for legacy candidates
+    # from pre-Sprint-1 runs, and for candidates that exit the cascade
+    # before Stage 4 runs.
+    stage4_findings: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True
+    )
     fitness: Mapped[float] = mapped_column(Float, nullable=False)
     island_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     generation: Mapped[int | None] = mapped_column(Integer, nullable=True)

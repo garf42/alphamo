@@ -59,7 +59,7 @@ def _make_s4(robustness: float = 0.85) -> Stage4Finding:
 
 def _patch_stage4(monkeypatch, robustness: float = 0.85):
     monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c: _make_s4(robustness)
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: _make_s4(robustness)
     )
 
 
@@ -88,7 +88,7 @@ def test_passing_candidate_runs_all_four_stages(cascade, monkeypatch):
     monkeypatch.setattr(
         cascade_mod,
         "stage4_adversarial",
-        lambda a, c: s4_calls.append(a) or _make_s4(0.80),
+        lambda a, c, **kw: s4_calls.append(a) or _make_s4(0.80),
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
@@ -120,7 +120,7 @@ def test_middle_class_failure_short_circuits_to_zero_fitness(cascade, monkeypatc
         cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
     )
 
     result = cascade.evaluate(PE_ROLLUP_FOIL.architecture)
@@ -145,7 +145,7 @@ def test_low_stage1_score_skips_stage2_and_stage3_and_stage4(cascade, monkeypatc
         cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
@@ -168,7 +168,7 @@ def test_low_stage2_score_skips_stage3_and_stage4(cascade, monkeypatch):
         cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)

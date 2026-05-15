@@ -6,14 +6,17 @@ operational, scaling, mechanism_robustness, hidden_dependencies,
 scaling_cliffs, legal_exposure) running concurrently. Each framing produces
 a list of concerns with falsification conditions and severity. The stage
 aggregates the concerns and computes a deterministic robustness score
-from their severity-weighted count.
+from their severity-weighted count via exponential decay.
 
 Robustness contributes to fitness as a fourth dimension alongside
 feasibility / structural / exemplar_similarity. Concerns are persisted on
-the candidate and projected into the handoff trail.
+the candidate (stage4_findings JSON column) and projected into the
+handoff trail.
 """
 
 from __future__ import annotations
+
+import math
 
 import anthropic
 
@@ -33,21 +36,41 @@ from alphamo.schemas.findings import (
     StructuralConcern,
 )
 
-# Severity-weighted deductions used to map concerns → robustness score.
-# Tuned so a single HIGH concern drops robustness by 0.30 (a meaningful
-# but not catastrophic move), a single MEDIUM by 0.10, a LOW by 0.03.
-# A candidate with three HIGH concerns lands at 0.10; four lands at 0.00.
-_SEVERITY_DEDUCTION: dict[Severity, float] = {
+# Per-concern severity weights — sum these across all concerns to get the
+# weighted concern total, then feed into the exponential decay below.
+# Preserved from the Phase 2 calibration: HIGH=0.30, MEDIUM=0.10, LOW=0.03.
+_SEVERITY_WEIGHT: dict[Severity, float] = {
     Severity.HIGH: 0.30,
     Severity.MEDIUM: 0.10,
     Severity.LOW: 0.03,
 }
 
+# Default decay rate. Bug 1 fix (Sprint 1): the previous linear
+# `1.0 - sum(weights)` formula clamped to 0.0 with anything more than ~4
+# HIGH concerns. Run-006 observed 39-53 concerns per candidate, which
+# routinely produced weighted sums of 7-10, saturating any linear formula.
+# Exponential decay produces graded output across the full realistic range.
+DEFAULT_DECAY_K = 0.15
 
-def compute_robustness(concerns: list[StructuralConcern]) -> float:
-    """Robustness = 1.0 − sum(severity_deduction(c) for c in concerns), clamped to [0, 1]."""
-    deduction = sum(_SEVERITY_DEDUCTION[c.severity] for c in concerns)
-    return max(0.0, min(1.0, 1.0 - deduction))
+
+def compute_robustness(
+    concerns: list[StructuralConcern],
+    decay_k: float = DEFAULT_DECAY_K,
+) -> float:
+    """Robustness = exp(-decay_k * sum(severity_weight(c) for c in concerns)).
+
+    Exponential decay gives graded output across realistic concern counts:
+      0 concerns                    → 1.000
+      1 HIGH                        → 0.956
+      5 HIGH                        → 0.799
+      15 HIGH + 25 MED              → 0.350  (run-006 low end)
+      25 HIGH + 28 MED + 4 LOW      → 0.210  (run-006 high end)
+      ∞                             → 0.0+ (asymptotic, never clamps to 0)
+
+    The return is mathematically in (0, 1]; no clamping required.
+    """
+    weighted_sum = sum(_SEVERITY_WEIGHT[c.severity] for c in concerns)
+    return math.exp(-decay_k * weighted_sum)
 
 
 def _enforce_falsification(
@@ -94,6 +117,7 @@ def stage4_adversarial(
     client: anthropic.Anthropic,
     framings: list[str] | None = None,
     model: str = OPUS_MODEL,
+    decay_k: float = DEFAULT_DECAY_K,
 ) -> Stage4Finding:
     """Run all framings (default: 8) concurrently, aggregate, score robustness.
 
@@ -130,7 +154,7 @@ def stage4_adversarial(
         )
 
     return Stage4Finding(
-        robustness=compute_robustness(all_concerns),
+        robustness=compute_robustness(all_concerns, decay_k=decay_k),
         concerns=all_concerns,
         reasoning=reasoning,
     )

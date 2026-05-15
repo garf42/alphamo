@@ -162,6 +162,7 @@ class Orchestrator:
             client,
             stage1_threshold=self.hp.stage1_threshold,
             stage2_threshold=self.hp.stage2_threshold,
+            stage4_decay_k=self.hp.stage4_decay_k,
         )
         self.curator = Curator(client, audit_log, run_id=run_id)
 
@@ -362,12 +363,22 @@ class Orchestrator:
                 failure_reason=str(exc),
             )
 
+        # Sprint 1 (Bug 2): Stage 4 concerns persist on the candidate row so
+        # they're queryable per candidate via SQL, not just buried in the
+        # audit-log JSONL. NULL when the cascade short-circuited before
+        # Stage 4 (Stage 1/2/3 exit) or middle-class filter failure.
+        stage4_findings_payload = (
+            [c.model_dump(mode="json") for c in result.stage4.concerns]
+            if result.stage4 is not None
+            else None
+        )
         candidate_id = self.db.insert(
             architecture,
             result.scores,
             run_id=self.run_id,
             island_id=island_id,
             generation=generation,
+            stage4_findings=stage4_findings_payload,
         )
         row = self.db.get(candidate_id)
 

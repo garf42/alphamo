@@ -484,5 +484,38 @@ def harvest(
     click.echo(f"wrote {out_path}")
 
 
+@cli.command("backfill-stage4")
+@click.option(
+    "--decay-k",
+    "decay_k",
+    type=float,
+    default=0.15,
+    show_default=True,
+    help="Exponential-decay rate for the recomputed robustness scores.",
+)
+@_DB_OPTION
+@_AUDIT_OPTION
+def backfill_stage4(decay_k: float, db_path: Path, audit_path: Path) -> None:
+    """Sprint 1 (Bug 1+2): populate stage4_findings + recomputed robustness
+    on existing candidates from audit-log stage4_routine events.
+
+    Idempotent — re-running skips candidates whose stage4_findings is
+    already populated. Used to salvage run-006 (and any other pre-Sprint-1
+    run) without re-issuing LLM calls.
+    """
+    from alphamo.meta.audit_log import AuditLog
+
+    db = ProgramsDB(_db_url(db_path))
+    audit = AuditLog(audit_path)
+    events = audit.read_all()
+    stats = db.backfill_stage4_from_audit(events, decay_k=decay_k)
+    click.echo(
+        f"updated={stats['updated']} "
+        f"skipped_existing={stats['skipped_existing']} "
+        f"skipped_missing={stats['skipped_missing']} "
+        f"skipped_non_stage4={stats['skipped_non_stage4']}"
+    )
+
+
 if __name__ == "__main__":
     cli()

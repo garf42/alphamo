@@ -50,17 +50,27 @@ def _candidate_with_marker_in_notes(name: str = "src") -> tuple[Architecture, Sc
 
 
 def test_candidate_schema_has_no_meta_layer_columns():
-    """Structural guarantee: there is no slot on Candidate where meta-layer state could live."""
-    meta_named_columns = {
+    """Structural guarantee: there is no slot on Candidate where meta-layer
+    (curator / audit / drift-log) state could live.
+
+    `stage4_findings` is explicitly NOT meta-layer state — it's evaluator
+    output (adversarial concerns from Stage 4 of the cascade), persisted on
+    the candidate row alongside `scores`. Per the Sprint-1 design,
+    stage4_findings DOES travel with reseed because evaluator output
+    belongs to the architecture, the same way scores do. We exclude it
+    from the meta-layer scan below.
+    """
+    META_TOKENS = ("audit", "curator", "redteam", "red_team", "drift")
+    EVAL_OUTPUT_COLUMNS = {"stage4_findings"}
+
+    suspected = {
         c.name
         for c in Candidate.__table__.columns
-        if any(
-            tok in c.name.lower()
-            for tok in ("audit", "curator", "redteam", "red_team", "finding", "drift")
-        )
+        if any(tok in c.name.lower() for tok in META_TOKENS)
     }
-    assert meta_named_columns == set(), (
-        f"Candidate gained meta-layer columns: {meta_named_columns} — "
+    suspected -= EVAL_OUTPUT_COLUMNS
+    assert suspected == set(), (
+        f"Candidate gained meta-layer columns: {suspected} — "
         "reset_island must be reviewed for what it copies"
     )
 
@@ -71,6 +81,7 @@ def test_reset_island_only_copies_whitelisted_fields():
     allowed_source_fields = {
         "source.architecture_spec",
         "source.scores",
+        "source.stage4_findings",
         "source.fitness",
         "source.generation",
         "source.id",

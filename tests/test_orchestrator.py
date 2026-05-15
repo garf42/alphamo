@@ -70,7 +70,7 @@ def _stub_cascade(
     monkeypatch.setattr(
         cascade_mod,
         "stage4_adversarial",
-        lambda a, c: Stage4Finding(
+        lambda a, c, **kw: Stage4Finding(
             robustness=robustness,
             concerns=stage4_concerns or [],
             reasoning="stub stage4",
