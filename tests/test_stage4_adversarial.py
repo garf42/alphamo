@@ -57,6 +57,80 @@ def test_stage4_system_prompt_rejects_unknown_framing():
         stage4_system("nonexistent")
 
 
+# --------------------------------------------------------------------- Sprint 2 (Bug 3) prompt-shape regression guards
+#
+# These snapshot tests lock in the Sprint 2 reframe of Stage 4 prompts away
+# from "Examine the candidate for X failure modes" (always-find bias,
+# producing 22-41 concerns per seed regardless of seed quality) toward
+# "Evaluate whether..." (yes/no, with explicit empty-list license, design
+# target 3-10 concerns per candidate).
+#
+# If someone reverts the prompts toward always-find phrasing, these tests
+# fail before the reverted prompts can ship.
+
+
+def test_stage4_default_to_empty_is_first_discipline_rule():
+    """Rule #1 must be the empty-default rule, prominently placed."""
+    sys_text = stage4_system("regulatory")
+    discipline_idx = sys_text.find("Discipline:\n")
+    assert discipline_idx != -1, "Discipline section missing from system prompt"
+    after_discipline = sys_text[discipline_idx:]
+    rule_one_idx = after_discipline.find("\n1. ")
+    assert rule_one_idx != -1, "rule numbering missing"
+    rule_one = after_discipline[rule_one_idx:rule_one_idx + 200]
+    assert "Default to empty concerns lists" in rule_one, (
+        f"rule #1 must open with 'Default to empty concerns lists', got: {rule_one!r}"
+    )
+
+
+def test_stage4_severity_calibration_section_anchors_to_parent_goal():
+    """A 'Severity calibration:' section must exist with HIGH/MEDIUM/LOW anchors."""
+    sys_text = stage4_system("regulatory")
+    assert "Severity calibration:" in sys_text
+    # Each tier present with the parent-goal anchor language.
+    assert "HIGH:" in sys_text and "$1B+" in sys_text
+    assert "MEDIUM:" in sys_text and "below $1B" in sys_text
+    assert "LOW:" in sys_text
+    # The disambiguation cue is also present.
+    assert "When in doubt between HIGH and MEDIUM" in sys_text
+
+
+def test_each_framing_opens_with_evaluate_whether_pattern():
+    """Every framing prompt must open with the 'Evaluate whether...' yes/no pattern."""
+    for framing, text in FRAMINGS.items():
+        assert text.startswith("Evaluate whether"), (
+            f"framing {framing!r} does not open with 'Evaluate whether'; "
+            f"actual opening: {text[:80]!r}"
+        )
+
+
+def test_each_framing_grants_explicit_empty_list_license():
+    """Every framing must explicitly say 'return an empty concerns list' to make
+    the empty case first-class, not a default the model might infer to avoid."""
+    for framing, text in FRAMINGS.items():
+        assert "return an empty concerns list" in text, (
+            f"framing {framing!r} missing explicit empty-list license"
+        )
+
+
+def test_each_framing_says_empty_results_are_correct():
+    """The 'Empty results are correct when...' clause must appear in every
+    framing — reinforces the same message in a different sentence shape."""
+    for framing, text in FRAMINGS.items():
+        assert "Empty results are correct" in text, (
+            f"framing {framing!r} missing 'Empty results are correct' clause"
+        )
+
+
+def test_no_framing_uses_legacy_examine_for_failure_modes_phrasing():
+    """The old 'Examine the candidate for X failure modes' phrasing was the
+    proximate cause of the always-find bias. Lock against accidental revert."""
+    for framing, text in FRAMINGS.items():
+        assert "Examine the candidate for" not in text, (
+            f"framing {framing!r} reverted to legacy 'Examine the candidate for' phrasing"
+        )
+
+
 # --------------------------------------------------------------------- compute_robustness
 #
 # Sprint 1 (Bug 1): formula switched from linear deduction to exponential
