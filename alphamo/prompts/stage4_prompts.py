@@ -7,23 +7,28 @@ so the curator can distinguish blocking issues from notes.
 
 8 framings, all run in parallel per candidate that reaches Stage 4:
 
-  Original four (kept from the legacy red-team):
-    - regulatory          : licensing / regulator-shutdown / compliance risk
-    - economic            : margins, commoditization, competitive erosion
-    - operational         : SPOF, hidden labor, one-person violations
-    - scaling             : superlinear costs, mechanism degradation at scale
+  Legacy carryovers from the standalone red-team:
+    - regulatory           : licensing / regulator-shutdown / compliance risk
+    - economic             : margins, commoditization, competitive erosion
+    - operational          : SPOF, hidden labor, one-person violations
 
-  Four new (added in Phase 2):
-    - mechanism_robustness: does the mechanism require a specific
-                            cultural/regulatory/technological moment that may
-                            have closed
-    - hidden_dependencies : un-listed resources, networks, credentials,
-                            capital implied by the architecture
-    - scaling_cliffs      : non-linear path-to-$1B barriers distinct from
-                            general scaling failure modes
-    - legal_exposure      : concrete enforcement risks (state AG, IRS, UPL,
-                            FDA, class action) that could collapse the
-                            architecture
+  Added in Phase 2:
+    - mechanism_robustness : does the mechanism require a specific
+                             cultural/regulatory/technological moment that may
+                             have closed
+    - hidden_dependencies  : un-listed resources, networks, credentials,
+                             capital implied by the architecture
+    - scaling_cliffs       : non-linear path-to-$1B barriers distinct from
+                             general scaling failure modes
+    - legal_exposure       : concrete enforcement risks (state AG, IRS, UPL,
+                             FDA, class action) that could collapse the
+                             architecture
+
+  Added in Sprint 2 (replaced the legacy `scaling` framing, whose coverage
+  is preserved by scaling_cliffs + mechanism_robustness):
+    - timeline_plausibility: gap between stated timeline and mechanism floor,
+                             plus middle-class cash-flow viability during
+                             buildup
 
 Sprint 2 (Bug 3) reframed every framing toward yes/no evaluation, anchored
 severity to the parent goal, and promoted "default to empty concerns lists"
@@ -76,17 +81,88 @@ FRAMINGS: dict[str, str] = {
         "requirement, why it's structurally required (not optional), and "
         "how it violates the constraint."
     ),
-    "scaling": (
-        "Evaluate whether this candidate has a structural scaling flaw — "
-        "capture mechanism degradation at scale, hidden costs that grow "
-        "superlinearly, or scale-induced labor requirements that violate "
-        "labor separation. If the architecture's growth profile preserves "
-        "both the capture mechanism and labor separation through $1B, "
-        "return an empty concerns list. Empty results are correct when "
-        "there is no real scaling concern under this framing.\n\n"
-        "If a flaw exists, identify: at what scale the mechanism degrades, "
-        "which costs grow superlinearly and why, or which scale-induced "
-        "labor requirement violates the single-individual constraint."
+    "timeline_plausibility": (
+        "Evaluate whether this candidate has timeline problems that would "
+        "make middle-class execution implausible. If the architecture's "
+        "timeline is appropriate to its mechanism and the path to capture "
+        "is compatible with middle-class financial constraints, return an "
+        "empty concerns list. Empty results are correct when the timeline "
+        "is tight for the mechanism and the cash-flow path is realistic "
+        "for a middle-class operator.\n\n"
+        "For each candidate, assess two coupled timeline questions:\n\n"
+        "1. UNNECESSARY SLOWNESS. What timeline does the architecture's "
+        "stage-sequence imply from middle-class entry to $1B+ value "
+        "capture? Given the mechanism's nature, what's the shortest "
+        "reasonable duration this architecture could plausibly compress "
+        "to? Some mechanisms have hard floors that aren't penalizable: "
+        "biological cycles (breeding, growth — years per cycle), "
+        "regulatory/legal processes (months to years for approvals), "
+        "cultural adoption (typical curves measured in years), "
+        "compounding mathematics (minimum periods for given returns), "
+        "network bootstrap (characteristic time-to-critical-mass). The "
+        "concern is the gap between stated timeline and mechanism floor "
+        "— not absolute duration, but unnecessary delay.\n\n"
+        "2. MIDDLE-CLASS FINANCIAL VIABILITY. Can a middle-class operator "
+        "sustain the path? A middle-class person needs to eat, pay rent, "
+        "and meet other obligations throughout the buildup. The "
+        "architecture must either: produce revenue early enough to sustain "
+        "the operator, OR be operable as a side-pursuit alongside primary "
+        "income, OR reach a self-sustaining point before middle-class "
+        "savings are exhausted (typically 12-24 months of savings runway "
+        "for a determined middle-class operator). Architectures requiring "
+        "multi-year zero-revenue operation from middle-class entry have a "
+        "structural problem regardless of mechanism timeline — the parent "
+        "goal specifies middle-class entry, and a path that violates "
+        "middle-class financial constraints during buildup isn't actually "
+        "achievable from middle-class start.\n\n"
+        "Examples:\n"
+        "- Cultivar IP at 7-15 years, evenings-and-weekends alongside day "
+        "job: clean (matches breeding cycle floor; cash flow compatible "
+        "with middle-class via primary income).\n"
+        "- SaaS product portfolio at 8 years, with revenue from year 1: "
+        "clean (timeline appropriate for mechanism; cash flow positive "
+        "early).\n"
+        "- Software business at 5 years to $1B with zero revenue until "
+        "year 4: MEDIUM concern (cash flow requires 4 years of "
+        "zero-revenue operation, inconsistent with middle-class survival "
+        "unless side-pursuit, and the architecture doesn't describe it "
+        "as a side-pursuit).\n"
+        "- Patent licensing requiring 15 years of legal infrastructure "
+        "buildup before first royalty: MEDIUM concern (long buildup with "
+        "no revenue is middle-class-implausible).\n"
+        "- Index investing for 150 years to $1B: HIGH concern (extreme "
+        "timeline implausibility; no realistic path within a "
+        "human-relevant duration; even if mechanism floor matches, the "
+        "architecture is incompatible with the parent goal's middle-class "
+        "achievability).\n"
+        "- 'Buy and hold S&P 500 for 1000 years': HIGH concern (timeline "
+        "fundamentally implausible; mechanism's required duration "
+        "conflicts with the parent goal's framing of achievability).\n"
+        "- Network bootstrap claiming '$1B in 2 years from middle-class "
+        "entry through viral content': LOW or MEDIUM concern (assess "
+        "whether the architecture's mechanism actually supports the "
+        "asserted compressed timeline, or whether the timeline is "
+        "hand-waved relative to the mechanism's bootstrap floor).\n\n"
+        "Severity calibration for this framing:\n"
+        "- HIGH: either (a) timeline is dramatically longer than mechanism "
+        "requires (3x+ the floor) AND no clear cash-flow path for "
+        "middle-class operator, OR (b) timeline is fundamentally "
+        "inconsistent with the parent goal's human-relevant achievability "
+        "(centuries-long compounding, etc.).\n"
+        "- MEDIUM: either (a) timeline is meaningfully longer than "
+        "mechanism requires (1.5-3x floor) with cash-flow concerns, OR "
+        "(b) timeline reasonable for mechanism but multi-year zero-revenue "
+        "buildup creates middle-class survival problems, OR (c) timeline "
+        "is long but bounded (20-50 years) without clear cash-flow "
+        "workability.\n"
+        "- LOW: some unnecessary slack in timeline (1.1-1.5x mechanism "
+        "floor), or minor cash-flow concerns during buildup, but the "
+        "architecture is broadly workable.\n\n"
+        "The goal is balanced selection pressure: shorter timelines win "
+        "over longer for similar mechanisms, AND middle-class cash-flow "
+        "realism is enforced, without rigid cutoffs that would prevent "
+        "legitimately-long-timeline mechanisms (like cultivar IP) from "
+        "winning when they're appropriate."
     ),
     "mechanism_robustness": (
         "Evaluate whether the value-capture mechanism works as a structural "

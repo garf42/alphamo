@@ -30,17 +30,20 @@ from tests.fixtures.parsed_message import FakeParsedMessage, make_truncation_err
 # --------------------------------------------------------------------- shape
 
 def test_stage4_has_eight_framings():
-    """Phase 2: the four legacy framings plus the four added (mechanism_robustness,
-    hidden_dependencies, scaling_cliffs, legal_exposure)."""
+    """Sprint 2: three legacy framings, four Phase-2 additions, and
+    timeline_plausibility (which replaced the legacy `scaling` framing —
+    scaling's coverage is preserved by scaling_cliffs + mechanism_robustness,
+    and timeline_plausibility fills the previously-absent time-to-value
+    selection pressure gap)."""
     assert set(FRAMINGS) == {
         "regulatory",
         "economic",
         "operational",
-        "scaling",
         "mechanism_robustness",
         "hidden_dependencies",
         "scaling_cliffs",
         "legal_exposure",
+        "timeline_plausibility",
     }
     assert len(DEFAULT_FRAMINGS) == 8
 
@@ -129,6 +132,32 @@ def test_no_framing_uses_legacy_examine_for_failure_modes_phrasing():
         assert "Examine the candidate for" not in text, (
             f"framing {framing!r} reverted to legacy 'Examine the candidate for' phrasing"
         )
+
+
+def test_legacy_scaling_framing_removed():
+    """`scaling` was retired in Sprint 2; its coverage is preserved by
+    scaling_cliffs + mechanism_robustness. Lock against accidental revival."""
+    assert "scaling" not in FRAMINGS
+
+
+def test_timeline_plausibility_framing_covers_both_assessments():
+    """timeline_plausibility must examine BOTH unnecessary slowness vs
+    mechanism floor AND middle-class cash-flow viability — the framing
+    fails as designed if either assessment drops out."""
+    text = FRAMINGS["timeline_plausibility"]
+    # Both assessments must be named explicitly.
+    assert "UNNECESSARY SLOWNESS" in text, (
+        "timeline_plausibility lost the mechanism-floor-gap assessment"
+    )
+    assert "MIDDLE-CLASS FINANCIAL VIABILITY" in text, (
+        "timeline_plausibility lost the cash-flow-viability assessment"
+    )
+    # Severity calibration is anchored, including the centuries-long tail.
+    assert "3x+ the floor" in text or "3x the floor" in text
+    assert "centuries-long" in text or "century" in text or "150 years" in text
+    # Mechanism-floor exemption is named so legitimately-long mechanisms
+    # (cultivar IP, etc.) don't get penalized for matching their own floor.
+    assert "cultivar" in text.lower() or "breeding" in text.lower()
 
 
 # --------------------------------------------------------------------- compute_robustness
