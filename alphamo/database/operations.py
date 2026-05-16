@@ -192,6 +192,51 @@ class ProgramsDB:
                 select(Run.run_id).order_by(Run.created_at.desc()).limit(1)
             )
 
+    def incomplete_runs(self) -> list[Run]:
+        """Sprint 4: runs whose `completed_at` is NULL — candidates for resume.
+
+        These are runs the orchestrator started but never marked complete:
+        crashed mid-iteration, killed by a signal, or in-progress (rare in
+        a single-developer single-process setup but defensible to allow).
+        Sorted most-recent first so the CLI surfaces the freshest crashed
+        run to the user. Run rows with `stopped_reason IS NOT NULL` are
+        treated as terminated and excluded (they reached a stop condition
+        and just didn't have completed_at stamped — backward-compat guard
+        for any pre-Sprint-1 rows that exist).
+        """
+        stmt = (
+            select(Run)
+            .where(Run.completed_at.is_(None))
+            .where(Run.stopped_reason.is_(None))
+            .order_by(Run.created_at.desc())
+        )
+        with self._session() as session:
+            rows = list(session.scalars(stmt))
+            for row in rows:
+                session.expunge(row)
+            return rows
+
+    def latest_generation_in_run(self, run_id: str) -> int:
+        """Sprint 4: max(generation) across alive candidates in this run.
+
+        Returns -1 when the run has no alive candidates. Used by the
+        resume path to determine where to continue the for-loop from:
+        `start_generation = db.latest_generation_in_run(run_id) + 1`,
+        so a run that completed generations 1..17 resumes at 18.
+
+        Only alive candidates are counted: rows marked `status="reset"`
+        by island reset don't shift the resume marker (they belong to
+        an earlier generation in the original lineage; reset is a
+        within-loop event, not a generation boundary).
+        """
+        with self._session() as session:
+            result = session.scalar(
+                select(func.max(Candidate.generation))
+                .where(Candidate.run_id == run_id)
+                .where(Candidate.status == "alive")
+            )
+            return -1 if result is None else int(result)
+
     def complete_run(self, run_id: str, stopped_reason: str) -> None:
         with self._session() as session:
             result = session.execute(

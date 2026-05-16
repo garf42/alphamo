@@ -40,7 +40,9 @@ audit event is scoped to that run.
 from __future__ import annotations
 
 import random
+import sys
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import anthropic
 
@@ -133,6 +135,109 @@ class RunResult:
     consecutive_failures_at_stop: int = 0
 
 
+class ResumeIncompatibleError(Exception):
+    """Raised by `Orchestrator.resume_run` when the persisted run cannot
+    be safely resumed under the current code.
+
+    Carries the run_id and the list of blocking reasons so the CLI can
+    surface a clear "stored=X, current=Y, fix=Z" message to the user.
+    """
+
+    def __init__(self, run_id: str, blocking_reasons: list[str]) -> None:
+        self.run_id = run_id
+        self.blocking_reasons = list(blocking_reasons)
+        msg = (
+            f"cannot resume run {run_id!r} — "
+            + "; ".join(blocking_reasons)
+        )
+        super().__init__(msg)
+
+
+def check_resume_compatibility(
+    run: Any,
+    *,
+    current_parent_goal_version: str,
+    current_verifier_version: str,
+    current_default_hp: Any,
+    override_hp: Any | None = None,
+) -> tuple[list[str], list[str]]:
+    """Compare a persisted run against current code; return (blocking, warnings).
+
+    HARD BLOCK (returned in the first list — caller must refuse resume):
+      - parent_goal_version mismatch (search criterion changed; old
+        candidates were evaluated under different prompts).
+      - num_islands or cluster_signature_resolution mismatch BETWEEN
+        PERSISTED HP AND `override_hp` (when override_hp is supplied).
+        Today's `resume_run` doesn't support HP override, so these
+        structural blocks are vacuous in normal flow — but the check
+        is wired in case a future feature adds an override path.
+
+    SOFT WARN (returned in the second list — caller surfaces to user
+    but resume proceeds):
+      - verifier_version mismatch (cascade behavior may have changed
+        between original run and now).
+      - Any persisted Hyperparameter that differs from the current
+        code's default. Informational only — surfaces that the
+        original run was configured with non-default HP, which a
+        future replay would need to reproduce explicitly.
+
+    Why parent_goal_version is blocked but other code-default changes
+    aren't: PARENT_GOAL_VERSION is the search-criterion identity; old
+    candidates were evaluated under different criteria, so their
+    fitness ordering is meaningless under the new criterion. HP
+    defaults are tuning knobs — the persisted run will keep using its
+    persisted values regardless of what the current default happens
+    to be, so a default change is informational, not blocking.
+    """
+    blocking: list[str] = []
+    warnings: list[str] = []
+
+    if run.parent_goal_version != current_parent_goal_version:
+        blocking.append(
+            f"PARENT_GOAL_VERSION mismatch (stored {run.parent_goal_version!r}, "
+            f"current {current_parent_goal_version!r})"
+        )
+
+    persisted_hp = dict(run.hyperparameters or {})
+
+    structural_hp = ("num_islands", "cluster_signature_resolution")
+    if override_hp is not None:
+        override_dict = override_hp.model_dump()
+        for key in structural_hp:
+            if key not in persisted_hp:
+                continue
+            if persisted_hp[key] != override_dict.get(key):
+                blocking.append(
+                    f"{key} mismatch — override_hp requests "
+                    f"{override_dict.get(key)!r} but the persisted run was "
+                    f"built with {persisted_hp[key]!r}; structural HP cannot "
+                    "change across resume"
+                )
+
+    if run.verifier_version != current_verifier_version:
+        warnings.append(
+            f"VERIFIER_VERSION differs (stored {run.verifier_version!r}, "
+            f"current {current_verifier_version!r}); cascade behavior may "
+            "have changed since the original run"
+        )
+
+    default_hp_dict = current_default_hp.model_dump()
+    for key, persisted_value in persisted_hp.items():
+        default_value = default_hp_dict.get(key)
+        if default_value is not None and persisted_value != default_value:
+            warnings.append(
+                f"hyperparameter '{key}' differs from current default "
+                f"(stored {persisted_value!r}, current default {default_value!r})"
+            )
+
+    return blocking, warnings
+
+
+def _default_resume_warning(message: str) -> None:
+    """Default soft-warning sink for `resume_run`: print to stderr."""
+    print(f"WARNING (resume): {message}", file=sys.stderr)
+
+
 class Orchestrator:
     """Drives one production run end-to-end, scoped to one `run_id`."""
 
@@ -211,14 +316,37 @@ class Orchestrator:
         audit_log: AuditLog,
         run_id: str,
         rng: random.Random | None = None,
+        on_warning: Callable[[str], None] | None = None,
     ) -> "Orchestrator":
         """Attach to an existing Run row. Hyperparameters come from the row.
 
-        Raises KeyError if run_id does not exist. Sets `last_resumed_at` on
-        the run so the handoff can report fresh-vs-resumed.
+        Sprint 4: applies a compatibility check between the persisted run
+        and the current code's PARENT_GOAL_VERSION + VERIFIER_VERSION +
+        structural HP. HARD-BLOCK conditions raise
+        `ResumeIncompatibleError`; SOFT-WARN conditions go to `on_warning`
+        (defaults to stderr-print) and resume proceeds.
+
+        Raises KeyError if run_id does not exist. Raises
+        ResumeIncompatibleError on a structural mismatch. Sets
+        `last_resumed_at` on the run so the handoff can report
+        fresh-vs-resumed.
         """
         run = db.get_run(run_id)
         hp = Hyperparameters(**run.hyperparameters) if run.hyperparameters else Hyperparameters()
+
+        blocking, warnings = check_resume_compatibility(
+            run,
+            current_parent_goal_version=PARENT_GOAL_VERSION,
+            current_verifier_version=VERIFIER_VERSION,
+            current_default_hp=Hyperparameters(),
+        )
+        if blocking:
+            raise ResumeIncompatibleError(run_id, blocking)
+        if warnings:
+            emit = on_warning if on_warning is not None else _default_resume_warning
+            for warning in warnings:
+                emit(warning)
+
         db.mark_run_resumed(run_id)
         return cls(db, client, audit_log, run_id=run_id, hp=hp, rng=rng)
 
@@ -621,19 +749,37 @@ class Orchestrator:
     def run(self, max_generations: int) -> RunResult:
         """Drive up to `max_generations` iterations.
 
-        Bootstrap step (Sprint 3): before the main loop, every island
-        gets a copy of the trivial seed at gen 0 via `_bootstrap_islands()`.
-        No-op on resume (existing alive candidates ⇒ skip).
+        Bootstrap step: before the main loop, every island gets a copy
+        of the trivial seed at gen 0 via `_bootstrap_islands()`. No-op
+        on resume (existing alive candidates ⇒ skip).
+
+        Sprint 4: the loop's start generation is derived from the DB
+        after bootstrap — `db.latest_generation_in_run + 1`. On a fresh
+        run this is 1 (bootstrap inserts at gen 0). On a resumed run
+        that previously completed N generations, this is N+1 — fixing
+        the pre-Sprint-4 bug where resumed runs restarted the loop
+        from gen 1 and double-counted generations from the perspective
+        of reset cadence and milestone gates.
 
         Stops early on (a) a structural curator pause or (b) when
         consecutive eval-side failures reach `hp.max_consecutive_failures`.
-        Stamps the run's `stopped_reason` and `completed_at` on the Run row
-        before returning.
+        If start_generation > max_generations (the run already completed
+        more iterations than the user requested), exits cleanly with
+        stopped_reason="max_generations" without running any steps.
+
+        Stamps the run's `stopped_reason` and `completed_at` on the Run
+        row before returning.
         """
         self._bootstrap_islands()
+        start_generation = self.db.latest_generation_in_run(self.run_id) + 1
+        # Bootstrap inserts at generation 0, so post-bootstrap fresh runs
+        # have start_generation = 1. Defensive max() guards against the
+        # case where the run somehow has no candidates at all (would
+        # otherwise produce start_generation = 0).
+        start_generation = max(1, start_generation)
         result = RunResult()
         consecutive_failures = 0
-        for generation in range(1, max_generations + 1):
+        for generation in range(start_generation, max_generations + 1):
             event = self.step(generation)
             result.events.append(event)
 

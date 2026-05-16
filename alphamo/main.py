@@ -363,7 +363,14 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     "resume_id",
     type=str,
     default=None,
-    help="Continue an existing run by id. Otherwise a fresh run is created.",
+    help="Continue an existing run by id. Skips the in-progress-run detection prompt.",
+)
+@click.option(
+    "--no-resume",
+    "no_resume",
+    is_flag=True,
+    default=False,
+    help="Force a fresh run even if an incomplete run is detected. Skips the prompt.",
 )
 @_DB_OPTION
 @_AUDIT_OPTION
@@ -374,6 +381,7 @@ def run(
     milestone_fitness_delta: float,
     research_every: int,
     resume_id: str | None,
+    no_resume: bool,
     db_path: Path,
     audit_path: Path,
 ) -> None:
@@ -382,7 +390,13 @@ def run(
 
     from alphamo.context.hyperparams import Hyperparameters
     from alphamo.meta.audit_log import AuditLog
-    from alphamo.orchestrator import Orchestrator
+    from alphamo.orchestrator import (
+        Orchestrator,
+        ResumeIncompatibleError,
+    )
+
+    if resume_id is not None and no_resume:
+        raise click.ClickException("--resume and --no-resume are mutually exclusive")
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
@@ -391,11 +405,30 @@ def run(
     # connection/timeout errors so a single API blip doesn't kill a run.
     client = anthropic.Anthropic(max_retries=3)
 
+    # Sprint 4: auto-detect-incomplete-run prompt path. Skipped when the
+    # user passed an explicit flag.
+    if resume_id is None and not no_resume:
+        incomplete = db.incomplete_runs()
+        if incomplete:
+            stale = incomplete[0]
+            last_gen = db.latest_generation_in_run(stale.run_id)
+            click.echo(
+                f"WARN: Incomplete run detected: {stale.run_id} "
+                f"(created {stale.created_at.isoformat()}, "
+                f"last completed generation {last_gen})"
+            )
+            if click.confirm("Resume?", default=False):
+                resume_id = stale.run_id
+
     if resume_id is not None:
         try:
             orchestrator = Orchestrator.resume_run(db, client, audit, resume_id)
         except KeyError as exc:
             raise click.ClickException(str(exc)) from exc
+        except ResumeIncompatibleError as exc:
+            raise click.ClickException(
+                f"{exc} — start a fresh run with `alphamo run --no-resume`"
+            ) from exc
         click.echo(f"resuming run {resume_id}")
     else:
         hp = Hyperparameters(
