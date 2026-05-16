@@ -3,10 +3,11 @@
 The handoff is the load-bearing deliverable. Everything before it is plumbing
 in service of producing this document.
 
-The builder honestly separates seeds (what the run started with) from
-generated discoveries (what the search produced). A seed never wins:
-`winning_architecture` is null whenever no generated candidate exceeded a
-seed baseline, and `no_breakthrough_this_run` flags that case explicitly.
+Sprint 2 redesign: seeds are descriptive reference only (mechanism summary,
+structural insight, known fragilities) — no fitness numbers. The
+`no_breakthrough_this_run` flag and `winning_architecture` are gated on
+absolute milestone thresholds (fitness AND robustness clearing the
+configured floors from Hyperparameters), not on seed-relative comparison.
 
 Every read here is filtered by `run_id` so that two runs sharing the same DB
 produce two separate handoffs. The verification_trail records the run's
@@ -17,28 +18,25 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo.context.hyperparams import Hyperparameters
 from alphamo.context.verifier import VERIFIER_ANCHOR
 from alphamo.database import ProgramsDB
-from alphamo.database.operations import aggregate_fitness
 from alphamo.database.schema import Candidate
 from alphamo.evaluator import EvaluatorCascade
-from alphamo.evaluator.exemplar_library import STARTERS
+from alphamo.evaluator.exemplar_library import SEED_REFERENCES
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas import Architecture, Scores
 from alphamo.schemas.findings import StructuralConcern
 from alphamo.schemas.handoff import (
     DriftLogEntry,
-    ExemplarComparison,
     GeneratedDiscovery,
     Handoff,
     MiddleClassEntryCheck,
-    SeedBaseline,
+    SeedReference,
     VerificationTrail,
 )
 
 TOP_GENERATED_LIMIT = 7
-
-_STARTER_NAMES: frozenset[str] = frozenset(arch.name for arch, _ in STARTERS)
 
 
 def _audit_event_source(event: AuditEvent) -> str:
@@ -68,24 +66,23 @@ def _drift_log_from_audit(
     return entries
 
 
-def _seed_baselines(seed_rows: list[Candidate]) -> list[SeedBaseline]:
-    """Build the seed_baselines list from the canonical STARTERS constant.
+def _seed_references() -> list[SeedReference]:
+    """Project the canonical seed architectures into descriptive references.
 
-    `island_of_origin` is the lowest island_id where this seed-named
-    candidate is currently alive in the run. Defaults to 0 if no copy is
-    alive (which would be unusual — every island gets every starter at
-    seed_if_empty time).
+    Pulls from `exemplar_library.SEED_REFERENCES` (the same source the
+    proposer uses), so the handoff's reference section never drifts from
+    what the proposer actually saw.
     """
-    out: list[SeedBaseline] = []
-    for arch, scores in STARTERS:
-        copies = [r for r in seed_rows if r.architecture_spec.get("name") == arch.name]
-        island_of_origin = min((r.island_id for r in copies), default=0)
+    out: list[SeedReference] = []
+    for arch in SEED_REFERENCES:
+        notes = getattr(arch, "notes", None) or {}
         out.append(
-            SeedBaseline(
+            SeedReference(
                 name=arch.name,
-                scores=scores,
-                fitness=aggregate_fitness(scores),
-                island_of_origin=island_of_origin,
+                summary=arch.summary,
+                capture_mechanism=arch.capture_mechanism,
+                structural_insight=notes.get("structural_insight"),
+                known_fragilities=notes.get("known_vulnerabilities"),
             )
         )
     return out
@@ -109,6 +106,32 @@ def _generated_discovery_from_row(row: Candidate) -> GeneratedDiscovery:
     )
 
 
+def _candidate_clears_milestone(
+    row: Candidate, hp: Hyperparameters
+) -> bool:
+    """Match orchestrator._is_milestone semantics on a stored candidate row.
+
+    Fitness must exceed `milestone_absolute_fitness_threshold` AND
+    robustness must exceed `milestone_absolute_robustness_threshold`. A
+    candidate with None robustness (early-exit, legacy) cannot be a
+    breakthrough — adversarial scrutiny never ran on it.
+
+    Note: the orchestrator also gates on `generation >= milestone_min_generation`.
+    The handoff intentionally drops that gate — at harvest time the
+    question is "did this candidate clear the bar?", not "did it clear
+    the bar AND past warmup?". A candidate that hit thresholds early is
+    still a breakthrough.
+    """
+    robustness = row.scores.get("robustness")
+    if robustness is None:
+        return False
+    if row.fitness <= hp.milestone_absolute_fitness_threshold:
+        return False
+    if robustness <= hp.milestone_absolute_robustness_threshold:
+        return False
+    return True
+
+
 def build_handoff(
     db: ProgramsDB,
     audit_log: AuditLog,
@@ -118,73 +141,60 @@ def build_handoff(
     coverage_residual: str = "",
     top_n_generated: int = TOP_GENERATED_LIMIT,
 ) -> Handoff:
-    """Harvest one run into a Handoff. Re-cascades the top generated candidate
+    """Harvest one run into a Handoff. Re-cascades the top candidate
     (if any) to populate the verification trail."""
     if not run_id:
         raise ValueError("run_id is required to build a handoff")
     run = db.get_run(run_id)
+    hp = (
+        Hyperparameters(**run.hyperparameters)
+        if run.hyperparameters
+        else Hyperparameters()
+    )
 
     all_alive = db.alive_in_run(run_id)
     if not all_alive:
         raise RuntimeError(
             f"no alive candidates for run {run_id!r} — nothing to harvest"
         )
+    # alive_in_run sorts by fitness desc.
 
-    seed_rows: list[Candidate] = []
-    generated_rows: list[Candidate] = []
-    for c in all_alive:
-        if c.architecture_spec.get("name") in _STARTER_NAMES:
-            seed_rows.append(c)
-        else:
-            generated_rows.append(c)
-    # alive_in_run sorts by fitness desc; the partition preserves that order.
-
-    seed_baselines = _seed_baselines(seed_rows)
-    min_seed_fitness = min(b.fitness for b in seed_baselines)
+    seed_baselines = _seed_references()
 
     top_generated_discoveries = [
-        _generated_discovery_from_row(c) for c in generated_rows[:top_n_generated]
+        _generated_discovery_from_row(c) for c in all_alive[:top_n_generated]
     ]
 
-    has_breakthrough = (
-        bool(generated_rows) and generated_rows[0].fitness > min_seed_fitness
-    )
+    breakthrough_rows = [c for c in all_alive if _candidate_clears_milestone(c, hp)]
+    has_breakthrough = bool(breakthrough_rows)
     no_breakthrough = not has_breakthrough
-    winning_architecture = top_generated_discoveries[0] if has_breakthrough else None
+    winning_architecture = (
+        _generated_discovery_from_row(breakthrough_rows[0])
+        if has_breakthrough
+        else None
+    )
 
-    # Re-cascade the top generated candidate (if any) for the verification
-    # trail. Skip if the run produced only seeds — those were already
-    # cascade-scored at `score-seeds` time and don't need re-verification.
-    cascade_subject_arch: Architecture | None = None
-    cascade_result: Any | None = None
-    if generated_rows:
-        cascade_subject_arch = Architecture(**generated_rows[0].architecture_spec)
-        cascade_result = cascade.evaluate(cascade_subject_arch)
+    # Re-cascade the top alive candidate for verification trail. Cascade
+    # subject is the top by fitness regardless of milestone status — that
+    # way the verification trail still contains live cascade output even
+    # when no breakthrough occurred.
+    cascade_subject_arch = Architecture(**all_alive[0].architecture_spec)
+    cascade_result = cascade.evaluate(cascade_subject_arch)
 
-    final_scores: Scores | None = None
-    exemplar_comparisons: list[ExemplarComparison] = []
-    adversarial_concerns: list[StructuralConcern] = []
-    if cascade_result is not None:
-        final_scores = Scores(**cascade_result.scores.model_dump())
-        if cascade_result.stage3 is not None:
-            s3 = cascade_result.stage3
-            exemplar_comparisons.append(
-                ExemplarComparison(
-                    closest_exemplar=s3.closest_exemplar,
-                    similarity=s3.similarity,
-                    reasoning=s3.reasoning,
-                )
-            )
-        if cascade_result.stage4 is not None:
-            adversarial_concerns = list(cascade_result.stage4.concerns)
+    final_scores = Scores(**cascade_result.scores.model_dump())
+    adversarial_concerns: list[StructuralConcern] = (
+        list(cascade_result.stage3.concerns)
+        if cascade_result.stage3 is not None
+        else []
+    )
 
     if winning_architecture is not None:
         parent_goal_alignment = _parent_goal_alignment_winner(
-            cascade_result, winning_architecture.spec.name
+            cascade_result, winning_architecture.spec.name, hp
         )
     else:
         parent_goal_alignment = _parent_goal_alignment_no_breakthrough(
-            top_generated_discoveries, cascade_result
+            top_generated_discoveries, cascade_result, hp
         )
 
     middle_class_check = _middle_class_check(cascade_result, cascade_subject_arch)
@@ -202,7 +212,7 @@ def build_handoff(
             final_scores=final_scores,
             anchor_used=VERIFIER_ANCHOR,
             eval_count=db.count_candidates(run_id=run_id),
-            exemplar_comparisons=exemplar_comparisons,
+            exemplar_comparisons=[],
             adversarial_concerns=adversarial_concerns,
         ),
         drift_log=_drift_log_from_audit(audit_log, run_id=run_id),
@@ -214,49 +224,57 @@ def build_handoff(
 
 
 def _parent_goal_alignment_winner(
-    cascade_result: Any, winner_name: str
+    cascade_result: Any, winner_name: str, hp: Hyperparameters
 ) -> str:
-    """Compose alignment text describing the winning generated candidate."""
-    parts: list[str] = [f"Winning generated candidate '{winner_name}':"]
-    if cascade_result is not None:
-        if cascade_result.stage3 is not None:
-            parts.append(f"Exemplar fit: {cascade_result.stage3.reasoning}")
-        if cascade_result.stage2 is not None:
-            parts.append(f"Structural fit: {cascade_result.stage2.reasoning}")
-        if cascade_result.stage1 is not None and len(parts) == 1:
-            parts.append(f"Feasibility: {cascade_result.stage1.reasoning}")
+    """Compose alignment text describing the winning candidate."""
+    parts: list[str] = [
+        f"Winning candidate '{winner_name}' cleared absolute milestone "
+        f"thresholds (fitness > {hp.milestone_absolute_fitness_threshold}, "
+        f"robustness > {hp.milestone_absolute_robustness_threshold})."
+    ]
+    if cascade_result.stage2 is not None:
+        parts.append(f"Structural fit: {cascade_result.stage2.reasoning}")
+    if cascade_result.stage3 is not None:
+        parts.append(f"Adversarial scrutiny: {cascade_result.stage3.reasoning}")
+    if cascade_result.stage1 is not None and len(parts) == 1:
+        parts.append(f"Feasibility: {cascade_result.stage1.reasoning}")
     return " // ".join(parts)
 
 
 def _parent_goal_alignment_no_breakthrough(
-    top_generated: list[GeneratedDiscovery], cascade_result: Any
+    top_generated: list[GeneratedDiscovery],
+    cascade_result: Any,
+    hp: Hyperparameters,
 ) -> str:
-    """Compose alignment text when no generated candidate beat any seed.
-
-    Opens with explicit acknowledgement, then describes the top 1-3 generated
-    discoveries (if any) as the best the search produced, plus per-stage
-    cascade reasoning on the top one.
-    """
+    """Compose alignment text when no candidate cleared the milestone thresholds."""
     if not top_generated:
-        return "this run produced no generated candidates."
+        return "this run produced no candidates."
     opener = (
-        "No generated candidate matched or exceeded seed baselines this run. "
-        "The seed exemplars remain the highest-scoring architectures, but the "
-        "search produced the following candidates worth examination: "
+        f"No candidate cleared the absolute milestone thresholds this run "
+        f"(fitness > {hp.milestone_absolute_fitness_threshold} AND "
+        f"robustness > {hp.milestone_absolute_robustness_threshold}). "
+        "The search produced the following candidates worth examination: "
     )
     descriptions = ", ".join(
-        f"{g.spec.name} (fitness {g.fitness:.4f})" for g in top_generated[:3]
+        f"{g.spec.name} (fitness {g.fitness:.4f}"
+        + (
+            f", robustness {g.scores.robustness:.4f}"
+            if g.scores.robustness is not None
+            else ""
+        )
+        + ")"
+        for g in top_generated[:3]
     )
     body = descriptions
     if cascade_result is not None:
         cascade_parts: list[str] = []
-        if cascade_result.stage3 is not None:
-            cascade_parts.append(
-                f"top candidate exemplar fit: {cascade_result.stage3.reasoning}"
-            )
         if cascade_result.stage2 is not None:
             cascade_parts.append(
-                f"structural fit: {cascade_result.stage2.reasoning}"
+                f"top candidate structural fit: {cascade_result.stage2.reasoning}"
+            )
+        if cascade_result.stage3 is not None:
+            cascade_parts.append(
+                f"adversarial scrutiny: {cascade_result.stage3.reasoning}"
             )
         if cascade_parts:
             body += " // " + " // ".join(cascade_parts)
@@ -269,7 +287,7 @@ def _middle_class_check(
     if cascade_result is None or subject is None:
         return MiddleClassEntryCheck(
             passes=True,
-            estimated_starting_resources="(no generated candidates this run)",
+            estimated_starting_resources="(no candidates this run)",
             stage_sequence=[],
         )
     return MiddleClassEntryCheck(
@@ -280,7 +298,7 @@ def _middle_class_check(
             for stage, present in [
                 ("stage1_feasibility", cascade_result.stage1 is not None),
                 ("stage2_structured", cascade_result.stage2 is not None),
-                ("stage3_exemplars", cascade_result.stage3 is not None),
+                ("stage3_adversarial", cascade_result.stage3 is not None),
             ]
             if present
         ],

@@ -113,6 +113,78 @@ def test_cluster_signature_is_deterministic_given_scores():
     assert cluster_signature(s_a) == cluster_signature(s_b)
 
 
+def test_sampler_signature_is_three_dimensional():
+    """Sprint 2: cluster_signature drops exemplar_similarity from its inputs
+    and uses 3 numeric dims (feasibility, structural, robustness) plus the
+    middle_class_accessible boolean. Resolution=2 was empirically rejected
+    (produces 100% singletons at every realistic run scale); the default
+    stays at resolution=1."""
+    from alphamo.sampler import cluster_signature
+    from alphamo.schemas import Scores
+
+    s = Scores(
+        feasibility=0.78,
+        structural=0.85,
+        exemplar_similarity=0.71,  # should NOT influence the signature
+        robustness=0.60,
+        middle_class_accessible=True,
+    )
+    sig = cluster_signature(s, resolution=1)
+    # 4-tuple: (feasibility, structural, robustness, middle_class).
+    # 0.85 rounds to 0.8 at resolution=1 (Python's banker's rounding).
+    assert len(sig) == 4
+    assert sig == (0.8, 0.8, 0.6, True)
+
+    # Changing exemplar_similarity must not change the signature.
+    s_other = s.model_copy(update={"exemplar_similarity": 0.05})
+    assert cluster_signature(s_other, resolution=1) == sig
+
+    # Two candidates differing only in robustness produce different signatures
+    # at resolution=1 (gap > 0.1 between them).
+    s_other_robust = s.model_copy(update={"robustness": 0.20})
+    assert cluster_signature(s_other_robust, resolution=1) != sig
+
+
+def test_cluster_signature_handles_robustness_none():
+    """Early-exit candidates have robustness=None; they cluster together."""
+    from alphamo.sampler import cluster_signature
+    from alphamo.schemas import Scores
+
+    s_early_1 = Scores(
+        feasibility=0.40, structural=0.0, robustness=None, middle_class_accessible=True,
+    )
+    s_early_2 = Scores(
+        feasibility=0.40, structural=0.0, robustness=None, middle_class_accessible=True,
+    )
+    assert cluster_signature(s_early_1) == cluster_signature(s_early_2)
+    # Robustness slot is None when robustness is None.
+    sig = cluster_signature(s_early_1)
+    assert sig[2] is None
+
+
+def test_aggregate_fitness_ignores_similarity_when_none():
+    """A Sprint-2 candidate has exemplar_similarity=None; aggregate_fitness
+    must skip the dim and average over the present ones."""
+    from alphamo.database.operations import aggregate_fitness
+    from alphamo.schemas import Scores
+
+    new = Scores(
+        feasibility=0.90,
+        structural=0.80,
+        exemplar_similarity=None,  # Sprint 2 default
+        robustness=0.70,
+        middle_class_accessible=True,
+    )
+    # (0.90 + 0.80 + 0.70) / 3 = 0.80
+    assert aggregate_fitness(new) == pytest.approx(0.80)
+
+    # Compare against a legacy row that has a similarity value — that one
+    # still aggregates over 4 dims for backward-compat.
+    legacy = new.model_copy(update={"exemplar_similarity": 0.60})
+    # (0.90 + 0.80 + 0.60 + 0.70) / 4 = 0.75
+    assert aggregate_fitness(legacy) == pytest.approx(0.75)
+
+
 def test_cluster_signature_buckets_nearby_scores_together():
     """At resolution=1, 0.78 and 0.83 round to 0.8 and share a signature axis."""
     from alphamo.sampler import cluster_signature

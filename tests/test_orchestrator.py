@@ -2,8 +2,12 @@
 
 The cascade stage functions, red-team agent, and research agent are all
 LLM-backed live and covered separately. These tests verify orchestration —
-seeding, iteration sequencing, milestone red-team triggers, scheduled
-research, curator pause — using monkeypatched stubs.
+iteration sequencing, milestone red-team triggers, scheduled research,
+curator pause — using monkeypatched stubs.
+
+Sprint 2 redesign: islands start empty; the proposer bootstraps each
+island from the reference exemplar set. No seed_if_empty mechanism.
+Milestone trigger uses absolute fitness + robustness thresholds.
 """
 
 from __future__ import annotations
@@ -21,11 +25,9 @@ from alphamo.schemas import Architecture
 from alphamo.schemas.findings import (
     Classification,
     ClassificationVerdict,
-    MetaFinding,
     Severity,
     Stage1Finding,
     Stage2Finding,
-    Stage3Finding,
     Stage4Finding,
     StructuralConcern,
 )
@@ -35,7 +37,6 @@ def _stub_cascade(
     monkeypatch,
     feasibility: float = 0.9,
     structural: float = 0.85,
-    similarity: float = 0.9,
     middle_class: bool = True,
     robustness: float = 0.85,
     stage4_concerns: list[StructuralConcern] | None = None,
@@ -62,18 +63,11 @@ def _stub_cascade(
     )
     monkeypatch.setattr(
         cascade_mod,
-        "stage3_exemplars",
-        lambda a, c: Stage3Finding(
-            closest_exemplar="Satoshi", similarity=similarity, reasoning="stub"
-        ),
-    )
-    monkeypatch.setattr(
-        cascade_mod,
         "stage4_adversarial",
         lambda a, c, **kw: Stage4Finding(
             robustness=robustness,
             concerns=stage4_concerns or [],
-            reasoning="stub stage4",
+            reasoning="stub adversarial",
         ),
     )
 
@@ -112,10 +106,8 @@ def _stub_client(
 
 
 def _hp(**kwargs) -> Hyperparameters:
-    # Phase 2: milestone is gated by (a) generation >= milestone_min_generation
-    # and (b) fitness > seed_baseline + milestone_fitness_delta. We default the
-    # min-generation to 10000 here to disable the trigger for most tests; the
-    # milestone-specific tests opt in explicitly.
+    """Default test HP. Disables milestone trigger via high min_generation;
+    individual milestone tests override."""
     defaults = dict(
         num_islands=2,
         reset_every_generations=1000,
@@ -136,34 +128,50 @@ def _make_orchestrator(
     return Orchestrator.for_new_run(db, client, audit, hp=hp or _hp())
 
 
-def test_seed_if_empty_seeds_when_db_is_empty(db, monkeypatch, tmp_path):
-    orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    assert orch.seed_if_empty() is True
-    assert db.count_candidates(status="alive") > 0
+# ----------------------------------------------------------------- bootstrap
 
 
-def test_seed_if_empty_no_op_when_db_has_alive_candidates(db, monkeypatch, tmp_path):
+def test_seeds_not_inserted_into_candidates_table(db, monkeypatch, tmp_path):
+    """Sprint 2 invariant: orchestrator never inserts seed architectures into the DB."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
+
+    # Before any step, candidates table is empty.
+    assert db.count_candidates_in_run(orch.run_id) == 0
+
+    # Even after a step runs, no seed-named row appears — only the proposer's output.
+    orch.step(generation=1)
+    rows = db.alive_in_run(orch.run_id)
+    starter_names = {"Satoshi", "Rowling", "Levels", "Medvi"}
+    for row in rows:
+        assert row.architecture_spec["name"] not in starter_names
+
+
+def test_step_bootstraps_empty_island_from_references(db, monkeypatch, tmp_path):
+    """Empty island: proposer is invoked anyway, bootstrapping from reference
+    exemplars. The result is a fresh candidate in the DB."""
     orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    orch.seed_if_empty()
-    assert orch.seed_if_empty() is False
+    before = db.count_candidates(status="alive")
+    event = orch.step(generation=1)
+    assert event.skipped_reason is None
+    assert event.candidate_id is not None
+    assert db.count_candidates(status="alive") == before + 1
 
 
 def test_step_inserts_a_new_candidate(db, monkeypatch, tmp_path):
     orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    orch.seed_if_empty()
+    # Prime the island with a candidate first.
+    orch.step(generation=1)
     before = db.count_candidates(status="alive")
-    event = orch.step(generation=1)
+    event = orch.step(generation=2)
     assert event.candidate_id is not None
     assert event.skipped_reason is None
     assert db.count_candidates(status="alive") == before + 1
 
 
-def test_step_skips_empty_island(db, monkeypatch, tmp_path):
-    orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    # Don't seed — every island is empty.
-    event = orch.step(generation=1)
-    assert event.skipped_reason == "empty_island"
-    assert event.candidate_id is None
+# ----------------------------------------------------------------- milestone trigger
 
 
 def _concern(framing: str = "regulatory", severity: Severity = Severity.MEDIUM) -> StructuralConcern:
@@ -176,134 +184,162 @@ def _concern(framing: str = "regulatory", severity: Severity = Severity.MEDIUM) 
     )
 
 
-def test_step_does_not_invoke_curator_below_baseline_delta(db, monkeypatch, tmp_path):
-    """A candidate below baseline+delta must not invoke the curator, even with concerns."""
-    # Seed baseline (max of STARTERS) ≈ 0.888 with cascade-produced robustness.
-    # Stub fitness ≈ 0.88, below baseline + delta. Stage 4 surfaces concerns,
-    # but they should not be routed to the curator because the candidate
-    # is not a milestone.
+def test_milestone_does_not_fire_below_absolute_fitness_threshold(db, monkeypatch, tmp_path):
+    """Fitness below the absolute floor → no milestone, no curator firing."""
     _stub_cascade(
         monkeypatch,
-        feasibility=0.9,
-        structural=0.85,
-        similarity=0.9,
+        feasibility=0.6, structural=0.6,
+        robustness=0.95,  # high robustness, but low fitness
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-    client = _stub_client()
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db, client, audit, hp=_hp(milestone_min_generation=1)
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.80,
+            milestone_absolute_robustness_threshold=0.50,
+        ),
     )
-    orch.seed_if_empty()
     event = orch.step(generation=5)
-    # No milestone curator firing → no meta_trigger, no curator classify calls.
     assert event.meta_trigger is None
     assert event.meta_decision is None
 
 
-def test_step_does_not_invoke_curator_before_min_generation(db, monkeypatch, tmp_path):
-    """Even a high-fitness candidate must not invoke curator during warmup."""
+def test_milestone_does_not_fire_below_absolute_robustness_threshold(db, monkeypatch, tmp_path):
+    """Robustness below the absolute floor → no milestone, even with high fitness."""
     _stub_cascade(
         monkeypatch,
-        feasibility=0.99,
-        structural=0.99,
-        similarity=0.99,
+        feasibility=0.95, structural=0.95,
+        robustness=0.40,  # below floor
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db, _stub_client(), audit, hp=_hp(milestone_min_generation=25)
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.50,
+            milestone_absolute_robustness_threshold=0.70,
+        ),
     )
-    orch.seed_if_empty()
     event = orch.step(generation=5)
     assert event.meta_trigger is None
 
 
-def test_step_does_not_invoke_curator_when_stage4_clean_on_milestone(
-    db, monkeypatch, tmp_path
-):
-    """A milestone candidate with NO Stage 4 concerns must not invoke the curator.
-
-    Per Decision 3: only structural concerns trigger pause. If Stage 4 is
-    clean, there's nothing to classify — the curator shouldn't fire at all.
-    """
+def test_milestone_does_not_fire_before_min_generation(db, monkeypatch, tmp_path):
+    """Even a high-fitness candidate must not invoke curator during warmup."""
     _stub_cascade(
         monkeypatch,
-        feasibility=0.99,
-        structural=0.99,
-        similarity=0.99,
-        stage4_concerns=[],  # clean
+        feasibility=0.99, structural=0.99,
+        robustness=0.99,
+        stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db,
-        _stub_client(),
-        audit,
-        hp=_hp(milestone_min_generation=1, milestone_fitness_delta=0.01),
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=25,
+            milestone_absolute_fitness_threshold=0.50,
+            milestone_absolute_robustness_threshold=0.50,
+        ),
     )
-    orch.seed_if_empty()
+    event = orch.step(generation=5)
+    assert event.meta_trigger is None
+
+
+def test_milestone_does_not_fire_when_adversarial_clean(db, monkeypatch, tmp_path):
+    """A milestone candidate with NO concerns must not invoke the curator —
+    there's nothing structural to classify, and routine classification doesn't
+    qualify as a curator pause."""
+    _stub_cascade(
+        monkeypatch,
+        feasibility=0.99, structural=0.99,
+        robustness=0.99,
+        stage4_concerns=[],
+    )
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.50,
+            milestone_absolute_robustness_threshold=0.50,
+        ),
+    )
     event = orch.step(generation=30)
     assert event.meta_trigger is None
 
 
-def test_step_invokes_curator_on_milestone_with_concerns(db, monkeypatch, tmp_path):
-    """Past min-generation AND above baseline+delta AND Stage 4 has concerns → curator fires."""
-    # 4-way fitness = (0.99 * 4) / 4 = 0.99, comfortably above the
-    # cascade-produced Satoshi seed baseline of ~0.888 + delta 0.02 = 0.908.
+def test_milestone_fires_at_absolute_threshold_boundary_for_fitness(db, monkeypatch, tmp_path):
+    """Fitness just above threshold + robustness clear → milestone fires."""
+    # 3-dim aggregate of (0.85, 0.85, 0.85) = 0.85; threshold 0.80 → clears.
     _stub_cascade(
         monkeypatch,
-        feasibility=0.99,
-        structural=0.99,
-        similarity=0.99,
-        robustness=0.99,
+        feasibility=0.85, structural=0.85,
+        robustness=0.85,
         stage4_concerns=[_concern(framing="legal_exposure", severity=Severity.HIGH)],
     )
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db,
-        _stub_client(),
-        audit,
-        hp=_hp(milestone_min_generation=25, milestone_fitness_delta=0.02),
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.80,
+            milestone_absolute_robustness_threshold=0.70,
+        ),
     )
-    orch.seed_if_empty()
-    event = orch.step(generation=30)
+    event = orch.step(generation=5)
     assert event.meta_trigger == "milestone_candidate"
     assert event.meta_decision is not None
 
 
-def test_seed_baseline_is_persisted_in_run_hyperparameters(db, monkeypatch, tmp_path):
-    """The computed seed_baseline_fitness must survive into the run row's HP JSON."""
-    _stub_cascade(monkeypatch)
+def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monkeypatch, tmp_path):
+    """Robustness just above threshold + fitness clear → milestone fires."""
+    _stub_cascade(
+        monkeypatch,
+        feasibility=0.95, structural=0.95,
+        robustness=0.75,  # just above floor of 0.70
+        stage4_concerns=[_concern(severity=Severity.HIGH)],
+    )
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
-    orch.seed_if_empty()
-    run = db.get_run(orch.run_id)
-    assert "seed_baseline_fitness" in run.hyperparameters
-    # Cascade-produced canonical scores: Satoshi remains the highest aggregate.
-    # (0.9500 + 0.9700 + 1.0000 + 0.6319) / 4.0 = 0.887975
-    assert run.hyperparameters["seed_baseline_fitness"] == pytest.approx(0.887975, abs=0.005)
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.80,
+            milestone_absolute_robustness_threshold=0.70,
+        ),
+    )
+    event = orch.step(generation=5)
+    assert event.meta_trigger == "milestone_candidate"
 
 
-def test_resumed_run_inherits_seed_baseline(db, monkeypatch, tmp_path):
-    """Resume of a previously-seeded run must read the baseline from HP JSON, not recompute."""
-    _stub_cascade(monkeypatch)
+def test_milestone_does_not_fire_when_robustness_is_none(db, monkeypatch, tmp_path):
+    """An early-exit candidate (robustness=None) can never be a milestone."""
+    # Force early exit at stage 1.
+    _stub_cascade(monkeypatch, feasibility=0.2, structural=0.9, robustness=0.95)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch_a = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
-    orch_a.seed_if_empty()
-    baseline = orch_a.seed_baseline_fitness
-    assert baseline is not None
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.10,  # low floor
+            milestone_absolute_robustness_threshold=0.10,
+        ),
+    )
+    event = orch.step(generation=5)
+    assert event.meta_trigger is None
 
-    orch_resumed = Orchestrator.resume_run(db, _stub_client(), audit, orch_a.run_id)
-    assert orch_resumed.seed_baseline_fitness == baseline
-    # seed_if_empty must NOT re-seed and must NOT recompute.
-    assert orch_resumed.seed_if_empty() is False
-    assert orch_resumed.seed_baseline_fitness == baseline
+
+# ----------------------------------------------------------------- research + stall
 
 
 def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
@@ -311,15 +347,12 @@ def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
     monkeypatch.setattr(
         orch_mod, "run_research", lambda trigger, *a, **k: calls.append(trigger) or []
     )
-    _stub_cascade(monkeypatch, feasibility=0.5, structural=0.6, similarity=0.6)
+    _stub_cascade(monkeypatch, feasibility=0.5, structural=0.6)
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
-        db,
-        _stub_client(),
-        audit,
+        db, _stub_client(), audit,
         hp=_hp(research_every_generations=5),
     )
-    orch.seed_if_empty()
     event = orch.step(generation=5)
     assert calls == ["scheduled_interval"]
     assert event.meta_trigger == "scheduled_interval"
@@ -334,15 +367,10 @@ def test_run_returns_after_max_generations(db, monkeypatch, tmp_path):
 
 
 def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
-    # Make the proposer's output score above the seed baseline so the
-    # milestone gate fires past gen 1, and stub Stage 4 to surface a
-    # high-severity concern that the (structural-classifying) curator
-    # will escalate to PAUSE_FOR_HUMAN.
     _stub_cascade(
         monkeypatch,
-        feasibility=0.99,
-        structural=0.99,
-        similarity=0.99,
+        feasibility=0.99, structural=0.99,
+        robustness=0.99,
         stage4_concerns=[
             StructuralConcern(
                 framing="regulatory",
@@ -357,21 +385,21 @@ def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _stub_client(classification=Classification.STRUCTURAL)
     orch = Orchestrator.for_new_run(
-        db,
-        client,
-        audit,
-        hp=_hp(milestone_min_generation=1, milestone_fitness_delta=0.01),
+        db, client, audit,
+        hp=_hp(
+            milestone_min_generation=1,
+            milestone_absolute_fitness_threshold=0.50,
+            milestone_absolute_robustness_threshold=0.50,
+        ),
     )
     result = orch.run(max_generations=10)
     assert result.paused is True
     assert result.stopped_reason == "curator_pause"
-    assert len(result.events) >= 1
-    assert len(result.events) < 10
+    assert 1 <= len(result.events) < 10
 
 
 def test_detect_stall_returns_false_with_short_history(db, monkeypatch, tmp_path):
     orch = _make_orchestrator(db, monkeypatch, tmp_path, hp=_hp(stall_window=10))
-    orch.seed_if_empty()
     assert orch.detect_stall() is False
 
 
@@ -381,20 +409,15 @@ def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path
     orch = _make_orchestrator(
         db, monkeypatch, tmp_path, hp=_hp(stall_window=5, stall_epsilon=0.001)
     )
-    # Insert flat fitness rows across many generations into THIS orchestrator's run.
+    # Flat fitness across many generations.
     for g in range(1, 6):
         db.insert(
             Architecture(
-                name=f"n{g}",
-                summary="s",
-                value_chain="vc",
-                capture_mechanism="cm",
-                entry_resources="er",
+                name=f"n{g}", summary="s", value_chain="vc",
+                capture_mechanism="cm", entry_resources="er",
             ),
             Scores(
-                feasibility=0.5,
-                structural=0.5,
-                exemplar_similarity=0.5,
+                feasibility=0.5, structural=0.5,
                 middle_class_accessible=True,
             ),
             run_id=orch.run_id,
@@ -403,8 +426,10 @@ def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path
     assert orch.detect_stall() is True
 
 
+# ----------------------------------------------------------------- failure handling
+
+
 def _client_that_raises_proposer_error_then_succeeds(failures: int) -> MagicMock:
-    """Mock client where the first `failures` proposer calls return None and the rest succeed."""
     from tests.fixtures.parsed_message import FakeParsedMessage
 
     client = MagicMock()
@@ -415,17 +440,12 @@ def _client_that_raises_proposer_error_then_succeeds(failures: int) -> MagicMock
         if output_format is Architecture:
             call_state["proposer_calls"] += 1
             if call_state["proposer_calls"] <= failures:
-                return FakeParsedMessage(
-                    parsed_output=None,
-                    stop_reason="refusal",
-                )
+                return FakeParsedMessage(parsed_output=None, stop_reason="refusal")
             return FakeParsedMessage(
                 Architecture(
                     name=f"variant-{call_state['proposer_calls']}",
-                    summary="s",
-                    value_chain="vc",
-                    capture_mechanism="cm",
-                    entry_resources="er",
+                    summary="s", value_chain="vc",
+                    capture_mechanism="cm", entry_resources="er",
                 )
             )
         if output_format is ClassificationVerdict:
@@ -441,7 +461,6 @@ def _client_that_raises_proposer_error_then_succeeds(failures: int) -> MagicMock
 
 
 def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
-    """One failed eval → loop continues; next iteration scores a candidate."""
     _stub_cascade(monkeypatch)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -451,7 +470,7 @@ def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
     result = orch.run(max_generations=5)
 
     assert result.stopped_reason == "max_generations"
-    assert result.consecutive_failures_at_stop == 0  # last 4 succeeded
+    assert result.consecutive_failures_at_stop == 0
     failures = [e for e in result.events if e.failure_reason is not None and e.candidate_id is None]
     inserts = [e for e in result.events if e.candidate_id is not None]
     assert len(failures) == 1
@@ -460,7 +479,6 @@ def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
 
 
 def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
-    """N consecutive eval-side failures (no successful insert between them) halt the run."""
     _stub_cascade(monkeypatch)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -477,7 +495,6 @@ def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
 
 
 def test_consecutive_counter_resets_on_successful_insert(db, monkeypatch, tmp_path):
-    """A success between failures should reset the counter so the run doesn't halt."""
     _stub_cascade(monkeypatch)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -486,10 +503,10 @@ def test_consecutive_counter_resets_on_successful_insert(db, monkeypatch, tmp_pa
 
     client = MagicMock()
     pattern = iter([
-        False, False,  # 2 failures
-        True,          # success → reset counter
-        False, False,  # 2 more failures (counter at 2, below threshold of 3)
-        True, True, True,  # more successes
+        False, False,
+        True,
+        False, False,
+        True, True, True,
     ])
 
     def parse_side_effect(**kwargs):

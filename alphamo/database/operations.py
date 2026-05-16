@@ -27,27 +27,32 @@ LEGACY_RUN_ID = "run_legacy"
 
 
 def aggregate_fitness(scores: Scores) -> float:
-    """Average of present score dimensions, zeroed when the middle-class filter fails.
+    """Average of present (non-None) score dimensions, zeroed when the
+    middle-class filter fails.
 
     The middle-class constraint is a *filter, not a penalty* — candidates
     that fail it must not appear above accessible candidates regardless of
     how well they score elsewhere.
 
-    Aggregation rule (Phase 2):
+    Aggregation rule:
       - middle_class_accessible=False ⇒ fitness = 0.0 (filter)
-      - else: average over dimensions actually evaluated. `robustness` is
-        included when present and skipped when None. This preserves
-        backward compatibility with pre-Stage-4 candidates (which average
-        over 3 dimensions, matching the original behavior) and gives
-        Stage-4-scrutinised candidates a true 4-way average.
+      - else: average over dimensions that are actually present.
+        `exemplar_similarity` and `robustness` are both Optional and
+        skipped when None. New (Sprint-2-and-later) candidates have
+        `exemplar_similarity=None` and aggregate over 3 dimensions
+        (feasibility + structural + robustness). Legacy candidates with
+        a similarity value will still include it, preserving their
+        historical fitness; legacy pre-Stage-4 candidates with
+        `robustness=None` aggregate over their 3 present dimensions.
     """
     if not scores.middle_class_accessible:
         return 0.0
     dims: list[float] = [
         scores.feasibility,
         scores.structural,
-        scores.exemplar_similarity,
     ]
+    if scores.exemplar_similarity is not None:
+        dims.append(scores.exemplar_similarity)
     if scores.robustness is not None:
         dims.append(scores.robustness)
     return sum(dims) / len(dims)

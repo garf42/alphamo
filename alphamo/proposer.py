@@ -1,4 +1,10 @@
-"""LLM proposer: generates a candidate Architecture as a variation on k seeds."""
+"""LLM proposer: generates a candidate Architecture from reference exemplars +
+optional island-drawn seeds.
+
+Sprint 2 redesign: empty seed lists are valid. When the island is empty
+(fresh run, or just post-reset), the proposer bootstraps from the
+reference exemplar set alone — see `render_seeds([])`.
+"""
 
 from __future__ import annotations
 
@@ -16,12 +22,12 @@ from alphamo.schemas import Architecture
 
 
 class Proposer:
-    """Calls Opus with k seed architectures and parses the response as a new Architecture.
+    """Calls Opus with k island seeds (or zero, for bootstrap) and parses the
+    response as a new Architecture.
 
-    Phase 2 (per AlphaEvolve §2.2): seeds carry their per-dimension scores so
-    the prompt can render score headers above each prior program. Callers
-    pass `list[Seed]`. A back-compat overload also accepts `list[Architecture]`
-    for ad-hoc usage that doesn't have score data.
+    Reference exemplars are baked into the prompt template — the caller
+    passes only the island-drawn candidates (which may be empty for the
+    bootstrap case).
     """
 
     def __init__(self, client: Any, model: str = OPUS_MODEL) -> None:
@@ -29,12 +35,13 @@ class Proposer:
         self.model = model
 
     def propose(self, seeds: list[Seed] | list[Architecture]) -> Architecture:
-        if not seeds:
-            raise ValueError("propose() requires at least one seed")
-        if isinstance(seeds[0], Seed):
+        # Empty list is valid: bootstrap from reference exemplars alone.
+        if seeds and isinstance(seeds[0], Seed):
             user_content = render_seeds(seeds)  # type: ignore[arg-type]
-        else:
+        elif seeds:
             user_content = render_seeds_from_architectures(seeds)  # type: ignore[arg-type]
+        else:
+            user_content = render_seeds([])
         return parse_or_raise(
             self.client,
             ProposerOutputError,

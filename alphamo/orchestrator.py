@@ -2,18 +2,26 @@
 
 One Orchestrator drives a run. Each iteration:
   1. Pick an island (uniform).
-  2. Draw k seeds via softmax-weighted sampling.
+  2. Draw k candidates from the island via softmax-weighted sampling.
+     If the island is empty, draw is empty and the proposer bootstraps
+     from the reference exemplars alone (Sprint 2 redesign: seeds are
+     no longer inserted into the candidates table).
   3. Propose a new architecture via Opus.
   4. Score it through the cascade.
   5. Insert into the DB.
-  6. If the new fitness is at or above the milestone threshold, fire the
-     red-team agent and pass findings to the curator.
+  6. If the new fitness clears the absolute milestone thresholds, fire
+     the red-team agent and pass findings to the curator.
   7. Apply the islands manager's reset cadence.
   8. On scheduled intervals (or stall detection), fire the research agent
      and pass findings to the curator.
 
 Termination: max_generations reached, OR curator returns PAUSE_FOR_HUMAN
 on a structural finding, OR `max_consecutive_failures` LLM output failures.
+
+Sprint 2 redesign: the milestone trigger uses absolute fitness +
+robustness thresholds, not seed-relative comparison. The
+`seed_baseline_fitness` mechanism was removed when seeds stopped being
+scored candidates.
 
 Every Orchestrator owns exactly one `run_id`. Every insert / read / audit
 event is scoped to that run. Construct via `Orchestrator.for_new_run(...)`
@@ -36,10 +44,8 @@ from alphamo.context.hyperparams import Hyperparameters
 from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
-from alphamo.database.operations import aggregate_fitness
 from alphamo.errors import LLMOutputError
 from alphamo.evaluator import EvaluatorCascade
-from alphamo.evaluator.exemplar_library import STARTERS
 from alphamo.islands import IslandsManager, ResetEvent
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.meta.curator import Curator
@@ -56,7 +62,9 @@ from alphamo.schemas.findings import (
     StructuralConcern,
 )
 
-SEED_BASELINE_KEY = "seed_baseline_fitness"
+# Audit-log trigger string preserved from pre-Sprint-2 for backward
+# compatibility with old audit.jsonl files (run-006, run-007). The
+# conceptual stage is now Stage 3, but persisted strings stay.
 STAGE4_AUDIT_TRIGGER = "stage4_routine"
 
 
@@ -130,15 +138,6 @@ class Orchestrator:
         self.hp = hp or Hyperparameters()
         self.rng = rng or random.Random()
 
-        # Load any derived run-start state (e.g. seed_baseline_fitness)
-        # persisted into the run's hyperparameters JSON. Populated by
-        # seed_if_empty() on a fresh run; survived from the original session
-        # on a resumed run. None until seeding completes.
-        run_row = db.get_run(run_id)
-        self.seed_baseline_fitness: float | None = run_row.hyperparameters.get(
-            SEED_BASELINE_KEY
-        )
-
         self.islands = IslandsManager(
             db,
             run_id=run_id,
@@ -209,27 +208,6 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ loop
 
-    def seed_if_empty(self) -> bool:
-        """Seed canonical STARTERS into every island if THIS run has no candidates.
-
-        A fresh run starts with zero candidates for its run_id and gets
-        seeded. A resumed run sees its existing candidates and skips. Other
-        runs in the same DB are invisible.
-
-        On a fresh seed, computes seed_baseline_fitness = max aggregate
-        fitness across STARTERS, caches it on self, and persists it into
-        the run's hyperparameters JSON for milestone gating and auditability.
-        """
-        if self.db.count_candidates_in_run(self.run_id) > 0:
-            return False
-        self.islands.seed_all_islands(STARTERS)
-        starter_fitnesses = [aggregate_fitness(scores) for _, scores in STARTERS]
-        self.seed_baseline_fitness = max(starter_fitnesses)
-        self.db.patch_run_hyperparameters(
-            self.run_id, {SEED_BASELINE_KEY: self.seed_baseline_fitness}
-        )
-        return True
-
     def detect_stall(self) -> bool:
         """True if max fitness has barely moved over the last `stall_window` generations."""
         history = self.db.fitness_history(self.hp.stall_window, run_id=self.run_id)
@@ -237,19 +215,30 @@ class Orchestrator:
             return False
         return max(history) - min(history) < self.hp.stall_epsilon
 
-    def _is_milestone(self, generation: int, fitness: float) -> bool:
-        """A candidate is a milestone iff BOTH conditions hold:
+    def _is_milestone(
+        self, generation: int, fitness: float, robustness: float | None
+    ) -> bool:
+        """A candidate is a milestone iff ALL conditions hold:
 
-          (1) past the early-generation warmup (`milestone_min_generation`), and
-          (2) decisively above the seed baseline
-              (`seed_baseline_fitness + milestone_fitness_delta`).
+          (1) past the early-generation warmup (`milestone_min_generation`),
+          (2) aggregate fitness exceeds the absolute fitness threshold, and
+          (3) robustness exceeds the absolute robustness threshold.
+
+        Sprint 2 redesign: thresholds are absolute, not seed-relative. The
+        `seed_baseline_fitness + delta` comparison was retired with the
+        seeds-as-candidates mechanism. Robustness is None when adversarial
+        scrutiny didn't run (any early exit) — those candidates can't be
+        milestones since they haven't been scrutinised.
         """
         if generation < self.hp.milestone_min_generation:
             return False
-        if self.seed_baseline_fitness is None:
-            # No baseline persisted yet — be conservative and don't trigger.
+        if robustness is None:
             return False
-        return fitness > self.seed_baseline_fitness + self.hp.milestone_fitness_delta
+        if fitness <= self.hp.milestone_absolute_fitness_threshold:
+            return False
+        if robustness <= self.hp.milestone_absolute_robustness_threshold:
+            return False
+        return True
 
     def _log_stage4_routine(
         self, candidate_id: int, stage4: Stage4Finding
@@ -292,8 +281,8 @@ class Orchestrator:
         fitness: float,
         stage4: Stage4Finding,
     ) -> tuple[str, CuratorDecision] | None:
-        """If the candidate is a milestone AND Stage 4 surfaced concerns,
-        invoke the curator's classify-and-gate path.
+        """If the candidate is a milestone AND adversarial scrutiny surfaced
+        concerns, invoke the curator's classify-and-gate path.
 
         Per Decision 3: only STRUCTURAL concerns trigger pause. The curator's
         existing semantics handle that — it classifies each concern and pauses
@@ -302,7 +291,7 @@ class Orchestrator:
         A milestone with empty Stage 4 concerns (clean adversarial pass) does
         not invoke the curator — there's nothing to classify.
         """
-        if not self._is_milestone(generation, fitness):
+        if not self._is_milestone(generation, fitness, stage4.robustness):
             return None
         if not stage4.concerns:
             return None
@@ -337,12 +326,9 @@ class Orchestrator:
         """
         island_id = self.islands.pick_island()
         seeds = self.sampler.draw(island_id=island_id, k=self.hp.k_seeds)
-        if not seeds:
-            return IterationEvent(
-                generation=generation,
-                island_id=island_id,
-                skipped_reason="empty_island",
-            )
+        # Empty seeds is OK: the proposer bootstraps from the reference
+        # exemplars alone. This is the expected path on the first iteration
+        # for each island (Sprint 2 redesign: islands start empty).
 
         try:
             architecture = self.proposer.propose(seeds)
@@ -368,8 +354,8 @@ class Orchestrator:
         # audit-log JSONL. NULL when the cascade short-circuited before
         # Stage 4 (Stage 1/2/3 exit) or middle-class filter failure.
         stage4_findings_payload = (
-            [c.model_dump(mode="json") for c in result.stage4.concerns]
-            if result.stage4 is not None
+            [c.model_dump(mode="json") for c in result.stage3.concerns]
+            if result.stage3 is not None
             else None
         )
         candidate_id = self.db.insert(
@@ -386,8 +372,8 @@ class Orchestrator:
         # This is the routine selection-pressure path: robustness is already
         # in the candidate's scores, but the per-framing diagnostic trail is
         # the only place the concerns themselves get persisted.
-        if result.stage4 is not None:
-            self._log_stage4_routine(candidate_id, result.stage4)
+        if result.stage3 is not None:
+            self._log_stage4_routine(candidate_id, result.stage3)
 
         meta_trigger: str | None = None
         meta_decision: CuratorDecision | None = None
@@ -395,9 +381,9 @@ class Orchestrator:
         try:
             milestone_outcome = (
                 self._maybe_milestone_curate(
-                    generation, candidate_id, row.fitness, result.stage4
+                    generation, candidate_id, row.fitness, result.stage3
                 )
-                if result.stage4 is not None
+                if result.stage3 is not None
                 else None
             )
             if milestone_outcome is not None:
@@ -431,8 +417,11 @@ class Orchestrator:
         consecutive eval-side failures reach `hp.max_consecutive_failures`.
         Stamps the run's `stopped_reason` and `completed_at` on the Run row
         before returning.
+
+        Sprint 2 redesign: no `seed_if_empty()` step — islands start empty
+        and the proposer bootstraps each island from the reference exemplar
+        set on its first iteration.
         """
-        self.seed_if_empty()
         result = RunResult()
         consecutive_failures = 0
         for generation in range(1, max_generations + 1):

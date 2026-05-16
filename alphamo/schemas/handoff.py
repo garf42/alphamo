@@ -4,12 +4,11 @@ The handoff is the load-bearing artefact: everything before it is plumbing in
 service of producing this document. Skill 4 (implementation-handoff) consumes
 the document and packages it for autonomous build.
 
-The structure honestly separates seeds (what the run started with) from
-generated discoveries (what the search actually produced). A seed never
-"wins" — `winning_architecture` is null whenever no generated candidate
-exceeded a seed baseline, and `no_breakthrough_this_run` flags that case
-explicitly so a human reading the handoff knows the search did not exceed
-its starting baseline.
+Sprint 2 redesign: seeds appear only as descriptive references (mechanism /
+structural insight / known fragilities), without fitness numbers. The
+`no_breakthrough_this_run` flag and `winning_architecture` field are gated
+on absolute milestone thresholds (fitness AND robustness clearing the
+configured floors), not on seed-relative comparison.
 """
 
 from __future__ import annotations
@@ -21,27 +20,30 @@ from alphamo.schemas.findings import StructuralConcern
 from alphamo.schemas.scores import Scores
 
 
-class SeedBaseline(BaseModel):
-    """One STARTER's canonical baseline. Informational — NOT a winner.
+class SeedReference(BaseModel):
+    """One reference exemplar's descriptive entry.
 
-    Listed in the handoff so the reader sees what the run started with and
-    can interpret `top_generated_discoveries` against it. The fitness here
-    is computed from the canonical scores in `exemplar_library.py`, not from
-    DB rows, so the baseline is stable even if a reseed copy of this seed
-    has been killed off the alive set.
+    Listed in the handoff so the reader sees the structural patterns the
+    search was anchored against, without any fitness number suggesting the
+    seed itself was a candidate. Seeds are not scored in the Sprint 2
+    redesign — they appear in proposer prompts as patterns, and here as
+    descriptive reference, and nowhere else in the pipeline.
     """
 
     name: str
-    scores: Scores
-    fitness: float
-    island_of_origin: int
+    summary: str
+    capture_mechanism: str
+    structural_insight: str | None = None
+    known_fragilities: str | None = None
 
 
 class GeneratedDiscovery(BaseModel):
-    """A non-seed candidate produced by the search loop.
+    """A candidate produced by the search loop.
 
-    `stage4_findings` is None for legacy / pre-Stage-4 candidates and an
-    empty list for Stage-4-scrutinised candidates that came back clean.
+    Sprint 2 redesign: all alive candidates in a run are generated
+    discoveries (seeds are not inserted into the DB). `stage4_findings`
+    is None for legacy / pre-Stage-4 candidates and an empty list for
+    Stage-4-scrutinised candidates that came back clean.
     """
 
     spec: Architecture
@@ -53,21 +55,16 @@ class GeneratedDiscovery(BaseModel):
     stage4_findings: list[StructuralConcern] | None = None
 
 
-class ExemplarComparison(BaseModel):
-    """One stage-3 comparison record for the verification trail."""
-
-    closest_exemplar: str
-    similarity: float
-    reasoning: str
-
-
 class VerificationTrail(BaseModel):
     """How the cascade subject was scored, for downstream auditability.
 
     The cascade subject is the top generated discovery when one exists, or
-    nothing at all when the run produced only seeds. In the latter case
-    `final_scores`, `exemplar_comparisons`, and `adversarial_concerns` are
-    empty / None — there's nothing to verify because nothing was generated.
+    nothing at all when the run produced no candidates. In the latter case
+    `final_scores` and `adversarial_concerns` are empty / None.
+
+    Sprint 2: `exemplar_comparisons` is retained as an empty list for
+    backward-compatible JSON shape but is never populated — Stage 3
+    (exemplar similarity) was retired.
     """
 
     run_id: str
@@ -77,7 +74,7 @@ class VerificationTrail(BaseModel):
     final_scores: Scores | None = None
     anchor_used: str
     eval_count: int
-    exemplar_comparisons: list[ExemplarComparison]
+    exemplar_comparisons: list[dict] = Field(default_factory=list)
     adversarial_concerns: list[StructuralConcern] = Field(default_factory=list)
 
 
@@ -94,9 +91,8 @@ class DriftLogEntry(BaseModel):
 class MiddleClassEntryCheck(BaseModel):
     """Explicit confirmation the hard constraint held on the cascade subject.
 
-    When no generated candidate exists, this reports `passes=True` with a
-    placeholder note — seeds always pass the filter and there's no subject
-    to check otherwise.
+    When no candidate exists in the run, this reports `passes=True` with a
+    placeholder note.
     """
 
     passes: bool
@@ -107,18 +103,19 @@ class MiddleClassEntryCheck(BaseModel):
 class Handoff(BaseModel):
     """The complete handoff document.
 
-    Field semantics:
-      - `seed_baselines`: informational. One entry per STARTER. NOT a winner.
-      - `top_generated_discoveries`: research output. Top N generated
-        candidates by fitness, sorted descending. Empty when the run
-        produced only seeds.
-      - `no_breakthrough_this_run`: True when no generated candidate's
-        fitness exceeds `min(seed_baselines.fitness)`. Honest summary flag.
-      - `winning_architecture`: the highest-fitness generated candidate
-        when `no_breakthrough_this_run` is False, else null. Never a seed.
+    Field semantics (Sprint 2):
+      - `seed_baselines`: descriptive reference. One entry per seed in
+        `SEED_REFERENCES`. NO fitness number — seeds aren't scored.
+      - `top_generated_discoveries`: research output. Top N alive
+        candidates by fitness, sorted descending.
+      - `no_breakthrough_this_run`: True when no candidate cleared the
+        absolute milestone thresholds (fitness AND robustness floors
+        from Hyperparameters). Honest summary flag.
+      - `winning_architecture`: the highest-fitness candidate when
+        `no_breakthrough_this_run` is False, else null.
     """
 
-    seed_baselines: list[SeedBaseline]
+    seed_baselines: list[SeedReference]
     top_generated_discoveries: list[GeneratedDiscovery]
     no_breakthrough_this_run: bool
     winning_architecture: GeneratedDiscovery | None = None

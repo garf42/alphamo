@@ -3,12 +3,16 @@
 Each stage uses a fixed system prompt (parent goal + role) and a small user
 message containing the candidate. The system prompt is held byte-stable so
 prompt caching can hit on every call after the first.
+
+Sprint 2 redesign: the legacy STAGE3_SYSTEM (exemplar similarity
+comparison) was retired alongside the exemplar_similarity dimension. What
+the codebase still calls `stage4_adversarial` is now conceptually Stage 3;
+its prompts live in `alphamo/prompts/stage4_prompts.py`.
 """
 
 from __future__ import annotations
 
 from alphamo.context.parent_goal import PARENT_GOAL
-from alphamo.evaluator.exemplar_library import format_exemplars_for_prompt
 from alphamo.schemas import Architecture
 
 STAGE1_SYSTEM = f"""\
@@ -38,32 +42,12 @@ three load-bearing structural criteria:
 
 Score each sub-criterion on 0.0-1.0, then aggregate to an overall structural \
 score that reflects how well the candidate fits the parent goal's structural \
-shape. Aggressive but calibrated: known existence proofs (Satoshi, Rowling, \
-Levels-style architectures) should score 0.7+ on every axis.
+shape. Aggressive but calibrated: a coherent value-capture architecture \
+that satisfies the three criteria should score 0.7+ on every axis.
 
 The parent goal:
 
 {PARENT_GOAL}\
-"""
-
-STAGE3_SYSTEM = f"""\
-You are the deep-comparison evaluator for an evolutionary search over \
-value-capture architectures. You compare a candidate to the reference \
-exemplars below and score how structurally similar it is to its closest \
-match.
-
-"Structural similarity" means similarity in the SHAPE of the value-capture \
-configuration: who does the operational labor, what mechanism captures the \
-value, what the entry requirements are. Surface differences (industry, era, \
-medium) should not drag the score down if the underlying structure matches.
-
-The parent goal:
-
-{PARENT_GOAL}
-
-The reference exemplars:
-
-{format_exemplars_for_prompt()}\
 """
 
 

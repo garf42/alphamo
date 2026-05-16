@@ -19,7 +19,7 @@ from alphamo.context.hyperparams import Hyperparameters
 from alphamo.database import ProgramsDB
 from alphamo.database.schema import Candidate
 from alphamo.evaluator import cascade as cascade_mod
-from alphamo.evaluator.exemplar_library import STARTERS
+from alphamo.evaluator.exemplar_library import SEED_REFERENCES
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.orchestrator import Orchestrator
 from alphamo.schemas.findings import (
@@ -28,7 +28,6 @@ from alphamo.schemas.findings import (
     Severity,
     Stage1Finding,
     Stage2Finding,
-    Stage3Finding,
     Stage4Finding,
     StructuralConcern,
 )
@@ -110,13 +109,6 @@ def _stub_full_cascade_with_concerns(monkeypatch, stage4_concerns):
         lambda a, c: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="ok",
-        ),
-    )
-    monkeypatch.setattr(
-        cascade_mod,
-        "stage3_exemplars",
-        lambda a, c: Stage3Finding(
-            closest_exemplar="Satoshi", similarity=0.9, reasoning="ok",
         ),
     )
     monkeypatch.setattr(
@@ -220,12 +212,6 @@ def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
         ),
     )
     monkeypatch.setattr(
-        cascade_mod, "stage3_exemplars",
-        lambda a, c: Stage3Finding(
-            closest_exemplar="Satoshi", similarity=0.9, reasoning="x",
-        ),
-    )
-    monkeypatch.setattr(
         cascade_mod, "stage4_adversarial",
         lambda a, c, **kw: Stage4Finding(robustness=0.5, concerns=[], reasoning="x"),
     )
@@ -298,7 +284,7 @@ def test_backfill_populates_stage4_findings_and_recomputes_robustness(db, defaul
     # Insert a candidate WITHOUT stage4_findings, simulating run-006.
     from alphamo.schemas import Scores
 
-    arch_run006 = STARTERS[0][0]
+    arch_run006 = SEED_REFERENCES[0]
     bad_scores = Scores(
         feasibility=0.85,
         structural=0.85,
@@ -336,7 +322,7 @@ def test_backfill_is_idempotent(db, default_run):
     """Re-running backfill on a candidate that already has stage4_findings is a no-op."""
     from alphamo.schemas import Scores
 
-    arch = STARTERS[0][0]
+    arch = SEED_REFERENCES[0]
     cand_id = db.insert(
         arch,
         Scores(
@@ -376,7 +362,7 @@ def test_backfill_ignores_non_stage4_events(db, default_run):
     """Curator-event audit entries do not trigger backfill updates."""
     from alphamo.schemas import Scores
 
-    arch = STARTERS[0][0]
+    arch = SEED_REFERENCES[0]
     cand_id = db.insert(
         arch,
         Scores(

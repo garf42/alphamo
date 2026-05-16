@@ -4,6 +4,9 @@ The individual stages are LLM-backed and tested live in
 `test_evaluator_calibration.py`. These tests verify the orchestration logic
 — thresholds, short-circuiting, middle-class filtering — by injecting
 fake stage functions via monkeypatch so they run without API calls.
+
+Sprint 2 redesign: the cascade has 3 stages (feasibility, structural,
+adversarial). The exemplar-similarity comparison stage was retired.
 """
 
 from __future__ import annotations
@@ -17,7 +20,6 @@ from alphamo.evaluator.cascade import EvaluatorCascade
 from alphamo.schemas.findings import (
     Stage1Finding,
     Stage2Finding,
-    Stage3Finding,
     Stage4Finding,
 )
 from tests.fixtures.exemplars import PE_ROLLUP_FOIL, SATOSHI_FIXTURE
@@ -41,15 +43,9 @@ def _make_s2(structural: float) -> Stage2Finding:
     )
 
 
-def _make_s3(similarity: float) -> Stage3Finding:
-    return Stage3Finding(
-        closest_exemplar="Satoshi",
-        similarity=similarity,
-        reasoning="test stub",
-    )
-
-
-def _make_s4(robustness: float = 0.85) -> Stage4Finding:
+def _make_adversarial(robustness: float = 0.85) -> Stage4Finding:
+    """Adversarial-scrutiny finding. Stage4Finding class name preserved from
+    pre-Sprint-2 for compatibility; the conceptual stage is now Stage 3."""
     return Stage4Finding(
         robustness=robustness,
         concerns=[],
@@ -59,7 +55,7 @@ def _make_s4(robustness: float = 0.85) -> Stage4Finding:
 
 def _patch_stage4(monkeypatch, robustness: float = 0.85):
     monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c, **kw: _make_s4(robustness)
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: _make_adversarial(robustness)
     )
 
 
@@ -68,8 +64,8 @@ def cascade() -> EvaluatorCascade:
     return EvaluatorCascade(client=MagicMock(), stage1_threshold=0.4, stage2_threshold=0.5)
 
 
-def test_passing_candidate_runs_all_four_stages(cascade, monkeypatch):
-    s1_calls, s2_calls, s3_calls, s4_calls = [], [], [], []
+def test_passing_candidate_runs_all_three_stages(cascade, monkeypatch):
+    s1_calls, s2_calls, s3_calls = [], [], []
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
@@ -82,34 +78,25 @@ def test_passing_candidate_runs_all_four_stages(cascade, monkeypatch):
     )
     monkeypatch.setattr(
         cascade_mod,
-        "stage3_exemplars",
-        lambda a, c: s3_calls.append(a) or _make_s3(0.92),
-    )
-    monkeypatch.setattr(
-        cascade_mod,
         "stage4_adversarial",
-        lambda a, c, **kw: s4_calls.append(a) or _make_s4(0.80),
+        lambda a, c, **kw: s3_calls.append(a) or _make_adversarial(0.80),
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
 
-    assert (
-        len(s1_calls) == 1
-        and len(s2_calls) == 1
-        and len(s3_calls) == 1
-        and len(s4_calls) == 1
-    )
+    assert len(s1_calls) == 1 and len(s2_calls) == 1 and len(s3_calls) == 1
     assert result.early_exit is None
     assert result.scores.feasibility == 0.9
     assert result.scores.structural == 0.85
-    assert result.scores.exemplar_similarity == 0.92
+    # exemplar_similarity is retired — always None on new candidates.
+    assert result.scores.exemplar_similarity is None
     assert result.scores.robustness == 0.80
     assert result.scores.middle_class_accessible is True
-    assert result.stage4 is not None
+    assert result.stage3 is not None
 
 
 def test_middle_class_failure_short_circuits_to_zero_fitness(cascade, monkeypatch):
-    s2_calls, s3_calls, s4_calls = [], [], []
+    s2_calls, s3_calls = [], []
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, False)
     )
@@ -117,24 +104,21 @@ def test_middle_class_failure_short_circuits_to_zero_fitness(cascade, monkeypatc
         cascade_mod, "stage2_structured", lambda a, c: s2_calls.append(1) or _make_s2(0.9)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
-    )
-    monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
     )
 
     result = cascade.evaluate(PE_ROLLUP_FOIL.architecture)
 
     assert result.early_exit == "middle_class_filter"
-    assert s2_calls == [] and s3_calls == [] and s4_calls == []
+    assert s2_calls == [] and s3_calls == []
     assert result.scores.middle_class_accessible is False
     assert result.scores.structural == 0.0
-    assert result.scores.exemplar_similarity == 0.0
+    assert result.scores.exemplar_similarity is None
     assert result.scores.robustness is None
 
 
-def test_low_stage1_score_skips_stage2_and_stage3_and_stage4(cascade, monkeypatch):
-    s2_calls, s3_calls, s4_calls = [], [], []
+def test_low_stage1_score_skips_downstream_stages(cascade, monkeypatch):
+    s2_calls, s3_calls = [], []
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.2, True)
     )
@@ -142,22 +126,19 @@ def test_low_stage1_score_skips_stage2_and_stage3_and_stage4(cascade, monkeypatc
         cascade_mod, "stage2_structured", lambda a, c: s2_calls.append(1) or _make_s2(0.9)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
-    )
-    monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
 
     assert result.early_exit == "stage1_feasibility"
-    assert s2_calls == [] and s3_calls == [] and s4_calls == []
+    assert s2_calls == [] and s3_calls == []
     assert result.scores.feasibility == 0.2
     assert result.scores.robustness is None
 
 
-def test_low_stage2_score_skips_stage3_and_stage4(cascade, monkeypatch):
-    s3_calls, s4_calls = [], []
+def test_low_stage2_score_skips_stage3(cascade, monkeypatch):
+    s3_calls = []
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, True)
     )
@@ -165,18 +146,15 @@ def test_low_stage2_score_skips_stage3_and_stage4(cascade, monkeypatch):
         cascade_mod, "stage2_structured", lambda a, c: _make_s2(0.3)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage3_exemplars", lambda a, c: s3_calls.append(1) or _make_s3(0.9)
-    )
-    monkeypatch.setattr(
-        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s4_calls.append(1) or _make_s4()
+        cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
     )
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
 
     assert result.early_exit == "stage2_structured"
-    assert s3_calls == [] and s4_calls == []
+    assert s3_calls == []
     assert result.scores.structural == 0.3
-    assert result.scores.exemplar_similarity == 0.0
+    assert result.scores.exemplar_similarity is None
     assert result.scores.robustness is None
 
 
@@ -197,14 +175,11 @@ def test_cascade_aggregates_fitness_via_db(tmp_path, monkeypatch):
     monkeypatch.setattr(
         cascade_mod, "stage2_structured", lambda a, c: _make_s2(0.85)
     )
-    monkeypatch.setattr(
-        cascade_mod, "stage3_exemplars", lambda a, c: _make_s3(0.92)
-    )
     _patch_stage4(monkeypatch, robustness=0.80)
 
     result = cascade.evaluate(SATOSHI_FIXTURE.architecture)
     new_id = db.insert(SATOSHI_FIXTURE.architecture, result.scores, run_id=run_id)
 
     row = db.get(new_id)
-    # 4-way average now that Stage 4 ran.
-    assert row.fitness == pytest.approx((0.9 + 0.85 + 0.92 + 0.80) / 4.0)
+    # 3-way average (feasibility + structural + robustness); exemplar_similarity retired.
+    assert row.fitness == pytest.approx((0.9 + 0.85 + 0.80) / 3.0)

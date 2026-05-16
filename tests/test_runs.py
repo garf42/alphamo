@@ -18,7 +18,6 @@ from alphamo.schemas.findings import (
     ClassificationVerdict,
     Stage1Finding,
     Stage2Finding,
-    Stage3Finding,
     Stage4Finding,
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
@@ -45,13 +44,6 @@ def _stub_cascade(monkeypatch, fit=0.85):
             labor_separation=fit,
             structural=fit,
             reasoning="ok",
-        ),
-    )
-    monkeypatch.setattr(
-        cascade_mod,
-        "stage3_exemplars",
-        lambda a, c: Stage3Finding(
-            closest_exemplar="Satoshi", similarity=fit, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
@@ -239,19 +231,17 @@ def test_two_orchestrator_runs_against_same_db_are_isolated(db, tmp_path, monkey
     assert orch_a.run_id != orch_b.run_id
     assert len(result_a.events) == 3 and len(result_b.events) == 3
 
-    # Each run's STARTERS got seeded into its own run_id; no overlap.
+    # Each run's generated candidates live under its own run_id; no overlap.
     a_count = db.count_candidates_in_run(orch_a.run_id)
     b_count = db.count_candidates_in_run(orch_b.run_id)
     assert a_count > 0 and b_count > 0
-    # Same canonical starters + same number of generations should produce
-    # very similar counts but distinct rows.
     a_ids = {r.id for r in db.top_programs_from_islands([0, 1], n=100, run_id=orch_a.run_id)}
     b_ids = {r.id for r in db.top_programs_from_islands([0, 1], n=100, run_id=orch_b.run_id)}
     assert a_ids.isdisjoint(b_ids)
 
 
-def test_resume_run_appends_without_reseeding(db, tmp_path, monkeypatch):
-    """Resume an existing run; seed_if_empty must not re-add STARTERS."""
+def test_resume_run_marks_resumed_at_without_reseeding(db, tmp_path, monkeypatch):
+    """Resume an existing run — alive candidates stay; resumed timestamp is set."""
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
 
@@ -263,10 +253,10 @@ def test_resume_run_appends_without_reseeding(db, tmp_path, monkeypatch):
     count_after_fresh = db.count_candidates_in_run(orch_a.run_id)
     assert count_after_fresh > 0
 
-    orch_resumed = Orchestrator.resume_run(db, _stub_client("a"), audit, orch_a.run_id)
-    seeded = orch_resumed.seed_if_empty()
-    assert seeded is False, "resume must NOT re-seed when the run already has candidates"
+    Orchestrator.resume_run(db, _stub_client("a"), audit, orch_a.run_id)
     assert db.get_run(orch_a.run_id).last_resumed_at is not None
+    # No reseeding behavior — count unchanged after the resume call alone.
+    assert db.count_candidates_in_run(orch_a.run_id) == count_after_fresh
 
 
 def test_resume_run_inherits_hyperparameters(db, tmp_path, monkeypatch):
@@ -329,9 +319,12 @@ def test_audit_events_are_filterable_by_run_id(db, tmp_path):
     assert len(r2_events) == 1
 
 
-def test_seed_if_empty_only_inspects_current_run(db, tmp_path, monkeypatch):
-    """A new run created against a non-empty DB still seeds (other run's data invisible)."""
+def test_new_run_only_inspects_its_own_candidates(db, tmp_path, monkeypatch):
+    """A new run created against a non-empty DB doesn't see other runs' candidates."""
     _stub_cascade(monkeypatch)
+    import alphamo.orchestrator as orch_mod
+
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     other = db.create_run(hyperparameters={}, parent_goal_version="v1", verifier_version="v1")
@@ -342,11 +335,11 @@ def test_seed_if_empty_only_inspects_current_run(db, tmp_path, monkeypatch):
             run_id=other,
             island_id=island,
         )
-    assert db.count_candidates(status="alive") > 0
+    assert db.count_candidates(status="alive") == 4
 
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=2))
-    seeded = orch.seed_if_empty()
-    assert seeded is True
+    orch.run(max_generations=2)
+    # New run produced its own candidates.
     assert db.count_candidates_in_run(orch.run_id) > 0
     # Other run untouched.
     assert db.count_candidates_in_run(other) == 4
@@ -418,24 +411,23 @@ def test_migration_is_idempotent(tmp_path):
 # ----------------------------------------------------------- seeding is internal
 
 
-def test_fresh_run_creates_exactly_one_run_with_seeded_candidates(
+def test_fresh_run_creates_exactly_one_run_with_generated_candidates(
     db, tmp_path, monkeypatch
 ):
-    """Phase 1.1: `alphamo run` on a fresh DB → one Run row + seed candidates.
+    """`alphamo run` on a fresh DB → one Run row + proposer-generated candidates.
 
-    No separate seed-run row, no orphaned hp={} run. The orchestrator's
-    seed_if_empty does the gen-0 seeding internally as the first step of run().
+    Sprint 2 redesign: no seed candidates are inserted into the DB; the
+    proposer bootstraps each island from the reference exemplar set.
     """
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-    from alphamo.evaluator.exemplar_library import STARTERS
 
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     hp = _hp(num_islands=4)
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=hp)
-    orch.run(max_generations=2)
+    orch.run(max_generations=3)
 
     runs = db.list_runs()
     assert len(runs) == 1, (
@@ -446,29 +438,28 @@ def test_fresh_run_creates_exactly_one_run_with_seeded_candidates(
     assert only_run.hyperparameters["num_islands"] == 4
     assert only_run.stopped_reason == "max_generations"
 
-    # Seed population is present and tagged to this run.
-    seed_count = 4 * len(STARTERS)  # num_islands × starter count
+    # Generated candidates present and tagged to this run.
     total_in_run = db.count_candidates_in_run(orch.run_id)
-    assert total_in_run >= seed_count
-    # No candidates should be untagged or in another run.
+    assert total_in_run > 0
     assert db.count_candidates() == total_in_run
+
+    # No candidate carries a STARTER name (seeds are reference-only, not inserted).
+    starter_names = {"Satoshi", "Rowling", "Levels", "Medvi"}
+    rows = db.alive_in_run(orch.run_id)
+    assert not any(r.architecture_spec["name"] in starter_names for r in rows)
 
 
 def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
-    """Phase 1.1: prior runs' candidates are invisible to a new run's sampler.
+    """Prior runs' candidates are invisible to a new run's sampler.
 
     Lay down a prior run with a distinctive candidate, then start a fresh run.
-    The fresh run must seed its own gen-0 from STARTERS, and its sampler must
-    not be able to draw the prior run's candidate.
+    The fresh run's sampler must not be able to draw the prior run's candidate.
     """
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-    from alphamo.evaluator.exemplar_library import STARTERS
 
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
-    # Prior run: just insert a distinctive candidate directly, simulating a
-    # leftover from an earlier session.
     prior_run_id = db.create_run(
         hyperparameters={"legacy": True},
         parent_goal_version="v0",
@@ -486,7 +477,6 @@ def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
         Scores(
             feasibility=0.99,
             structural=0.99,
-            exemplar_similarity=0.99,
             middle_class_accessible=True,
         ),
         run_id=prior_run_id,
@@ -494,28 +484,22 @@ def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
     )
     db.complete_run(prior_run_id, "manual_simulation")
 
-    # Fresh run on the same DB.
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=2))
     orch.run(max_generations=2)
 
-    # Fresh run has its own seed candidates (STARTERS × islands).
     fresh_count = db.count_candidates_in_run(orch.run_id)
-    assert fresh_count >= 2 * len(STARTERS)
+    assert fresh_count > 0
 
-    # The fresh run's sampler must NEVER see the zombie. Sampler is bound to
-    # orch.run_id; the prior candidate sits in a different run.
     for island_id in range(orch.hp.num_islands):
         rows = db.top_k_in_island(island_id=island_id, k=100, run_id=orch.run_id)
         names = {r.architecture_spec["name"] for r in rows}
         assert "ZOMBIE_FROM_PRIOR_RUN" not in names
 
-    # And confirm the zombie is still in the DB, tagged to the prior run.
     zombie = db.get(prior_id)
     assert zombie.run_id == prior_run_id
     assert zombie.architecture_spec["name"] == "ZOMBIE_FROM_PRIOR_RUN"
 
-    # The DB has both runs visible in list_runs.
     run_ids = {r.run_id for r in db.list_runs()}
     assert {prior_run_id, orch.run_id}.issubset(run_ids)
 

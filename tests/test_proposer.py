@@ -118,42 +118,55 @@ def _seed(arch_fixture, fitness: float = 0.9) -> "Seed":
 
 
 def test_propose_renders_per_dimension_scores_in_prompt():
-    """Each seed must appear with a score header (AlphaEvolve §2.2 / Fig 3b)."""
+    """Each scored candidate must appear with a score header (AlphaEvolve §2.2 / Fig 3b).
+
+    Sprint 2: exemplar_similarity was retired; the score header now shows
+    feasibility, structural, robustness (when present), middle_class_accessible,
+    and fitness.
+    """
     client = MagicMock()
     client.messages.parse.return_value = FakeParsedMessage(_fake_architecture())
     seeds = [_seed(SATOSHI_FIXTURE), _seed(ROWLING_FIXTURE)]
     Proposer(client).propose(seeds)
 
     user_content = client.messages.parse.call_args[1]["messages"][0]["content"]
-    # A score header line precedes each seed's architecture content.
     assert "Scores —" in user_content
-    # Each per-dimension score appears as a labeled value.
     for axis in (
         "feasibility:",
         "structural:",
-        "exemplar_similarity:",
+        "robustness:",
         "middle_class_accessible:",
         "fitness:",
     ):
         assert axis in user_content, f"missing score axis: {axis}"
-    # Verify the actual values for Satoshi appear in the prompt.
+    # Sprint 2: exemplar_similarity must NOT appear in the score header.
+    assert "exemplar_similarity:" not in user_content
     s = SATOSHI_FIXTURE.scores
     assert f"feasibility: {s.feasibility:.3f}" in user_content
     assert f"structural: {s.structural:.3f}" in user_content
 
 
-def test_propose_score_header_appears_before_architecture_content():
-    """AlphaEvolve format: score header comes BEFORE the program/architecture."""
+def test_propose_score_header_appears_before_candidate_architecture_content():
+    """AlphaEvolve format: score header comes BEFORE the candidate's architecture.
+
+    The prompt has two sections (Sprint 2): reference exemplars first, then
+    candidates to mutate. This test scopes to the candidate section — it
+    locates the candidate header `--- Candidate 1:` and verifies the score
+    header precedes the candidate's own Summary line.
+    """
     client = MagicMock()
     client.messages.parse.return_value = FakeParsedMessage(_fake_architecture())
     Proposer(client).propose([_seed(SATOSHI_FIXTURE)])
 
     user_content = client.messages.parse.call_args[1]["messages"][0]["content"]
-    score_idx = user_content.find("Scores —")
-    summary_idx = user_content.find("Summary:")
+    candidate_idx = user_content.find("--- Candidate 1:")
+    assert candidate_idx != -1, "candidate section header missing"
+    section = user_content[candidate_idx:]
+    score_idx = section.find("Scores —")
+    summary_idx = section.find("Summary:")
     assert score_idx != -1 and summary_idx != -1
     assert score_idx < summary_idx, (
-        "Score header must appear before architecture content"
+        "Score header must appear before architecture content within the candidate section"
     )
 
 

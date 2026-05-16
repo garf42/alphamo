@@ -97,7 +97,6 @@ def init(db_path: Path) -> None:
 @click.option("--entry-resources", required=True)
 @click.option("--feasibility", type=float, required=True)
 @click.option("--structural", type=float, required=True)
-@click.option("--exemplar-similarity", type=float, required=True)
 @click.option(
     "--middle-class-accessible/--not-middle-class-accessible",
     "middle_class_accessible",
@@ -123,7 +122,6 @@ def insert(
     entry_resources: str,
     feasibility: float,
     structural: float,
-    exemplar_similarity: float,
     middle_class_accessible: bool,
     island_id: int,
     generation: int,
@@ -142,7 +140,6 @@ def insert(
     scores = Scores(
         feasibility=feasibility,
         structural=structural,
-        exemplar_similarity=exemplar_similarity,
         middle_class_accessible=middle_class_accessible,
     )
     resolved_run_id = _resolve_run_id(db, run_id)
@@ -553,27 +550,18 @@ def _print_seed_cascade_result(name: str, result) -> None:
 
     if result.stage3 is not None:
         s3 = result.stage3
+        framings_seen = sorted({c.framing for c in s3.concerns})
+        n_high = sum(1 for c in s3.concerns if c.severity.value == "high")
+        n_med = sum(1 for c in s3.concerns if c.severity.value == "medium")
+        n_low = sum(1 for c in s3.concerns if c.severity.value == "low")
         click.echo(
-            f"  Stage 3 (Opus — exemplar similarity):\n"
-            f"    closest_exemplar = {s3.closest_exemplar}\n"
-            f"    similarity       = {s3.similarity:.4f}\n"
+            f"  Stage 3 (Opus — adversarial scrutiny across framings):\n"
+            f"    robustness    = {s3.robustness:.4f}\n"
+            f"    concerns      = {len(s3.concerns)} (high={n_high} medium={n_med} low={n_low})\n"
+            f"    framings_with_concerns = {framings_seen}\n"
             f"    reasoning: {s3.reasoning}"
         )
-
-    if result.stage4 is not None:
-        s4 = result.stage4
-        framings_seen = sorted({c.framing for c in s4.concerns})
-        n_high = sum(1 for c in s4.concerns if c.severity.value == "high")
-        n_med = sum(1 for c in s4.concerns if c.severity.value == "medium")
-        n_low = sum(1 for c in s4.concerns if c.severity.value == "low")
-        click.echo(
-            f"  Stage 4 (Opus × 8 framings — adversarial):\n"
-            f"    robustness    = {s4.robustness:.4f}\n"
-            f"    concerns      = {len(s4.concerns)} (high={n_high} medium={n_med} low={n_low})\n"
-            f"    framings_with_concerns = {framings_seen}\n"
-            f"    reasoning: {s4.reasoning}"
-        )
-        for line in _format_concern_lines(s4.concerns):
+        for line in _format_concern_lines(s3.concerns):
             click.echo(line)
 
     final = result.scores
@@ -581,130 +569,12 @@ def _print_seed_cascade_result(name: str, result) -> None:
         f"  Final aggregate scores:\n"
         f"    feasibility            = {final.feasibility:.4f}\n"
         f"    structural             = {final.structural:.4f}\n"
-        f"    exemplar_similarity    = {final.exemplar_similarity:.4f}\n"
         f"    robustness             = "
         + (f"{final.robustness:.4f}" if final.robustness is not None else "None")
         + "\n"
         f"    middle_class_accessible = {final.middle_class_accessible}"
     )
 
-
-@cli.command("score-seeds")
-@click.option(
-    "--write/--no-write",
-    "write_back",
-    default=True,
-    show_default=True,
-    help="Write updated scores back to exemplar_library.py. --no-write for dry-run.",
-)
-@click.option(
-    "--decay-k",
-    "decay_k",
-    type=float,
-    default=0.50,
-    show_default=True,
-    help="Stage 4 exponential-decay rate.",
-)
-@click.option(
-    "--report-out",
-    "report_out",
-    type=click.Path(dir_okay=False, path_type=Path),
-    default=None,
-    help="Optional path to write a structured JSON report of the cascade output.",
-)
-def score_seeds(write_back: bool, decay_k: float, report_out: Path | None) -> None:
-    """Run each STARTER through the full cascade and overwrite
-    exemplar_library.py with the cascade-produced scores.
-
-    Once-off operation. Costs ~$2-3 in LLM calls and ~6-12 min wall time
-    for the current 4 seeds. Re-run when the cascade prompts, models, or
-    severity weights change.
-
-    On seeds that fail Stage 1 (middle-class filter rejection) or
-    short-circuit elsewhere, the cascade-produced (degenerate) scores
-    are reported and written verbatim — the whole point is to see what
-    the cascade actually says, not to suppress signal.
-    """
-    import json
-    from datetime import datetime, timezone
-
-    import anthropic
-
-    from alphamo.context.parent_goal import PARENT_GOAL_VERSION
-    from alphamo.context.verifier import VERIFIER_VERSION
-    from alphamo.evaluator import EvaluatorCascade
-    from alphamo.evaluator.exemplar_library import STARTERS
-    from alphamo.evaluator.seed_scoring import rewrite_exemplar_library_text
-
-    client = anthropic.Anthropic()
-    cascade = EvaluatorCascade(client, stage4_decay_k=decay_k)
-
-    click.echo(
-        f"Scoring {len(STARTERS)} seeds through the cascade. "
-        f"decay_k={decay_k}, parent_goal={PARENT_GOAL_VERSION}, "
-        f"verifier={VERIFIER_VERSION}."
-    )
-
-    results: list[tuple[Any, Any]] = []
-    for arch, _ in STARTERS:
-        result = cascade.evaluate(arch)
-        results.append((arch, result))
-        _print_seed_cascade_result(arch.name, result)
-
-    new_scores_by_prefix = {
-        arch.name.upper(): result.scores.model_dump()
-        for arch, result in results
-    }
-
-    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if report_out is not None:
-        report_payload = {
-            "generated_at": generated_at,
-            "parent_goal_version": PARENT_GOAL_VERSION,
-            "verifier_version": VERIFIER_VERSION,
-            "decay_k": decay_k,
-            "seeds": [
-                {
-                    "name": arch.name,
-                    "scores": result.scores.model_dump(),
-                    "early_exit": result.early_exit,
-                    "stage1": (
-                        result.stage1.model_dump() if result.stage1 else None
-                    ),
-                    "stage2": (
-                        result.stage2.model_dump() if result.stage2 else None
-                    ),
-                    "stage3": (
-                        result.stage3.model_dump() if result.stage3 else None
-                    ),
-                    "stage4": (
-                        result.stage4.model_dump() if result.stage4 else None
-                    ),
-                }
-                for arch, result in results
-            ],
-        }
-        report_out.parent.mkdir(parents=True, exist_ok=True)
-        report_out.write_text(json.dumps(report_payload, indent=2, default=str))
-        click.echo(f"\nWrote structured report to {report_out}")
-
-    if not write_back:
-        click.echo("\n--no-write: skipped writing exemplar_library.py")
-        return
-
-    import alphamo.evaluator.exemplar_library as exlib_module
-
-    library_path = Path(exlib_module.__file__)
-    original_text = library_path.read_text()
-    new_text = rewrite_exemplar_library_text(
-        original_text,
-        new_scores_by_prefix,
-        generated_at=generated_at,
-        parent_goal_version=PARENT_GOAL_VERSION,
-        verifier_version=VERIFIER_VERSION,
-    )
-    library_path.write_text(new_text)
-    click.echo(f"\nUpdated {library_path} with cascade-produced scores.")
 
 
 @cli.command("backfill-stage4")

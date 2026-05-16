@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 from alphamo.schemas import Architecture, Scores
 
-ClusterSignature = tuple[float, float, float, bool]
+ClusterSignature = tuple[float, float, float | None, bool]
 
 
 @dataclass(frozen=True)
@@ -73,11 +73,28 @@ def cluster_signature(scores: Scores, resolution: int = 1) -> ClusterSignature:
     inaccessible candidates can't share a cluster (in practice inaccessible
     rows get filtered before clustering, but the discipline keeps the
     invariant explicit).
+
+    Sprint 2 redesign: signature dropped from 4 numeric dims to 3 when
+    exemplar_similarity was retired as a fitness dimension. Resolution=2
+    was tested as a compensating granularity bump and produced 100%
+    singleton clusters at every realistic island scale (25-400
+    candidates), destroying FunSearch's diversity-preservation property.
+    Resolution=1 with 3 dims preserves healthy multi-candidate clusters
+    (~125 effective buckets given realistic [0.2, 0.95] cascade output;
+    top clusters of 4-7 candidates at 200-400 island scale).
+
+    `robustness` slot rounds None to itself, so candidates that exited
+    early (robustness=None) cluster together by-construction — the
+    desired behavior since they all failed the same stage.
     """
+    robustness = scores.robustness
+    rounded_robustness = (
+        None if robustness is None else round(robustness, resolution)
+    )
     return (
         round(scores.feasibility, resolution),
         round(scores.structural, resolution),
-        round(scores.exemplar_similarity, resolution),
+        rounded_robustness,
         bool(scores.middle_class_accessible),
     )
 

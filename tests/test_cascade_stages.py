@@ -6,6 +6,11 @@ ever returned no parseable JSON or if the SDK raised pydantic.ValidationError
 on truncation. These tests pin the new behaviour: each stage raises its
 component-specific subclass of LLMOutputError, which the orchestrator's
 existing `except LLMOutputError` already handles.
+
+Sprint 2 redesign: the legacy Stage 3 (exemplar similarity) was retired,
+so only Stage 1 and Stage 2 have dedicated parse-time error tests here.
+Adversarial scrutiny (now conceptually Stage 3, code-named
+stage4_adversarial) has its own dedicated test file.
 """
 
 from __future__ import annotations
@@ -17,13 +22,10 @@ import pytest
 from alphamo.errors import (
     Stage1OutputError,
     Stage2OutputError,
-    Stage3OutputError,
 )
 from alphamo.evaluator.stage1_feasibility import stage1_feasibility
 from alphamo.evaluator.stage2_structured import stage2_structured
-from alphamo.evaluator.stage3_exemplars import stage3_exemplars
-from alphamo.schemas import Architecture
-from alphamo.schemas.findings import Stage1Finding, Stage2Finding, Stage3Finding
+from alphamo.schemas.findings import Stage1Finding, Stage2Finding
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
 from tests.fixtures.parsed_message import (
     FakeContentBlock,
@@ -101,41 +103,9 @@ def test_stage2_raises_on_truncated_json():
     assert exc_info.value.stop_reason == "parse_error"
 
 
-def test_stage3_returns_parsed_output_on_success():
-    finding = Stage3Finding(
-        closest_exemplar="Satoshi", similarity=0.92, reasoning="ok"
-    )
-    result = stage3_exemplars(
-        SATOSHI_FIXTURE.architecture, _client_returning(finding)
-    )
-    assert isinstance(result, Stage3Finding)
-    assert result.similarity == 0.92
-
-
-def test_stage3_raises_when_parsed_is_none():
-    client = MagicMock()
-    client.messages.parse.return_value = FakeParsedMessage(
-        parsed_output=None,
-        stop_reason="max_tokens",
-        content=[FakeContentBlock("thinking"), FakeContentBlock("text")],
-    )
-    with pytest.raises(Stage3OutputError) as exc_info:
-        stage3_exemplars(SATOSHI_FIXTURE.architecture, client)
-    assert exc_info.value.content_block_types == ["thinking", "text"]
-
-
-def test_stage3_raises_on_truncated_json():
-    client = MagicMock()
-    client.messages.parse.side_effect = make_truncation_error()
-    with pytest.raises(Stage3OutputError) as exc_info:
-        stage3_exemplars(SATOSHI_FIXTURE.architecture, client)
-    assert exc_info.value.stop_reason == "parse_error"
-
-
 def test_stage_errors_are_subclasses_of_llm_output_error():
     """Orchestrator catches LLMOutputError; stage errors must inherit from it."""
     from alphamo.errors import LLMOutputError
 
     assert issubclass(Stage1OutputError, LLMOutputError)
     assert issubclass(Stage2OutputError, LLMOutputError)
-    assert issubclass(Stage3OutputError, LLMOutputError)

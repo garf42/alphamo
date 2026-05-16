@@ -108,10 +108,6 @@ class Stage2OutputError(LLMOutputError):
     COMPONENT = "stage2_structured"
 
 
-class Stage3OutputError(LLMOutputError):
-    COMPONENT = "stage3_exemplars"
-
-
 class Stage4OutputError(LLMOutputError):
     COMPONENT = "stage4_adversarial"
 

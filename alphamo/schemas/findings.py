@@ -64,26 +64,6 @@ class Stage2Finding(BaseModel):
     )
 
 
-class Stage3Finding(BaseModel):
-    """Stage 3 — deep comparison against the exemplar library."""
-
-    closest_exemplar: str = Field(
-        description="Name of the exemplar (Satoshi / Rowling / Levels) the candidate most resembles structurally.",
-    )
-    similarity: float = Field(
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How structurally similar is the candidate to its closest exemplar? "
-            "1.0 = same structural pattern (not the same surface details); "
-            "0.0 = no structural relationship."
-        ),
-    )
-    reasoning: str = Field(
-        description="Two to four sentences justifying the similarity score and exemplar choice.",
-    )
-
-
 class Severity(str, Enum):
     """Per-finding severity tag from the research / Stage 4 adversarial agents."""
 

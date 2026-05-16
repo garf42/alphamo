@@ -5,6 +5,12 @@ independently, and periodically wipe the bottom half — reseeding them with
 copies of the top programs from the surviving islands. This prevents global
 mode collapse without losing the discoveries the strong islands have made.
 
+Sprint 2 redesign: islands start empty. The proposer's first-generation
+output bootstraps each island (it generates from the seed reference set
+in the prompt without needing seed rows in the candidates table). Until
+an island has at least one alive candidate, the sampler returns an empty
+list and the orchestrator skips the step.
+
 Every DB operation is scoped to a single `run_id` so two runs against the
 same database stay isolated.
 """
@@ -17,8 +23,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from alphamo.database import ProgramsDB
-
-from alphamo.schemas import Architecture, Scores
 
 
 @dataclass(frozen=True)
@@ -52,18 +56,6 @@ class IslandsManager:
         self.reset_every_generations = reset_every_generations
         self.top_seed_count = top_seed_count
         self.rng = rng or random.Random()
-
-    def seed_all_islands(self, starters: list[tuple[Architecture, Scores]]) -> None:
-        """Insert each starter into every island as generation-0 alive candidates."""
-        for island_id in range(self.num_islands):
-            for architecture, scores in starters:
-                self.db.insert(
-                    architecture,
-                    scores,
-                    run_id=self.run_id,
-                    island_id=island_id,
-                    generation=0,
-                )
 
     def pick_island(self) -> int:
         """Uniform-random island id for the next inner-loop step."""
