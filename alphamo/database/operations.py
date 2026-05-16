@@ -421,6 +421,25 @@ class ProgramsDB:
                 means[island_id] = float(avg) if avg is not None else 0.0
         return means
 
+    def alive_in_run(self, run_id: str) -> list[Candidate]:
+        """All alive candidates for `run_id`, sorted by fitness descending.
+
+        Used by the harvest builder to partition seeds vs generated discoveries
+        and pick top-N. The whole alive set is intentional — runs are bounded
+        by max_generations * num_islands and capped at low thousands of rows.
+        """
+        stmt = (
+            select(Candidate)
+            .where(Candidate.run_id == run_id)
+            .where(Candidate.status == "alive")
+            .order_by(Candidate.fitness.desc())
+        )
+        with self._session() as session:
+            rows = list(session.scalars(stmt))
+            for row in rows:
+                session.expunge(row)
+            return rows
+
     def fitness_history(
         self, generations: int, run_id: str | None = None
     ) -> list[float]:

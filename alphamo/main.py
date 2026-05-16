@@ -471,17 +471,28 @@ def harvest(
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(handoff.model_dump_json(indent=2))
+    click.echo(f"run: {resolved_run_id}")
+    if handoff.winning_architecture is not None:
+        w = handoff.winning_architecture
+        click.echo(
+            f"winner: {w.spec.name} "
+            f"(island {w.island_of_origin}, generation {w.generation}, "
+            f"fitness {w.fitness:.4f})"
+        )
+    else:
+        click.echo(
+            "winner: none — no generated candidate exceeded any seed baseline"
+        )
     click.echo(
-        f"run: {resolved_run_id}\n"
-        f"winner: {handoff.winning_architecture.spec.name} "
-        f"(island {handoff.winning_architecture.island_of_origin}, "
-        f"generation {handoff.winning_architecture.generation})"
-    )
-    click.echo(
-        f"alternates: {len(handoff.alternates)} | "
+        f"top generated discoveries: {len(handoff.top_generated_discoveries)} | "
+        f"seed baselines: {len(handoff.seed_baselines)} | "
         f"drift log: {len(handoff.drift_log)} entries | "
         f"eval count: {handoff.verification_trail.eval_count}"
     )
+    if handoff.no_breakthrough_this_run:
+        click.echo(
+            "no_breakthrough_this_run: TRUE — see parent_goal_alignment for context"
+        )
     click.echo(f"wrote {out_path}")
 
 
