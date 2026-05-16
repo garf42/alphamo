@@ -1,24 +1,25 @@
-"""Pre-seed sanity check: Stage 4 must surface Medvi's known legal exposure.
+"""Calibration check: adversarial-scrutiny stage must surface Medvi's known legal exposure.
 
-Medvi is queued for Part 5 as a fourth STARTER. Its `known_vulnerabilities`
-note in the architecture's `notes` field flags legal exposure as the
-specific weakness the system should evolve away from in descendants. If
-Stage 4's legal-exposure framing can't detect this class of vulnerability
-on a Medvi-shaped candidate, descendants would inherit the vulnerability
-rather than getting it selected against.
+Sprint 3 redesign: Medvi is no longer a STARTER (production seeds are
+gone — see `exemplar_library.py`). The Medvi-shape candidate lives here
+as an INLINE TEST FIXTURE constructed solely to calibrate the
+adversarial-scrutiny stage on a known-risky architecture. The test name
+and structural assertions are unchanged — what's checked is that the
+stage's legal-exposure framing detects UPL / state AG / class-action
+threat surfaces on this fixture, which would otherwise propagate into
+descendants if missed.
 
 This test mocks the LLM with a representative legal-exposure framing
 output and verifies the resulting Stage4Finding:
   - Contains concerns from the legal-exposure framing
-  - Concerns mention UPL / state AG / regulatory enforcement (the known
-    Medvi-class threat surface from the architecture's notes)
+  - Concerns mention UPL / state AG / regulatory enforcement
   - Severity reflects the threat
-  - Robustness drops below the seed-baseline robustness (0.85), creating
-    selection pressure away from Medvi-shaped descendants
+  - Robustness drops meaningfully below 1.0 once exposure is surfaced
 
-The test does NOT exercise the live LLM — Stage 4's prompt is what asks
-for legal_exposure findings; this is a regression guard that the
-plumbing routes such findings into the Stage4Finding correctly.
+The test does NOT exercise the live LLM — the adversarial-scrutiny
+prompt is what asks for legal_exposure findings; this is a regression
+guard that the plumbing routes such findings into the Stage4Finding
+correctly.
 """
 
 from __future__ import annotations
@@ -34,8 +35,8 @@ from alphamo.schemas.findings import RawFinding, RawFindingsBatch, Severity
 from tests.fixtures.parsed_message import FakeParsedMessage
 
 
-# Medvi-shape candidate — same content the future MEDVI STARTER will use.
-# Kept inline so this test runs even before Part 5 lands.
+# Inline Medvi-shape test fixture used to calibrate the
+# adversarial-scrutiny stage on a known-risky architecture.
 MEDVI_CANDIDATE = Architecture(
     name="Medvi",
     summary=(

@@ -1,9 +1,9 @@
-"""LLM proposer: generates a candidate Architecture from reference exemplars +
-optional island-drawn seeds.
+"""LLM proposer: generates a candidate Architecture from k island-drawn seeds.
 
-Sprint 2 redesign: empty seed lists are valid. When the island is empty
-(fresh run, or just post-reset), the proposer bootstraps from the
-reference exemplar set alone — see `render_seeds([])`.
+Sprint 3 redesign: empty seed lists are an invariant violation. Bootstrap
+inserts the trivial seed into every island at gen 0; reset reseeds wiped
+islands with a copy of a surviving island's best — so the sampler always
+has at least one alive row to return. `propose([])` raises ValueError.
 """
 
 from __future__ import annotations
@@ -22,12 +22,11 @@ from alphamo.schemas import Architecture
 
 
 class Proposer:
-    """Calls Opus with k island seeds (or zero, for bootstrap) and parses the
-    response as a new Architecture.
+    """Calls Opus with k island-drawn candidates and parses the response
+    as a new Architecture.
 
-    Reference exemplars are baked into the prompt template — the caller
-    passes only the island-drawn candidates (which may be empty for the
-    bootstrap case).
+    The proposer sees ONLY candidates from the current island (Sprint 3 /
+    FunSearch §A.1 alignment) — no global reference library.
     """
 
     def __init__(self, client: Any, model: str = OPUS_MODEL) -> None:
@@ -35,13 +34,15 @@ class Proposer:
         self.model = model
 
     def propose(self, seeds: list[Seed] | list[Architecture]) -> Architecture:
-        # Empty list is valid: bootstrap from reference exemplars alone.
-        if seeds and isinstance(seeds[0], Seed):
+        if not seeds:
+            raise ValueError(
+                "propose() requires at least one seed — empty islands are an "
+                "invariant violation post-bootstrap"
+            )
+        if isinstance(seeds[0], Seed):
             user_content = render_seeds(seeds)  # type: ignore[arg-type]
-        elif seeds:
-            user_content = render_seeds_from_architectures(seeds)  # type: ignore[arg-type]
         else:
-            user_content = render_seeds([])
+            user_content = render_seeds_from_architectures(seeds)  # type: ignore[arg-type]
         return parse_or_raise(
             self.client,
             ProposerOutputError,

@@ -1,14 +1,16 @@
-"""Test fixtures: positive exemplars + foils with hand-picked scores.
+"""Test fixtures: hand-shaped exemplar + foil candidates with hand-picked scores.
 
-Sprint 2 redesign: production seeds are no longer scored. These TEST
-fixtures keep hand-picked Scores attached so DB-level / ordering /
+Sprint 3 redesign: production seeds are gone (replaced by a single
+trivial Solo Service Provider baseline in `exemplar_library.py`). These
+TEST fixtures keep Architecture instances inline so DB-level / ordering /
 fitness-aggregation tests can insert known-fitness rows without spinning
-up a live cascade. The fixtures' scores are test-only — they do NOT
-appear in `exemplar_library.py`'s production seed references.
+up a live cascade. The fixtures' architectures are TEST-ONLY data; they
+do NOT appear in `exemplar_library.SEED_REFERENCES`.
 
-The Architecture instances themselves are imported from
-`alphamo.evaluator.exemplar_library` so test architecture data and the
-runtime reference set can't drift apart.
+Calibration: SATOSHI_FIXTURE > ROWLING_FIXTURE > LEVELS_FIXTURE under
+3-dim aggregation (feasibility + structural + robustness), giving a
+deterministic ordering for tests that don't want to depend on cascade
+output.
 
 The foils (PE rollup, trust-fund SaaS) verify the middle-class filter
 rejects wealth-required configurations.
@@ -18,7 +20,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from alphamo.evaluator.exemplar_library import LEVELS, ROWLING, SATOSHI
 from alphamo.schemas import Architecture, Scores
 
 
@@ -28,12 +29,56 @@ class Exemplar:
     scores: Scores
 
 
-# Hand-picked test scores. Calibrated so Satoshi > Rowling > Levels under
-# 3-dim aggregation (feasibility + structural + robustness), giving a
-# deterministic ordering for tests that don't want to depend on
-# cascade output.
+_SATOSHI_ARCH = Architecture(
+    name="Satoshi",
+    summary="Pseudonymous launch of a permissionless monetary protocol.",
+    value_chain="Miners and node operators secure and propagate the chain.",
+    capture_mechanism=(
+        "Pre-mined / early-mined coin allocation under a fixed-supply protocol "
+        "whose value accrues to early holders as the network grows."
+    ),
+    entry_resources=(
+        "Cryptography and distributed-systems skill; time outside a primary job; "
+        "commodity hardware; no institutional backing."
+    ),
+)
+
+_ROWLING_ARCH = Architecture(
+    name="Rowling",
+    summary="Author retains downstream IP rights across a transmedia franchise.",
+    value_chain=(
+        "Publishers, film studios, merchandising licensees, and theme parks "
+        "perform the operational labor of distribution and production."
+    ),
+    capture_mechanism=(
+        "Copyright ownership over a singular creative IP, licensed across media "
+        "with royalty structures that scale with franchise revenue."
+    ),
+    entry_resources=(
+        "Writing skill and time; modest savings; no industry network at start "
+        "(per the famous slush-pile origin)."
+    ),
+)
+
+_LEVELS_ARCH = Architecture(
+    name="Levels",
+    summary="Solo-operator portfolio of bootstrapped SaaS and media products.",
+    value_chain=(
+        "Hosted infrastructure providers, payment processors, and the user "
+        "community supply operational scale; the operator writes the code."
+    ),
+    capture_mechanism=(
+        "Direct subscription revenue + audience-driven distribution; no "
+        "investors, no equity dilution, public build-in-public flywheel."
+    ),
+    entry_resources=(
+        "Programming skill; laptop; modest runway; personal credit; no "
+        "institutional backing."
+    ),
+)
+
 SATOSHI_FIXTURE = Exemplar(
-    architecture=SATOSHI,
+    architecture=_SATOSHI_ARCH,
     scores=Scores(
         feasibility=0.95,
         structural=0.95,
@@ -42,7 +87,7 @@ SATOSHI_FIXTURE = Exemplar(
     ),
 )
 ROWLING_FIXTURE = Exemplar(
-    architecture=ROWLING,
+    architecture=_ROWLING_ARCH,
     scores=Scores(
         feasibility=0.90,
         structural=0.90,
@@ -51,7 +96,7 @@ ROWLING_FIXTURE = Exemplar(
     ),
 )
 LEVELS_FIXTURE = Exemplar(
-    architecture=LEVELS,
+    architecture=_LEVELS_ARCH,
     scores=Scores(
         feasibility=0.85,
         structural=0.80,
@@ -59,6 +104,11 @@ LEVELS_FIXTURE = Exemplar(
         middle_class_accessible=True,
     ),
 )
+
+# Backward-compat alias for tests that import the bare architecture.
+SATOSHI = _SATOSHI_ARCH
+ROWLING = _ROWLING_ARCH
+LEVELS = _LEVELS_ARCH
 
 PE_ROLLUP_FOIL = Exemplar(
     architecture=Architecture(

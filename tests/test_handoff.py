@@ -133,32 +133,92 @@ def _make_run(db, hp: Hyperparameters | None = None) -> str:
 # ----------------------------------------------------------------- shape
 
 
-def test_handoff_seed_baselines_have_no_fitness_field(db, cascade, tmp_path):
-    """SeedReference is descriptive only — no fitness or island_of_origin."""
+def test_handoff_seed_baselines_is_single_trivial_entry(db, cascade, tmp_path):
+    """Sprint 3: seed_baselines is a single-entry list — the trivial baseline.
+
+    Inverts the Sprint 2 invariant ("descriptive references, multiple
+    entries, no fitness"). Sprint 3 carries one entry — the gen-0
+    trivial Solo Service Provider — with its actual scored fitness from
+    the candidates table.
+    """
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
     run_id = _make_run(db)
     db.insert(_gen_arch("g"), _scores(0.6), run_id=run_id, island_id=0, generation=1)
     audit = AuditLog(tmp_path / "audit.jsonl")
     handoff = build_handoff(db, audit, cascade, num_islands=4, run_id=run_id)
 
-    assert len(handoff.seed_baselines) == 4
-    for ref in handoff.seed_baselines:
-        assert not hasattr(ref, "fitness")
-        assert not hasattr(ref, "island_of_origin")
-        assert ref.name in {"Satoshi", "Rowling", "Levels", "Medvi"}
-        assert ref.summary
-        assert ref.capture_mechanism
+    assert len(handoff.seed_baselines) == 1
+    [baseline] = handoff.seed_baselines
+    assert baseline.name == TRIVIAL_SEED.name
+    assert baseline.summary
+    assert baseline.capture_mechanism
+    # design_intent comes from the TRIVIAL_SEED's notes field.
+    assert baseline.design_intent is not None
+    assert "exceeded by evolution" in baseline.design_intent.lower()
 
 
-def test_handoff_seed_baselines_sourced_from_seed_references(db, cascade, tmp_path):
-    """The handoff seed_baselines mirror SEED_REFERENCES — all four seeds,
-    even when no candidate has been inserted."""
+def test_handoff_baseline_carries_actual_scored_fitness(db, cascade, tmp_path):
+    """When a gen-0 trivial-seed row exists in this run, baseline_fitness
+    reflects its actual scored fitness from the candidates table."""
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
+    run_id = _make_run(db)
+    # Insert a gen-0 trivial-seed copy with a known fitness.
+    db.insert(
+        TRIVIAL_SEED,
+        Scores(
+            feasibility=0.6, structural=0.2, robustness=0.3,
+            middle_class_accessible=True,
+        ),
+        run_id=run_id, island_id=0, generation=0,
+    )
+    # Plus a generated discovery so the handoff has something to harvest.
+    db.insert(_gen_arch("g"), _scores(0.6), run_id=run_id, island_id=1, generation=3)
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    handoff = build_handoff(db, audit, cascade, num_islands=4, run_id=run_id)
+
+    [baseline] = handoff.seed_baselines
+    # Aggregate = (0.6 + 0.2 + 0.3) / 3 = 0.3667
+    assert baseline.baseline_fitness == pytest.approx(0.3667, abs=1e-3)
+
+
+def test_handoff_baseline_fitness_is_none_when_no_gen0_seed_row(
+    db, cascade, tmp_path
+):
+    """Legacy DB without a gen-0 trivial-seed row: baseline_fitness is None."""
     run_id = _make_run(db)
     db.insert(_gen_arch("g"), _scores(0.6), run_id=run_id, island_id=0, generation=1)
     audit = AuditLog(tmp_path / "audit.jsonl")
     handoff = build_handoff(db, audit, cascade, num_islands=4, run_id=run_id)
-    assert {b.name for b in handoff.seed_baselines} == {
-        "Satoshi", "Rowling", "Levels", "Medvi"
-    }
+    [baseline] = handoff.seed_baselines
+    assert baseline.baseline_fitness is None
+
+
+def test_handoff_top_discoveries_excludes_gen0_trivial_seed_copies(
+    db, cascade, tmp_path
+):
+    """Gen-0 trivial-seed copies must NOT appear in top_generated_discoveries —
+    they belong in seed_baselines, not in the search-output projection."""
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
+    run_id = _make_run(db)
+    db.insert(
+        TRIVIAL_SEED,
+        Scores(
+            feasibility=0.6, structural=0.2, robustness=0.3,
+            middle_class_accessible=True,
+        ),
+        run_id=run_id, island_id=0, generation=0,
+    )
+    db.insert(_gen_arch("real-discovery"), _scores(0.6),
+              run_id=run_id, island_id=1, generation=3)
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    handoff = build_handoff(db, audit, cascade, num_islands=4, run_id=run_id)
+
+    discovery_names = {d.spec.name for d in handoff.top_generated_discoveries}
+    assert TRIVIAL_SEED.name not in discovery_names
+    assert "real-discovery" in discovery_names
 
 
 # ----------------------------------------------------------------- breakthrough semantics
@@ -448,6 +508,8 @@ def test_build_handoff_raises_on_missing_run(db, cascade, tmp_path):
 
 def test_build_handoff_serialisable_to_json(db, cascade, tmp_path):
     """Full handoff round-trips to JSON."""
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
     run_id = _make_run(db, hp=_hp_low_milestone())
     db.insert(_gen_arch("g"), _scores(0.7), run_id=run_id, island_id=0, generation=5)
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -456,7 +518,8 @@ def test_build_handoff_serialisable_to_json(db, cascade, tmp_path):
     assert "seed_baselines" in payload
     assert "top_generated_discoveries" in payload
     assert "no_breakthrough_this_run" in payload
-    assert "Satoshi" in payload  # seed reference name
+    # Sprint 3: trivial baseline replaces the 4 curated seeds in JSON output.
+    assert TRIVIAL_SEED.name in payload
     assert run_id in payload
 
 

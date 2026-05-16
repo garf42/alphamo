@@ -119,53 +119,94 @@ def _hp(**kwargs) -> Hyperparameters:
 
 
 def _make_orchestrator(
-    db, monkeypatch, tmp_path, client=None, hp=None
+    db, monkeypatch, tmp_path, client=None, hp=None, bootstrap: bool = True
 ) -> Orchestrator:
+    """Construct an orchestrator with stubbed cascade and research.
+
+    `bootstrap=True` (the default) runs `_bootstrap_islands()` so the
+    sampler has the trivial seed available in every island — this matches
+    what `run()` does before its main loop. Pass `bootstrap=False` to
+    leave islands empty (useful for tests of the bootstrap mechanism
+    itself or of the `run()` lifecycle end-to-end).
+    """
     _stub_cascade(monkeypatch)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = client or _stub_client()
-    return Orchestrator.for_new_run(db, client, audit, hp=hp or _hp())
+    orch = Orchestrator.for_new_run(db, client, audit, hp=hp or _hp())
+    if bootstrap:
+        orch._bootstrap_islands()
+    return orch
 
 
 # ----------------------------------------------------------------- bootstrap
 
 
-def test_seeds_not_inserted_into_candidates_table(db, monkeypatch, tmp_path):
-    """Sprint 2 invariant: orchestrator never inserts seed architectures into the DB."""
+def test_bootstrap_inserts_trivial_seed_into_every_island_at_gen_zero(
+    db, monkeypatch, tmp_path
+):
+    """Sprint 3 invariant: `_bootstrap_islands()` inserts a copy of
+    TRIVIAL_SEED into each of N islands as a gen-0 alive candidate.
+
+    Inverts the Sprint 2 `test_seeds_not_inserted_into_candidates_table`
+    invariant — Sprint 3 brings back per-island gen-0 seeding, but with
+    a single trivial baseline rather than four curated existence proofs.
+    """
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
     _stub_cascade(monkeypatch)
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
-    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit, hp=_hp(num_islands=4)
+    )
 
-    # Before any step, candidates table is empty.
-    assert db.count_candidates_in_run(orch.run_id) == 0
+    inserted = orch._bootstrap_islands()
+    assert inserted == 4
 
-    # Even after a step runs, no seed-named row appears — only the proposer's output.
-    orch.step(generation=1)
     rows = db.alive_in_run(orch.run_id)
-    starter_names = {"Satoshi", "Rowling", "Levels", "Medvi"}
+    assert len(rows) == 4
     for row in rows:
-        assert row.architecture_spec["name"] not in starter_names
+        assert row.architecture_spec["name"] == TRIVIAL_SEED.name
+        assert row.generation == 0
+    # One row per island.
+    assert {r.island_id for r in rows} == {0, 1, 2, 3}
 
 
-def test_step_bootstraps_empty_island_from_references(db, monkeypatch, tmp_path):
-    """Empty island: proposer is invoked anyway, bootstrapping from reference
-    exemplars. The result is a fresh candidate in the DB."""
-    orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    before = db.count_candidates(status="alive")
-    event = orch.step(generation=1)
-    assert event.skipped_reason is None
-    assert event.candidate_id is not None
-    assert db.count_candidates(status="alive") == before + 1
+def test_bootstrap_writes_audit_event(db, monkeypatch, tmp_path):
+    """Bootstrap step emits a single audit-log event for traceability."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit_path = tmp_path / "audit.jsonl"
+    audit = AuditLog(audit_path)
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=4))
+    orch._bootstrap_islands()
+
+    events = audit.read_all()
+    bootstrap_events = [e for e in events if e.trigger == "bootstrap_islands"]
+    assert len(bootstrap_events) == 1
+    assert bootstrap_events[0].payload["num_islands"] == 4
+    assert len(bootstrap_events[0].payload["candidate_ids"]) == 4
+
+
+def test_bootstrap_is_idempotent_no_op_on_resume(db, monkeypatch, tmp_path):
+    """Calling `_bootstrap_islands()` twice (e.g., resume of an already-bootstrapped
+    run) is a no-op on the second call."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=2))
+
+    assert orch._bootstrap_islands() == 2
+    assert orch._bootstrap_islands() == 0
+    rows = db.alive_in_run(orch.run_id)
+    assert len(rows) == 2  # not 4
 
 
 def test_step_inserts_a_new_candidate(db, monkeypatch, tmp_path):
     orch = _make_orchestrator(db, monkeypatch, tmp_path)
-    # Prime the island with a candidate first.
-    orch.step(generation=1)
     before = db.count_candidates(status="alive")
-    event = orch.step(generation=2)
+    event = orch.step(generation=1)
     assert event.candidate_id is not None
     assert event.skipped_reason is None
     assert db.count_candidates(status="alive") == before + 1
@@ -202,6 +243,7 @@ def test_milestone_does_not_fire_below_absolute_fitness_threshold(db, monkeypatc
             milestone_absolute_robustness_threshold=0.50,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger is None
     assert event.meta_decision is None
@@ -225,6 +267,7 @@ def test_milestone_does_not_fire_below_absolute_robustness_threshold(db, monkeyp
             milestone_absolute_robustness_threshold=0.70,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger is None
 
@@ -247,6 +290,7 @@ def test_milestone_does_not_fire_before_min_generation(db, monkeypatch, tmp_path
             milestone_absolute_robustness_threshold=0.50,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger is None
 
@@ -271,6 +315,7 @@ def test_milestone_does_not_fire_when_adversarial_clean(db, monkeypatch, tmp_pat
             milestone_absolute_robustness_threshold=0.50,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=30)
     assert event.meta_trigger is None
 
@@ -294,6 +339,7 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_fitness(db, monkeypa
             milestone_absolute_robustness_threshold=0.70,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger == "milestone_candidate"
     assert event.meta_decision is not None
@@ -317,6 +363,7 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monke
             milestone_absolute_robustness_threshold=0.70,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger == "milestone_candidate"
 
@@ -335,6 +382,7 @@ def test_milestone_does_not_fire_when_robustness_is_none(db, monkeypatch, tmp_pa
             milestone_absolute_robustness_threshold=0.10,
         ),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert event.meta_trigger is None
 
@@ -353,17 +401,55 @@ def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
         db, _stub_client(), audit,
         hp=_hp(research_every_generations=5),
     )
+    orch._bootstrap_islands()
     event = orch.step(generation=5)
     assert calls == ["scheduled_interval"]
     assert event.meta_trigger == "scheduled_interval"
 
 
 def test_run_returns_after_max_generations(db, monkeypatch, tmp_path):
-    orch = _make_orchestrator(db, monkeypatch, tmp_path)
+    # bootstrap=False here because run() does its own bootstrap; calling
+    # both would double-bootstrap. Bootstrap is idempotent (no-op on
+    # second call) so either order is safe, but skipping the helper
+    # bootstrap keeps the test's intent clear.
+    orch = _make_orchestrator(db, monkeypatch, tmp_path, bootstrap=False)
     result = orch.run(max_generations=3)
     assert len(result.events) == 3
     assert result.paused is False
     assert result.stopped_reason == "max_generations"
+
+
+def test_run_emits_island_reset_audit_event_at_cadence(db, monkeypatch, tmp_path):
+    """When run() crosses a reset cadence boundary, an island_reset audit
+    event must be emitted with weak/source/seed-program payload."""
+    _stub_cascade(monkeypatch)
+    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
+    audit_path = tmp_path / "audit.jsonl"
+    audit = AuditLog(audit_path)
+    # Cadence 2 so reset fires within a short test run; 4 islands so we
+    # have a meaningful weak/strong split.
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit,
+        hp=_hp(
+            num_islands=4,
+            reset_every_generations=2,
+            research_every_generations=1000,
+        ),
+    )
+    orch.run(max_generations=4)
+
+    events = audit.read_all()
+    reset_events = [e for e in events if e.trigger == "island_reset"]
+    # Reset fires at gen 2 and gen 4 (cadence 2, max_generations 4).
+    assert len(reset_events) >= 1, "expected at least one island_reset audit event"
+    sample = reset_events[0]
+    assert sample.classification == "routine"
+    payload = sample.payload
+    assert "weak_islands" in payload
+    assert "source_islands" in payload
+    assert "seed_program_ids" in payload
+    assert len(payload["weak_islands"]) == len(payload["source_islands"])
+    assert len(payload["weak_islands"]) == len(payload["seed_program_ids"])
 
 
 def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):

@@ -3,15 +3,17 @@
 The handoff is the load-bearing deliverable. Everything before it is plumbing
 in service of producing this document.
 
-Sprint 2 redesign: seeds are descriptive reference only (mechanism summary,
-structural insight, known fragilities) — no fitness numbers. The
-`no_breakthrough_this_run` flag and `winning_architecture` are gated on
-absolute milestone thresholds (fitness AND robustness clearing the
-configured floors from Hyperparameters), not on seed-relative comparison.
+Sprint 3 redesign: the handoff's `seed_baselines` projection is the
+single trivial Solo Service Provider baseline that every island was
+initialized with at gen 0. The actual scored fitness of that baseline
+(read from any gen-0 trivial-seed candidate in the candidates table)
+populates the entry. `top_generated_discoveries` filters out gen-0
+trivial-seed copies so the discoveries reflect what the search produced.
 
-Every read here is filtered by `run_id` so that two runs sharing the same DB
-produce two separate handoffs. The verification_trail records the run's
-hyperparameters and version anchors so the result is reproducible.
+Every read here is filtered by `run_id` so that two runs sharing the
+same DB produce two separate handoffs. The verification_trail records
+the run's hyperparameters and version anchors so the result is
+reproducible.
 """
 
 from __future__ import annotations
@@ -23,16 +25,16 @@ from alphamo.context.verifier import VERIFIER_ANCHOR
 from alphamo.database import ProgramsDB
 from alphamo.database.schema import Candidate
 from alphamo.evaluator import EvaluatorCascade
-from alphamo.evaluator.exemplar_library import SEED_REFERENCES
+from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas import Architecture, Scores
 from alphamo.schemas.findings import StructuralConcern
 from alphamo.schemas.handoff import (
+    BaselineSeed,
     DriftLogEntry,
     GeneratedDiscovery,
     Handoff,
     MiddleClassEntryCheck,
-    SeedReference,
     VerificationTrail,
 )
 
@@ -66,26 +68,43 @@ def _drift_log_from_audit(
     return entries
 
 
-def _seed_references() -> list[SeedReference]:
-    """Project the canonical seed architectures into descriptive references.
+def _is_trivial_seed_row(row: Candidate) -> bool:
+    """True iff this row is a copy of the gen-0 trivial baseline seed.
 
-    Pulls from `exemplar_library.SEED_REFERENCES` (the same source the
-    proposer uses), so the handoff's reference section never drifts from
-    what the proposer actually saw.
+    Matched by name + generation. The orchestrator only ever inserts
+    TRIVIAL_SEED at generation=0; any later candidate that happens to
+    carry the same name (vanishingly unlikely) would not be at gen 0
+    and would not be filtered.
     """
-    out: list[SeedReference] = []
-    for arch in SEED_REFERENCES:
-        notes = getattr(arch, "notes", None) or {}
-        out.append(
-            SeedReference(
-                name=arch.name,
-                summary=arch.summary,
-                capture_mechanism=arch.capture_mechanism,
-                structural_insight=notes.get("structural_insight"),
-                known_fragilities=notes.get("known_vulnerabilities"),
-            )
+    return (
+        row.generation == 0
+        and row.architecture_spec.get("name") == TRIVIAL_SEED.name
+    )
+
+
+def _baseline_seeds(db: ProgramsDB, run_id: str) -> list[BaselineSeed]:
+    """Project the trivial baseline into a single-entry list.
+
+    Reads the actual scored fitness from a gen-0 trivial-seed row in
+    this run's candidates table. Falls back to `baseline_fitness=None`
+    when no such row exists (e.g. legacy DB that pre-dates the Sprint
+    3 bootstrap mechanism).
+    """
+    notes = getattr(TRIVIAL_SEED, "notes", None) or {}
+    baseline_fitness: float | None = None
+    for row in db.alive_in_run(run_id):
+        if _is_trivial_seed_row(row):
+            baseline_fitness = row.fitness
+            break
+    return [
+        BaselineSeed(
+            name=TRIVIAL_SEED.name,
+            summary=TRIVIAL_SEED.summary,
+            capture_mechanism=TRIVIAL_SEED.capture_mechanism,
+            baseline_fitness=baseline_fitness,
+            design_intent=notes.get("design_intent"),
         )
-    return out
+    ]
 
 
 def _generated_discovery_from_row(row: Candidate) -> GeneratedDiscovery:
@@ -159,13 +178,20 @@ def build_handoff(
         )
     # alive_in_run sorts by fitness desc.
 
-    seed_baselines = _seed_references()
+    seed_baselines = _baseline_seeds(db, run_id)
+
+    # Sprint 3: gen-0 trivial-seed copies are technically "alive" candidates
+    # but they're not search output — filter them out of the discoveries
+    # projection so the reader sees what the search produced. They still
+    # appear in seed_baselines (with their actual fitness) and in the
+    # candidates table; just not double-counted in discoveries.
+    discoveries_pool = [c for c in all_alive if not _is_trivial_seed_row(c)]
 
     top_generated_discoveries = [
-        _generated_discovery_from_row(c) for c in all_alive[:top_n_generated]
+        _generated_discovery_from_row(c) for c in discoveries_pool[:top_n_generated]
     ]
 
-    breakthrough_rows = [c for c in all_alive if _candidate_clears_milestone(c, hp)]
+    breakthrough_rows = [c for c in discoveries_pool if _candidate_clears_milestone(c, hp)]
     has_breakthrough = bool(breakthrough_rows)
     no_breakthrough = not has_breakthrough
     winning_architecture = (
@@ -174,11 +200,16 @@ def build_handoff(
         else None
     )
 
-    # Re-cascade the top alive candidate for verification trail. Cascade
+    # Re-cascade the top discovery for verification trail. Cascade
     # subject is the top by fitness regardless of milestone status — that
     # way the verification trail still contains live cascade output even
-    # when no breakthrough occurred.
-    cascade_subject_arch = Architecture(**all_alive[0].architecture_spec)
+    # when no breakthrough occurred. Excludes gen-0 trivial-seed copies
+    # (those would always lose to evolved candidates, but we guard
+    # explicitly in case a run produced nothing-better-than-baseline).
+    cascade_subject_row = (
+        discoveries_pool[0] if discoveries_pool else all_alive[0]
+    )
+    cascade_subject_arch = Architecture(**cascade_subject_row.architecture_spec)
     cascade_result = cascade.evaluate(cascade_subject_arch)
 
     final_scores = Scores(**cascade_result.scores.model_dump())

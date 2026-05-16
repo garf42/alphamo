@@ -1,56 +1,47 @@
-"""Few-shot prompt template that turns reference exemplars + island seeds
-into a candidate Architecture.
+"""Few-shot prompt template that turns k island-drawn candidates into a
+new candidate Architecture.
 
-Sprint 2 redesign: the prompt now has two sections.
+Sprint 3 redesign (FunSearch/AlphaEvolve alignment): the proposer sees
+ONLY candidates drawn from the current island. No global reference
+library, no per-generation exemplar anchoring. The within-island k=2
+best-shot sampling pattern (FunSearch §A.1 Methods) is the sole context
+the proposer gets for mutation.
 
-  - REFERENCE EXEMPLARS at the top: the four seed architectures (Satoshi,
-    Rowling, Levels, Medvi), shown as structural patterns illustrating
-    the parent goal's solution space. Unscored — they are reference, not
-    fitness comparators.
+The prompt is pure k-shot: the user turn lists the k candidates with
+per-dimension score headers and asks for a structurally distinct
+variant. Reference exemplars (the 4 curated seeds Sprint 2 left as a
+prompt section) are gone — they were producing cross-island convergence
+even after Sprint 2 removed them from the fitness signal.
 
-  - CANDIDATES TO MUTATE below: zero or more island-drawn candidates
-    with per-dimension scores. The proposer is asked to produce a
-    structurally distinct architecture inspired by both sections.
-
-When the island is empty (first generation on a fresh island, or just
-post-reset), `render_seeds([])` is called and the prompt contains only
-the reference exemplars. The proposer then bootstraps the island from
-the reference set alone.
-
-The score header no longer mentions exemplar_similarity (retired in
-Sprint 2). Robustness shows when present; legacy candidates without
-robustness display feasibility/structural only.
+Bootstrap: each island starts with a copy of the trivial seed at
+generation 0 (`orchestrator._bootstrap_islands()`), so the sampler
+always has at least one candidate to return. `render_seeds([])` raises
+— empty seed lists are an invariant violation, not a valid input.
 """
 
 from __future__ import annotations
 
 from alphamo.context.parent_goal import PARENT_GOAL
-from alphamo.evaluator.exemplar_library import format_exemplars_for_prompt
 from alphamo.sampler import Seed
 from alphamo.schemas import Architecture
 
 PROPOSER_SYSTEM = f"""\
 You are the proposer in an evolutionary search over value-capture architectures.
 
-Your task: given (a) reference exemplars at the top of the user turn — \
-structural patterns that have hit the parent goal under prior conditions — \
-and (b) candidates to mutate drawn from the island population, generate a \
-NEW architecture that explores a different region of the search space while \
-satisfying the parent goal's load-bearing constraints.
+Below in the user turn are k candidates drawn from the same island in \
+the population. Generate a new architecture that is structurally \
+distinct from those candidates AND addresses the parent goal's \
+constraints more completely than what you see.
 
-Reference exemplars are NOT scored, and you should NOT copy them. They \
-illustrate what value-capture configurations the parent goal admits. \
-Structural novelty relative to both the references and the candidates is \
-the goal; surface rebranding is not.
-
-Each candidate to mutate is annotated with its multi-objective scores. Use \
-the score patterns to reason about WHICH dimension to push: a candidate \
-with high feasibility and low robustness suggests the mechanism is coherent \
-but adversarially fragile; a candidate with high structural and low \
-feasibility suggests the value-capture story is promising but the entry \
-path doesn't yet hang together. Do not optimize for the aggregate fitness \
-scalar alone — varying which dimension you push generates more useful \
-population diversity than chasing a single number.
+Each candidate is annotated with its multi-objective scores. Use the \
+score pattern to reason about WHICH dimension to push: a candidate with \
+high feasibility and low robustness is coherent but adversarially \
+fragile; high structural and low feasibility is a promising mechanism \
+that doesn't yet hang together; high feasibility but failing \
+labor_separation is a single-person bottleneck that needs a labor- \
+externalisation mechanism. Do not optimize for the aggregate scalar \
+alone — varying which dimension you push generates more useful \
+diversity than chasing one number.
 
 Constraints you MUST satisfy in the candidate you generate:
 1. Middle-class accessible entry — the starting position requires only modest \
@@ -61,6 +52,10 @@ industry network, no bespoke legal infrastructure at entry.
 3. Plausible potential to reach $1B+ (revenue, asset holdings, or comparable measure).
 4. Operational labor is performed by parties other than the capture node.
 
+Generate a structurally distinct architecture — not a surface rewording of \
+the candidates shown. Different industry, different mechanism, or a novel \
+recombination that the candidates suggest but do not yet instantiate.
+
 The parent goal:
 
 {PARENT_GOAL}\
@@ -68,10 +63,11 @@ The parent goal:
 
 
 def _render_score_header(seed: Seed) -> str:
-    """One-line header in AlphaEvolve §2.2 style: dimension: value pairs.
+    """One-line AlphaEvolve §2.2 style score header — dimension: value.
 
-    `exemplar_similarity` was retired in Sprint 2 and is omitted. `robustness`
-    is shown when present; absent when None (legacy or early-exit candidates).
+    `exemplar_similarity` was retired in Sprint 2 and is omitted.
+    `robustness` is shown when present; absent when None (legacy or
+    early-exit candidates).
     """
     s = seed.scores
     parts = [
@@ -85,89 +81,66 @@ def _render_score_header(seed: Seed) -> str:
     return "Scores — " + ", ".join(parts)
 
 
-def _reference_section() -> str:
-    """Static reference-exemplar block, prepended to every proposer request."""
-    return (
-        "REFERENCE EXEMPLARS (unscored — structural patterns illustrating "
-        "the parent goal's solution space; do not copy):\n\n"
-        + format_exemplars_for_prompt()
-    )
-
-
 def render_seeds(seeds: list[Seed]) -> str:
-    """Render the proposer user-turn payload: reference exemplars + scored candidates.
+    """Render island-drawn candidates as the proposer's user-turn payload.
 
-    `seeds` may be empty when the island is uninitialized (fresh run, or
-    just post-reset). In that case the proposer sees only the reference
-    exemplars and bootstraps the island.
+    Empty `seeds` is an invariant violation: bootstrap inserts the trivial
+    seed into every island at gen 0 and reset reseeds wiped islands with
+    a copy of a surviving island's best, so the sampler should always
+    have at least one alive row to return.
     """
-    parts = [_reference_section(), ""]
-    if seeds:
-        parts.append(
-            f"CANDIDATES TO MUTATE (drawn from the island, {len(seeds)} candidate(s)):\n"
+    if not seeds:
+        raise ValueError(
+            "render_seeds requires at least one Seed — empty islands are an "
+            "invariant violation post-bootstrap"
         )
-        for i, seed in enumerate(seeds, 1):
-            arch = seed.architecture
-            parts.append(
-                f"--- Candidate {i}: {arch.name} ---\n"
-                f"{_render_score_header(seed)}\n"
-                f"Summary: {arch.summary}\n"
-                f"Value chain: {arch.value_chain}\n"
-                f"Capture mechanism: {arch.capture_mechanism}\n"
-                f"Entry resources: {arch.entry_resources}"
-            )
+    parts = [
+        f"CANDIDATES FROM THE CURRENT ISLAND ({len(seeds)} candidate(s)):\n"
+    ]
+    for i, seed in enumerate(seeds, 1):
+        arch = seed.architecture
         parts.append(
-            "Generate a new candidate architecture that is structurally distinct "
-            "from the candidates above and from the reference exemplars, while "
-            "satisfying all load-bearing constraints from the parent goal."
+            f"--- Candidate {i}: {arch.name} ---\n"
+            f"{_render_score_header(seed)}\n"
+            f"Summary: {arch.summary}\n"
+            f"Value chain: {arch.value_chain}\n"
+            f"Capture mechanism: {arch.capture_mechanism}\n"
+            f"Entry resources: {arch.entry_resources}"
         )
-    else:
-        parts.append(
-            "CANDIDATES TO MUTATE: (none — the island is empty; bootstrap from "
-            "the reference exemplars alone).\n"
-        )
-        parts.append(
-            "Generate a new candidate architecture inspired by the reference "
-            "exemplars' structural patterns but instantiating a different "
-            "industry, mechanism, or recombination, while satisfying all "
-            "load-bearing constraints from the parent goal."
-        )
+    parts.append(
+        "Generate a new candidate architecture that is structurally "
+        "distinct from the candidates above and addresses the parent "
+        "goal's constraints more completely. Push whichever score "
+        "dimension is weakest in the candidates you were shown."
+    )
     return "\n\n".join(parts)
 
 
 def render_seeds_from_architectures(architectures: list[Architecture]) -> str:
     """Back-compat shim for callers that don't have per-dimension scores.
 
-    Used by tests and ad-hoc CLI flows where only Architecture objects are
-    available. Produces the prompt with reference exemplars and the given
-    architectures as un-scored candidates.
+    Used by tests and ad-hoc CLI flows where only Architecture objects
+    are available. Same prompt shape as `render_seeds` minus the score
+    headers.
     """
-    parts = [_reference_section(), ""]
-    if architectures:
-        parts.append(
-            f"CANDIDATES TO MUTATE (drawn from the island, {len(architectures)} candidate(s)):\n"
+    if not architectures:
+        raise ValueError(
+            "render_seeds_from_architectures requires at least one Architecture"
         )
-        for i, arch in enumerate(architectures, 1):
-            parts.append(
-                f"--- Candidate {i}: {arch.name} ---\n"
-                f"Summary: {arch.summary}\n"
-                f"Value chain: {arch.value_chain}\n"
-                f"Capture mechanism: {arch.capture_mechanism}\n"
-                f"Entry resources: {arch.entry_resources}"
-            )
+    parts = [
+        f"CANDIDATES FROM THE CURRENT ISLAND ({len(architectures)} candidate(s)):\n"
+    ]
+    for i, arch in enumerate(architectures, 1):
         parts.append(
-            "Generate a new candidate architecture that is structurally distinct "
-            "from the candidates above and from the reference exemplars, while "
-            "satisfying all load-bearing constraints from the parent goal."
+            f"--- Candidate {i}: {arch.name} ---\n"
+            f"Summary: {arch.summary}\n"
+            f"Value chain: {arch.value_chain}\n"
+            f"Capture mechanism: {arch.capture_mechanism}\n"
+            f"Entry resources: {arch.entry_resources}"
         )
-    else:
-        parts.append(
-            "CANDIDATES TO MUTATE: (none — bootstrap from reference exemplars alone).\n"
-        )
-        parts.append(
-            "Generate a new candidate architecture inspired by the reference "
-            "exemplars' structural patterns but instantiating a different "
-            "industry, mechanism, or recombination, while satisfying all "
-            "load-bearing constraints from the parent goal."
-        )
+    parts.append(
+        "Generate a new candidate architecture that is structurally "
+        "distinct from the candidates above and addresses the parent "
+        "goal's constraints more completely."
+    )
     return "\n\n".join(parts)

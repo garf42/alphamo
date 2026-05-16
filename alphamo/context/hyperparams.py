@@ -25,8 +25,31 @@ class Hyperparameters(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     num_islands: int = Field(default=8, ge=2)
-    reset_every_generations: int = Field(default=200, ge=1)
-    top_seed_count: int = Field(default=5, ge=1)
+    reset_every_generations: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "Cadence of FunSearch-style island reset. At our typical run "
+            "length (15-100 generations) and per-generation cost "
+            "(~$0.40-0.60), cadence 10 produces 1-10 reset cycles per run "
+            "— enough pressure to escape attractors without resetting "
+            "before islands have evolved meaningful diversity. The "
+            "pre-Sprint-3 default of 200 effectively disabled the "
+            "mechanism for any realistic run."
+        ),
+    )
+    top_seed_count: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Number of top programs to copy when reseeding a weak island "
+            "post-reset. FunSearch (Nature 2023): a single program from a "
+            "uniformly-randomly-chosen surviving island. We keep this "
+            "field for backward compatibility with persisted-JSON HP, but "
+            "the FunSearch-correct reset path in IslandsManager always "
+            "copies one program per weak-island independently."
+        ),
+    )
 
     pool_size: int = Field(default=8, ge=1)
     k_seeds: int = Field(default=2, ge=1)

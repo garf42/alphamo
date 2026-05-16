@@ -1,36 +1,40 @@
 """Main loop coordinator: wires sampler + proposer + cascade + islands + meta.
 
-One Orchestrator drives a run. Each iteration:
-  1. Pick an island (uniform).
-  2. Draw k candidates from the island via softmax-weighted sampling.
-     If the island is empty, draw is empty and the proposer bootstraps
-     from the reference exemplars alone (Sprint 2 redesign: seeds are
-     no longer inserted into the candidates table).
-  3. Propose a new architecture via Opus.
-  4. Score it through the cascade.
-  5. Insert into the DB.
-  6. If the new fitness clears the absolute milestone thresholds, fire
-     the red-team agent and pass findings to the curator.
-  7. Apply the islands manager's reset cadence.
-  8. On scheduled intervals (or stall detection), fire the research agent
-     and pass findings to the curator.
+One Orchestrator drives a run. Lifecycle:
+
+  Bootstrap (once per fresh run, in `run()` before the main loop):
+    - Score the trivial seed once via the cascade.
+    - Insert a copy of the trivial seed into every island as a gen-0
+      alive candidate. (Sprint 3, FunSearch alignment: every island
+      starts with the same baseline; from gen 1 onward, evolution
+      diverges per-island.)
+
+  Inner loop (each iteration):
+    1. Pick an island (uniform).
+    2. Draw k candidates from the island via softmax-weighted sampling.
+    3. Propose a new architecture via Opus — the proposer sees ONLY
+       those k island-drawn candidates (no global reference library).
+    4. Score it through the cascade.
+    5. Insert into the DB.
+    6. If the new fitness clears the absolute milestone thresholds,
+       fire the red-team curator gate.
+    7. Apply the islands manager's reset cadence — when fired, the
+       FunSearch per-weak-island independent draw reseeds the bottom-
+       half islands.
+    8. On scheduled intervals (or stall detection), fire the research
+       agent and pass findings to the curator.
 
 Termination: max_generations reached, OR curator returns PAUSE_FOR_HUMAN
 on a structural finding, OR `max_consecutive_failures` LLM output failures.
 
-Sprint 2 redesign: the milestone trigger uses absolute fitness +
-robustness thresholds, not seed-relative comparison. The
-`seed_baseline_fitness` mechanism was removed when seeds stopped being
-scored candidates.
+Sprint 3 redesign: bootstrap is back — the trivial Solo Service Provider
+seed (`exemplar_library.TRIVIAL_SEED`) is inserted into every island at
+gen 0 so the within-island sampler always has at least one row to
+return. The proposer never sees a global reference library; everything
+it sees comes from the current island.
 
-Every Orchestrator owns exactly one `run_id`. Every insert / read / audit
-event is scoped to that run. Construct via `Orchestrator.for_new_run(...)`
-to start a fresh run; via `Orchestrator.resume_run(...)` to attach to an
-existing one.
-
-The orchestrator never lets meta-layer state into the proposer's prompt —
-that isolation is enforced by the seam between Proposer (which reads only
-Architecture seeds) and Curator (which writes only to the audit log).
+Every Orchestrator owns exactly one `run_id`. Every insert / read /
+audit event is scoped to that run.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
 from alphamo.errors import LLMOutputError
 from alphamo.evaluator import EvaluatorCascade
+from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
 from alphamo.islands import IslandsManager, ResetEvent
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.meta.curator import Curator
@@ -66,6 +71,8 @@ from alphamo.schemas.findings import (
 # compatibility with old audit.jsonl files (run-006, run-007). The
 # conceptual stage is now Stage 3, but persisted strings stay.
 STAGE4_AUDIT_TRIGGER = "stage4_routine"
+ISLAND_RESET_AUDIT_TRIGGER = "island_reset"
+BOOTSTRAP_AUDIT_TRIGGER = "bootstrap_islands"
 
 
 def _stage4_concerns_as_meta_findings(
@@ -206,6 +213,72 @@ class Orchestrator:
         db.mark_run_resumed(run_id)
         return cls(db, client, audit_log, run_id=run_id, hp=hp, rng=rng)
 
+    # ------------------------------------------------------------------ bootstrap
+
+    def _bootstrap_islands(self) -> int:
+        """Insert a copy of `TRIVIAL_SEED` into every island as a gen-0
+        alive candidate. Returns the number of seed copies inserted.
+
+        No-op when this run already has alive candidates (resumed run, or
+        bootstrap already executed in a prior session). On a fresh run,
+        scores the trivial seed once through the cascade and copies the
+        resulting Scores into each island's gen-0 row.
+
+        FunSearch alignment: "Each island is initialized with a copy of
+        the user-provided initial program and is evolved separately."
+        Single architecture, copied to all m islands; per-island
+        evolution proceeds independently.
+
+        We deliberately score the seed ONCE and copy the scores to all
+        islands rather than running the cascade m times on the same
+        architecture. The cascade has LLM-side variance; m independent
+        evaluations would inject noise into what should be m identical
+        starting points. Cost saving (m-1 evaluations) is incidental;
+        the calibration argument is the load-bearing reason.
+        """
+        if self.db.count_candidates_in_run(self.run_id) > 0:
+            return 0
+
+        result = self.cascade.evaluate(TRIVIAL_SEED)
+        stage4_findings_payload = (
+            [c.model_dump(mode="json") for c in result.stage3.concerns]
+            if result.stage3 is not None
+            else None
+        )
+        inserted_ids: list[int] = []
+        for island_id in range(self.hp.num_islands):
+            candidate_id = self.db.insert(
+                TRIVIAL_SEED,
+                result.scores,
+                run_id=self.run_id,
+                island_id=island_id,
+                generation=0,
+                stage4_findings=stage4_findings_payload,
+            )
+            inserted_ids.append(candidate_id)
+
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=BOOTSTRAP_AUDIT_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"trivial_seed='{TRIVIAL_SEED.name}' "
+                    f"fitness={inserted_ids and self.db.get(inserted_ids[0]).fitness or 0.0:.4f} "
+                    f"inserted_into_islands={list(range(self.hp.num_islands))}"
+                ),
+                payload={
+                    "seed_architecture": TRIVIAL_SEED.model_dump(mode="json"),
+                    "seed_scores": result.scores.model_dump(mode="json"),
+                    "candidate_ids": inserted_ids,
+                    "num_islands": self.hp.num_islands,
+                },
+            )
+        )
+        return len(inserted_ids)
+
     # ------------------------------------------------------------------ loop
 
     def detect_stall(self) -> bool:
@@ -270,6 +343,38 @@ class Orchestrator:
                     "robustness": stage4.robustness,
                     "concerns": [c.model_dump(mode="json") for c in stage4.concerns],
                     "reasoning": stage4.reasoning,
+                },
+            )
+        )
+
+    def _log_island_reset(self, generation: int, event: ResetEvent) -> None:
+        """Record a FunSearch-style island reset in the audit log.
+
+        Captures the parallel weak/source/seed-program triples so a
+        post-run analysis can reconstruct, for each weak island, which
+        surviving island supplied its reseed and which program was
+        copied. Lineage on the resulting reset-copy rows in the
+        candidates table points back to the source program independently.
+        """
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=ISLAND_RESET_AUDIT_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"generation={generation} weak_islands={event.weak_islands} "
+                    f"strong_islands={event.strong_islands} "
+                    f"source_islands={event.source_islands} "
+                    f"seed_program_ids={event.seed_program_ids}"
+                ),
+                payload={
+                    "generation": generation,
+                    "weak_islands": list(event.weak_islands),
+                    "strong_islands": list(event.strong_islands),
+                    "source_islands": list(event.source_islands),
+                    "seed_program_ids": list(event.seed_program_ids),
                 },
             )
         )
@@ -396,6 +501,8 @@ class Orchestrator:
             meta_failure = str(exc)
 
         reset_event = self.islands.maybe_reset(generation)
+        if reset_event is not None:
+            self._log_island_reset(generation, reset_event)
 
         return IterationEvent(
             generation=generation,
@@ -413,15 +520,16 @@ class Orchestrator:
     def run(self, max_generations: int) -> RunResult:
         """Drive up to `max_generations` iterations.
 
+        Bootstrap step (Sprint 3): before the main loop, every island
+        gets a copy of the trivial seed at gen 0 via `_bootstrap_islands()`.
+        No-op on resume (existing alive candidates ⇒ skip).
+
         Stops early on (a) a structural curator pause or (b) when
         consecutive eval-side failures reach `hp.max_consecutive_failures`.
         Stamps the run's `stopped_reason` and `completed_at` on the Run row
         before returning.
-
-        Sprint 2 redesign: no `seed_if_empty()` step — islands start empty
-        and the proposer bootstraps each island from the reference exemplar
-        set on its first iteration.
         """
+        self._bootstrap_islands()
         result = RunResult()
         consecutive_failures = 0
         for generation in range(1, max_generations + 1):

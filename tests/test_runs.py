@@ -411,14 +411,20 @@ def test_migration_is_idempotent(tmp_path):
 # ----------------------------------------------------------- seeding is internal
 
 
-def test_fresh_run_creates_exactly_one_run_with_generated_candidates(
+def test_fresh_run_creates_exactly_one_run_with_bootstrap_and_generated(
     db, tmp_path, monkeypatch
 ):
-    """`alphamo run` on a fresh DB → one Run row + proposer-generated candidates.
+    """`alphamo run` on a fresh DB → one Run row + bootstrap trivial-seed
+    rows + proposer-generated candidates.
 
-    Sprint 2 redesign: no seed candidates are inserted into the DB; the
-    proposer bootstraps each island from the reference exemplar set.
+    Sprint 3 redesign: bootstrap inserts the trivial Solo Service
+    Provider seed into every island at gen 0; the proposer then evolves
+    from there. The pre-Sprint-3 invariant ("no seed candidates in the
+    DB") is inverted — seeds ARE in the DB now, just one trivial
+    baseline rather than four curated existence proofs.
     """
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
 
@@ -438,15 +444,23 @@ def test_fresh_run_creates_exactly_one_run_with_generated_candidates(
     assert only_run.hyperparameters["num_islands"] == 4
     assert only_run.stopped_reason == "max_generations"
 
-    # Generated candidates present and tagged to this run.
     total_in_run = db.count_candidates_in_run(orch.run_id)
-    assert total_in_run > 0
+    # 4 bootstrap rows (one per island) + at least one generated candidate.
+    assert total_in_run >= 4 + 1
     assert db.count_candidates() == total_in_run
 
-    # No candidate carries a STARTER name (seeds are reference-only, not inserted).
-    starter_names = {"Satoshi", "Rowling", "Levels", "Medvi"}
     rows = db.alive_in_run(orch.run_id)
-    assert not any(r.architecture_spec["name"] in starter_names for r in rows)
+    # Bootstrap rows: TRIVIAL_SEED in each island at gen 0.
+    trivial_rows = [
+        r for r in rows
+        if r.architecture_spec["name"] == TRIVIAL_SEED.name and r.generation == 0
+    ]
+    assert len(trivial_rows) == 4
+
+    # Sprint 3: the 4 retired curated seed names must NOT appear in the
+    # candidates table (they were removed from exemplar_library).
+    retired_names = {"Satoshi", "Rowling", "Levels", "Medvi"}
+    assert not any(r.architecture_spec["name"] in retired_names for r in rows)
 
 
 def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):

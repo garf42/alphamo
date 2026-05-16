@@ -192,18 +192,28 @@ def test_orchestrator_persists_stage4_findings_on_stage4_reaching_candidate(
 def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
     db, monkeypatch, tmp_path
 ):
-    """Candidates short-circuiting before Stage 4 must have stage4_findings=NULL."""
+    """Candidates short-circuiting before Stage 4 must have stage4_findings=NULL.
+
+    Sprint 3: bootstrap inserts the trivial seed first; this test
+    branches the stage1 stub by architecture name so the trivial seed
+    bootstraps successfully but the proposer-generated candidate
+    fails the middle-class filter — the resulting row is the one
+    whose stage4_findings we assert on.
+    """
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-    # Stage 1 produces middle_class_accessible=False, triggering middle-class
-    # filter exit. Stage 4 never runs.
-    monkeypatch.setattr(
-        cascade_mod,
-        "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+
+    def stage1_branched(arch, c):
+        if arch.name == TRIVIAL_SEED.name:
+            return Stage1Finding(
+                feasibility=0.9, middle_class_accessible=True, reasoning="bootstrap ok"
+            )
+        return Stage1Finding(
             feasibility=0.9, middle_class_accessible=False, reasoning="failed filter"
-        ),
-    )
-    # Other stages stubbed but should not be called.
+        )
+
+    monkeypatch.setattr(cascade_mod, "stage1_feasibility", stage1_branched)
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
         lambda a, c: Stage2Finding(
@@ -223,6 +233,7 @@ def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
     result = orch.run(max_generations=1)
     candidate_event = next(e for e in result.events if e.candidate_id is not None)
     row = db.get(candidate_event.candidate_id)
+    assert row.architecture_spec["name"] != TRIVIAL_SEED.name
     assert row.stage4_findings is None
 
 

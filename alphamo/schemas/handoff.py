@@ -4,11 +4,17 @@ The handoff is the load-bearing artefact: everything before it is plumbing in
 service of producing this document. Skill 4 (implementation-handoff) consumes
 the document and packages it for autonomous build.
 
-Sprint 2 redesign: seeds appear only as descriptive references (mechanism /
-structural insight / known fragilities), without fitness numbers. The
-`no_breakthrough_this_run` flag and `winning_architecture` field are gated
-on absolute milestone thresholds (fitness AND robustness clearing the
-configured floors), not on seed-relative comparison.
+Sprint 3 redesign: the handoff's `seed_baselines` is now a single-entry
+list — the trivial Solo Service Provider baseline that every island was
+initialized with at generation 0. This replaces the Sprint 2
+"descriptive reference" projection of four curated seeds. Re-harvesting
+old DBs that were created under the 4-seed era will produce a 1-entry
+baseline section that doesn't reflect what that run actually started
+from; this is acceptable legacy drift.
+
+The `no_breakthrough_this_run` flag and `winning_architecture` field are
+gated on absolute milestone thresholds (fitness AND robustness clearing
+the configured floors), not on seed-relative comparison.
 """
 
 from __future__ import annotations
@@ -20,21 +26,29 @@ from alphamo.schemas.findings import StructuralConcern
 from alphamo.schemas.scores import Scores
 
 
-class SeedReference(BaseModel):
-    """One reference exemplar's descriptive entry.
+class BaselineSeed(BaseModel):
+    """The trivial baseline architecture that every island was initialized
+    with at generation 0.
 
-    Listed in the handoff so the reader sees the structural patterns the
-    search was anchored against, without any fitness number suggesting the
-    seed itself was a candidate. Seeds are not scored in the Sprint 2
-    redesign — they appear in proposer prompts as patterns, and here as
-    descriptive reference, and nowhere else in the pipeline.
+    Sprint 3: the handoff carries this as a single-entry list (the
+    Solo Service Provider trivial baseline). It IS a real scored
+    candidate in the candidates table (one row per island at gen 0),
+    so unlike the Sprint 2 SeedReference projection, this entry
+    carries the actual scored fitness — the reader can see what
+    "starting from zero" looked like on this run.
     """
 
     name: str
     summary: str
     capture_mechanism: str
-    structural_insight: str | None = None
-    known_fragilities: str | None = None
+    baseline_fitness: float | None = None
+    design_intent: str | None = None
+
+
+# Backward-compatible alias preserved for any external consumer that
+# imported `SeedReference` (the Sprint 2 name). Same shape — only the
+# semantics shifted (1 trivial entry vs. 4 reference patterns).
+SeedReference = BaselineSeed
 
 
 class GeneratedDiscovery(BaseModel):
@@ -103,19 +117,22 @@ class MiddleClassEntryCheck(BaseModel):
 class Handoff(BaseModel):
     """The complete handoff document.
 
-    Field semantics (Sprint 2):
-      - `seed_baselines`: descriptive reference. One entry per seed in
-        `SEED_REFERENCES`. NO fitness number — seeds aren't scored.
-      - `top_generated_discoveries`: research output. Top N alive
-        candidates by fitness, sorted descending.
+    Field semantics (Sprint 3):
+      - `seed_baselines`: single-entry list — the trivial Solo Service
+        Provider baseline every island started from. Carries the actual
+        scored fitness of the gen-0 seed copy.
+      - `top_generated_discoveries`: top N alive candidates by fitness,
+        sorted descending. Excludes gen-0 trivial-seed copies (filtered
+        out so the discoveries section reflects what the search produced,
+        not what it started from).
       - `no_breakthrough_this_run`: True when no candidate cleared the
         absolute milestone thresholds (fitness AND robustness floors
-        from Hyperparameters). Honest summary flag.
+        from Hyperparameters).
       - `winning_architecture`: the highest-fitness candidate when
         `no_breakthrough_this_run` is False, else null.
     """
 
-    seed_baselines: list[SeedReference]
+    seed_baselines: list[BaselineSeed]
     top_generated_discoveries: list[GeneratedDiscovery]
     no_breakthrough_this_run: bool
     winning_architecture: GeneratedDiscovery | None = None
