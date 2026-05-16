@@ -601,7 +601,7 @@ def _print_seed_cascade_result(name: str, result) -> None:
     "--decay-k",
     "decay_k",
     type=float,
-    default=0.15,
+    default=0.50,
     show_default=True,
     help="Stage 4 exponential-decay rate.",
 )
@@ -712,7 +712,7 @@ def score_seeds(write_back: bool, decay_k: float, report_out: Path | None) -> No
     "--decay-k",
     "decay_k",
     type=float,
-    default=0.15,
+    default=0.50,
     show_default=True,
     help="Exponential-decay rate for the recomputed robustness scores.",
 )

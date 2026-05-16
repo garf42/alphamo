@@ -49,15 +49,18 @@ class Hyperparameters(BaseModel):
     stage2_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
     stage4_decay_k: float = Field(
-        default=0.15,
+        default=0.50,
         gt=0.0,
         description=(
             "Exponential-decay rate for Stage 4's robustness score. "
             "robustness = exp(-stage4_decay_k * weighted_concern_sum). "
-            "k=0.15 spans [0.21, 0.96] across the typical 1-50 concern "
-            "range; higher k punishes concerns more aggressively. Bug 1 "
-            "fix (Sprint 1): the prior linear formula clamped to 0.0 for "
-            "any non-trivial concern count."
+            "Calibration history: k=0.15 was tuned for the pre-Sprint-2 "
+            "always-find regime (30-50 concerns per candidate). Under the "
+            "Sprint 2 reframed prompts (2-10 concerns per candidate), "
+            "k=0.50 produces calibrated separation: 0 concerns → 1.00, "
+            "2 HIGH → 0.74, 4 HIGH → 0.55, 10 HIGH → 0.22, deep mixed "
+            "loads (17+ concerns) → 0.07-0.18. Higher k punishes "
+            "concerns more aggressively."
         ),
     )
 

@@ -387,11 +387,14 @@ might have missed.
 Framing for this pass: {FRAMINGS[framing]}
 
 Discipline:
-1. Default to empty concerns lists unless you can identify a specific \
-structural issue with clear evidence from the architecture's own \
-description. The architecture being scrutinized is one of multiple \
-candidates being compared; not every framing applies to every candidate. \
-Empty results when no concern exists are correct.
+1. Empty concerns lists are correct when no real structural issue exists \
+under this framing. However, do not treat "the architecture doesn't \
+mention this problem" as evidence that the problem doesn't exist. Apply \
+relevant domain knowledge to the architecture's described mechanism — if \
+a known structural issue applies to the mechanism class described, flag \
+it even if the architecture's text doesn't acknowledge it. The goal is \
+honest adversarial scrutiny, which sometimes finds nothing and sometimes \
+finds real issues the architecture's authors haven't addressed.
 2. Every concern MUST include a falsification_condition — a concrete fact \
 that, if true, would make the concern NOT a problem. Concerns without a \
 falsifier are filtered out at validation time. This is non-negotiable.

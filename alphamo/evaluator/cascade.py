@@ -58,7 +58,7 @@ class EvaluatorCascade:
         client: anthropic.Anthropic | None = None,
         stage1_threshold: float = 0.4,
         stage2_threshold: float = 0.5,
-        stage4_decay_k: float = 0.15,
+        stage4_decay_k: float = 0.50,
     ) -> None:
         self.client = client or anthropic.Anthropic()
         self.stage1_threshold = stage1_threshold

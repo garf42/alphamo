@@ -74,17 +74,36 @@ def test_stage4_system_prompt_rejects_unknown_framing():
 # fail before the reverted prompts can ship.
 
 
-def test_stage4_default_to_empty_is_first_discipline_rule():
-    """Rule #1 must be the empty-default rule, prominently placed."""
+def test_stage4_rule_one_balances_empty_validity_with_domain_knowledge():
+    """Rule #1 must keep empty-as-correct as a valid outcome AND require the
+    model to apply domain knowledge — not treat the architecture's silence
+    as evidence the concern doesn't exist. This is the Sprint 2 recalibration
+    balancing the previous "default to empty" wording (which under-found
+    real issues) against the original always-find phrasing (which produced
+    30-50 noise concerns per candidate)."""
     sys_text = stage4_system("regulatory")
     discipline_idx = sys_text.find("Discipline:\n")
     assert discipline_idx != -1, "Discipline section missing from system prompt"
     after_discipline = sys_text[discipline_idx:]
     rule_one_idx = after_discipline.find("\n1. ")
     assert rule_one_idx != -1, "rule numbering missing"
-    rule_one = after_discipline[rule_one_idx:rule_one_idx + 200]
-    assert "Default to empty concerns lists" in rule_one, (
-        f"rule #1 must open with 'Default to empty concerns lists', got: {rule_one!r}"
+    # Rule #1 spans until the next numbered rule.
+    rule_two_idx = after_discipline.find("\n2. ", rule_one_idx + 1)
+    rule_one = after_discipline[rule_one_idx:rule_two_idx]
+    # Empty-as-correct preserved.
+    assert "Empty concerns lists are correct" in rule_one
+    # Anti-silence-as-evidence clause is the new load-bearing addition.
+    assert "do not treat" in rule_one.lower()
+    assert "architecture doesn't mention this problem" in rule_one or (
+        "architecture's text doesn't acknowledge" in rule_one
+    )
+    # Domain-knowledge requirement is explicit.
+    assert "domain knowledge" in rule_one
+    # Old "Default to empty concerns lists" phrasing is gone — that wording
+    # under-found real issues on seeds like Satoshi (2/9 framings firing)
+    # and Rowling (1/9). Guard against accidental revert.
+    assert "Default to empty concerns lists" not in rule_one, (
+        "rule #1 reverted to the over-aggressive 'Default to empty' wording"
     )
 
 
@@ -219,9 +238,17 @@ def test_mechanism_robustness_severity_anchors_closed_windows_at_high():
 
 # --------------------------------------------------------------------- compute_robustness
 #
-# Sprint 1 (Bug 1): formula switched from linear deduction to exponential
-# decay: robustness = exp(-decay_k * weighted_concern_sum). With the default
-# k=0.15 and severity weights HIGH=0.30, MEDIUM=0.10, LOW=0.03:
+# Formula: robustness = exp(-decay_k * weighted_concern_sum). Severity
+# weights HIGH=0.30, MEDIUM=0.10, LOW=0.03.
+#
+# Default decay_k history:
+#   Sprint 1 (Bug 1): switched from linear deduction to exponential decay
+#     with k=0.15, tuned for the pre-Sprint-2 always-find regime
+#     (30-50 concerns per candidate).
+#   Sprint 2 recalibration: reframed prompts produce 2-10 concerns; bumped
+#     to k=0.50 to keep selection pressure under the lower concern volume.
+#     Representative profile: 0/2/4/10/17/27 concerns → 1.00/0.74/0.55/
+#     0.22/0.18/0.07 robustness.
 
 
 def test_compute_robustness_clean_returns_one():
@@ -237,50 +264,60 @@ def _concern(severity: Severity, framing: str = "regulatory") -> StructuralConce
 
 
 def test_compute_robustness_single_high():
-    # exp(-0.15 * 0.30) = 0.9560
-    assert compute_robustness([_concern(Severity.HIGH)]) == pytest.approx(0.9560, abs=1e-3)
+    # exp(-0.50 * 0.30) = 0.8607
+    assert compute_robustness([_concern(Severity.HIGH)]) == pytest.approx(0.8607, abs=1e-3)
 
 
 def test_compute_robustness_single_medium():
-    # exp(-0.15 * 0.10) = 0.9851
-    assert compute_robustness([_concern(Severity.MEDIUM)]) == pytest.approx(0.9851, abs=1e-3)
+    # exp(-0.50 * 0.10) = 0.9512
+    assert compute_robustness([_concern(Severity.MEDIUM)]) == pytest.approx(0.9512, abs=1e-3)
 
 
 def test_compute_robustness_single_low():
-    # exp(-0.15 * 0.03) = 0.9955
-    assert compute_robustness([_concern(Severity.LOW)]) == pytest.approx(0.9955, abs=1e-3)
+    # exp(-0.50 * 0.03) = 0.9851
+    assert compute_robustness([_concern(Severity.LOW)]) == pytest.approx(0.9851, abs=1e-3)
 
 
 def test_compute_robustness_five_high():
-    # exp(-0.15 * 1.5) = 0.7985
-    assert compute_robustness([_concern(Severity.HIGH)] * 5) == pytest.approx(0.7985, abs=1e-3)
+    # exp(-0.50 * 1.5) = 0.4724
+    assert compute_robustness([_concern(Severity.HIGH)] * 5) == pytest.approx(0.4724, abs=1e-3)
 
 
 def test_compute_robustness_does_not_clamp_to_zero_under_realistic_load():
-    """Bug 1 regression guard: 4 HIGH concerns no longer collapse to 0.0."""
+    """Bug 1 regression guard: 4 HIGH concerns no longer collapse to 0.0
+    under the linear-formula bug, and under the Sprint 2 k=0.50 calibration
+    the same load lands at ~0.55 (Satoshi's representative profile)."""
     r = compute_robustness([_concern(Severity.HIGH)] * 4)
     assert r > 0.0
-    # exp(-0.15 * 1.2) = 0.8353
-    assert r == pytest.approx(0.8353, abs=1e-3)
+    # exp(-0.50 * 1.2) = 0.5488 — matches Satoshi's profile in the recalibration spec.
+    assert r == pytest.approx(0.5488, abs=1e-3)
+
+
+def test_compute_robustness_two_high_matches_rowling_profile():
+    """Rowling's profile (2 HIGH concerns) lands at ~0.74 under k=0.50."""
+    # exp(-0.50 * 0.60) = 0.7408
+    assert compute_robustness([_concern(Severity.HIGH)] * 2) == pytest.approx(0.7408, abs=1e-3)
 
 
 def test_compute_robustness_run006_low_end():
-    """15 HIGH + 25 MED → graded score, not 0."""
+    """15 HIGH + 25 MED (run-006 low-end load): under k=0.50 robustness
+    drops sharply — the previous k=0.15 calibration left robustness at
+    0.35 here, which under-punished loaded candidates relative to clean."""
     concerns = [_concern(Severity.HIGH)] * 15 + [_concern(Severity.MEDIUM)] * 25
-    # weighted = 15*0.30 + 25*0.10 = 7.0; exp(-1.05) = 0.3499
-    assert compute_robustness(concerns) == pytest.approx(0.3499, abs=1e-3)
+    # weighted = 15*0.30 + 25*0.10 = 7.0; exp(-3.5) = 0.0302
+    assert compute_robustness(concerns) == pytest.approx(0.0302, abs=1e-3)
 
 
 def test_compute_robustness_run006_high_end():
-    """25 HIGH + 28 MED + 4 LOW → graded score in the low-but-nonzero range."""
+    """25 HIGH + 28 MED + 4 LOW: asymptotically low robustness under k=0.50."""
     concerns = (
         [_concern(Severity.HIGH)] * 25
         + [_concern(Severity.MEDIUM)] * 28
         + [_concern(Severity.LOW)] * 4
     )
     # weighted = 25*0.30 + 28*0.10 + 4*0.03 = 7.5 + 2.8 + 0.12 = 10.42
-    # exp(-0.15 * 10.42) = exp(-1.563) = 0.2096
-    assert compute_robustness(concerns) == pytest.approx(0.2096, abs=1e-3)
+    # exp(-0.50 * 10.42) = exp(-5.21) = 0.00546
+    assert compute_robustness(concerns) == pytest.approx(0.00546, abs=1e-4)
 
 
 def test_compute_robustness_mixed_severity():
@@ -290,16 +327,19 @@ def test_compute_robustness_mixed_severity():
         _concern(Severity.MEDIUM),
         _concern(Severity.LOW),
     ]
-    # weighted = 0.30 + 0.10 + 0.10 + 0.03 = 0.53; exp(-0.0795) = 0.9236
-    assert compute_robustness(concerns) == pytest.approx(0.9236, abs=1e-3)
+    # weighted = 0.30 + 0.10 + 0.10 + 0.03 = 0.53; exp(-0.265) = 0.7672
+    assert compute_robustness(concerns) == pytest.approx(0.7672, abs=1e-3)
 
 
 def test_compute_robustness_decay_k_parameter_is_tunable():
-    """Higher k punishes the same concern count more aggressively."""
+    """Higher k punishes the same concern count more aggressively. The
+    default is k=0.50 after Sprint 2 recalibration; the test brackets the
+    default with one stricter and one more lenient value to confirm the
+    monotonic relationship is preserved."""
     concerns = [_concern(Severity.HIGH)] * 5
-    r_default = compute_robustness(concerns, decay_k=0.15)
-    r_stricter = compute_robustness(concerns, decay_k=0.50)
-    r_lenient = compute_robustness(concerns, decay_k=0.05)
+    r_default = compute_robustness(concerns)  # k=0.50
+    r_stricter = compute_robustness(concerns, decay_k=1.00)
+    r_lenient = compute_robustness(concerns, decay_k=0.15)
     assert r_stricter < r_default < r_lenient
 
 
@@ -382,16 +422,16 @@ def test_stage4_aggregates_concerns_across_framings():
     framings = {c.framing for c in finding.concerns}
     assert framings == {"regulatory", "legal_exposure"}
     # weighted = 0.30 (HIGH) + 0.10 (MEDIUM) = 0.40
-    # exp(-0.15 * 0.40) = 0.9418
-    assert finding.robustness == pytest.approx(0.9418, abs=1e-3)
+    # exp(-0.50 * 0.40) = 0.8187
+    assert finding.robustness == pytest.approx(0.8187, abs=1e-3)
 
 
 def test_stage4_robustness_score_in_zero_one_range():
     """Stage 4 must emit robustness inside (0, 1] regardless of concern count.
 
-    Sprint 1: with exponential decay, 24 HIGH concerns produce
-    exp(-0.15 * 7.2) = 0.339 — graded, not collapsed. The score asymptotes
-    toward zero but never reaches it under any realistic concern count.
+    With the Sprint 2 k=0.50 default, 3 HIGH per framing across all
+    DEFAULT_FRAMINGS produces a graded but very-low score (under 0.05 at
+    9 framings). The score asymptotes toward zero but never reaches it.
     """
     batches = {
         framing: RawFindingsBatch(
@@ -412,7 +452,7 @@ def test_stage4_robustness_score_in_zero_one_range():
     # then exp(-decay_k * weighted_sum). Computed from the canonical
     # framing list so the assertion stays correct if framing count moves.
     expected_weighted = 3 * len(DEFAULT_FRAMINGS) * 0.30
-    expected_robustness = math.exp(-0.15 * expected_weighted)
+    expected_robustness = math.exp(-0.50 * expected_weighted)
     assert finding.robustness == pytest.approx(expected_robustness, abs=1e-3)
 
 
@@ -437,8 +477,8 @@ def test_stage4_drops_falsification_less_concerns():
     client = _client_with_framing_responses(batches)
     finding = stage4_adversarial(SATOSHI_FIXTURE.architecture, client)
     assert [c.claim for c in finding.concerns] == ["good concern"]
-    # Robustness reflects only the good concern: weighted=0.10; exp(-0.015)=0.9851
-    assert finding.robustness == pytest.approx(0.9851, abs=1e-3)
+    # Robustness reflects only the good concern: weighted=0.10; exp(-0.05)=0.9512
+    assert finding.robustness == pytest.approx(0.9512, abs=1e-3)
 
 
 def test_stage4_runs_framings_in_parallel():

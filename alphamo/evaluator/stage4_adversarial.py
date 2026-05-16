@@ -51,12 +51,22 @@ _SEVERITY_WEIGHT: dict[Severity, float] = {
     Severity.LOW: 0.03,
 }
 
-# Default decay rate. Bug 1 fix (Sprint 1): the previous linear
-# `1.0 - sum(weights)` formula clamped to 0.0 with anything more than ~4
-# HIGH concerns. Run-006 observed 39-53 concerns per candidate, which
-# routinely produced weighted sums of 7-10, saturating any linear formula.
-# Exponential decay produces graded output across the full realistic range.
-DEFAULT_DECAY_K = 0.15
+# Default decay rate. Calibration history:
+#   - Bug 1 fix (Sprint 1): the prior linear `1.0 - sum(weights)` formula
+#     clamped to 0.0 with anything more than ~4 HIGH concerns. Switched
+#     to exponential decay with k=0.15, tuned for the pre-Sprint-2
+#     always-find regime (run-006 observed 39-53 concerns per candidate).
+#   - Sprint 2 recalibration: the reframed prompts produce 2-10 concerns
+#     per candidate. k=0.15 in that regime leaves robustness inflated
+#     (Satoshi 0.835, Rowling 0.914 — implausible for 1990s-era patterns).
+#     Bumped to k=0.50, which produces calibrated separation:
+#       0 concerns         → 1.00
+#       2 HIGH (Rowling)   → 0.74
+#       4 HIGH (Satoshi)   → 0.55
+#       10 HIGH            → 0.22
+#       17 mixed (Levels)  → 0.18
+#       27 mixed (Medvi)   → 0.07
+DEFAULT_DECAY_K = 0.50
 
 
 def compute_robustness(

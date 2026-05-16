@@ -213,7 +213,7 @@ class ProgramsDB:
     def backfill_stage4_from_audit(
         self,
         audit_events: "list[Any]",
-        decay_k: float = 0.15,
+        decay_k: float = 0.50,
     ) -> dict[str, int]:
         """One-shot migration: populate stage4_findings on existing candidates
         from `trigger='stage4_routine'` events in the audit log.
