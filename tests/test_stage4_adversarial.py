@@ -7,6 +7,7 @@ robustness-from-severity calculation without live LLM calls.
 
 from __future__ import annotations
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -29,12 +30,12 @@ from tests.fixtures.parsed_message import FakeParsedMessage, make_truncation_err
 
 # --------------------------------------------------------------------- shape
 
-def test_stage4_has_eight_framings():
-    """Sprint 2: three legacy framings, four Phase-2 additions, and
-    timeline_plausibility (which replaced the legacy `scaling` framing —
-    scaling's coverage is preserved by scaling_cliffs + mechanism_robustness,
-    and timeline_plausibility fills the previously-absent time-to-value
-    selection pressure gap)."""
+def test_stage4_has_nine_framings():
+    """Sprint 2 final shape: three legacy framings, four Phase-2 additions,
+    timeline_plausibility (which replaced the legacy `scaling` framing),
+    and current_moment_dependency (run-007 follow-up — adds explicit
+    selection pressure against architectures that repackage historical
+    patterns without identifying current-moment dependencies)."""
     assert set(FRAMINGS) == {
         "regulatory",
         "economic",
@@ -44,8 +45,9 @@ def test_stage4_has_eight_framings():
         "scaling_cliffs",
         "legal_exposure",
         "timeline_plausibility",
+        "current_moment_dependency",
     }
-    assert len(DEFAULT_FRAMINGS) == 8
+    assert len(DEFAULT_FRAMINGS) == 9
 
 
 def test_stage4_system_prompt_includes_framing_text():
@@ -158,6 +160,61 @@ def test_timeline_plausibility_framing_covers_both_assessments():
     # Mechanism-floor exemption is named so legitimately-long mechanisms
     # (cultivar IP, etc.) don't get penalized for matching their own floor.
     assert "cultivar" in text.lower() or "breeding" in text.lower()
+
+
+def test_current_moment_dependency_framing_present_with_expected_shape():
+    """current_moment_dependency (run-007 follow-up) must be present and
+    follow the Sprint 2 reframe pattern (Evaluate whether... / If [issue]
+    does not apply / Empty results are correct), with both ERA INDEPENDENCE
+    TEST and SPECIFICITY OF CURRENT-MOMENT CLAIMS sections."""
+    text = FRAMINGS["current_moment_dependency"]
+    # Opens with the yes/no evaluation pattern.
+    assert text.startswith("Evaluate whether"), (
+        f"current_moment_dependency does not open with 'Evaluate whether'; "
+        f"got: {text[:80]!r}"
+    )
+    # Empty-list license + correctness clause inherited from the Sprint 2
+    # reframe pattern.
+    assert "return an empty concerns list" in text
+    assert "Empty results are correct" in text
+    # Both coupled assessments must be named explicitly so neither drops out.
+    assert "ERA INDEPENDENCE TEST" in text, (
+        "current_moment_dependency lost the 2015 era-independence assessment"
+    )
+    assert "SPECIFICITY OF CURRENT-MOMENT CLAIMS" in text, (
+        "current_moment_dependency lost the specificity assessment"
+    )
+    # Era anchor (2015) must appear so the framing has a concrete reference
+    # frame, not a vague "decade ago".
+    assert "2015" in text
+    # Severity calibration is anchored, with the era-independence HIGH
+    # anchor and the "Empty (no concern)" tier present.
+    assert "structurally identical to what a 2015 solo operator" in text
+    assert "Empty (no concern)" in text
+    # Explicit anti-prediction clause: the framing must NOT ask the LLM to
+    # predict future AI capabilities (would epistemically favor familiar
+    # patterns and penalize genuine innovation).
+    assert "predict" in text.lower()
+
+
+def test_mechanism_robustness_severity_anchors_closed_windows_at_high():
+    """mechanism_robustness must carry the closed-window HIGH severity
+    anchor added in the run-007 follow-up. Without this, closed-window
+    dependencies default to MEDIUM and the cascade under-penalises
+    architectures whose load-bearing existence proof's conditions have
+    demonstrably changed."""
+    text = FRAMINGS["mechanism_robustness"]
+    assert "Severity calibration for this framing:" in text, (
+        "mechanism_robustness lost its per-framing severity calibration"
+    )
+    assert "HIGH includes:" in text, (
+        "mechanism_robustness lost the closed-window HIGH severity anchor"
+    )
+    # Specific anchor language — demonstrably-changed conditions are HIGH.
+    assert "demonstrably changed" in text
+    # Concrete examples of closed-window conditions must be named.
+    assert "retail consolidation" in text
+    assert "regulatory regimes that have changed" in text
 
 
 # --------------------------------------------------------------------- compute_robustness
@@ -280,11 +337,11 @@ def _client_with_framing_responses(
     return client
 
 
-def test_stage4_runs_all_eight_framings():
+def test_stage4_runs_all_default_framings():
     """Every framing in DEFAULT_FRAMINGS produces exactly one LLM call."""
     client = _client_with_framing_responses({})
     stage4_adversarial(SATOSHI_FIXTURE.architecture, client)
-    assert client.messages.parse.call_count == 8
+    assert client.messages.parse.call_count == len(DEFAULT_FRAMINGS)
 
 
 def test_stage4_returns_score_and_concerns_on_clean_pass():
@@ -351,8 +408,12 @@ def test_stage4_robustness_score_in_zero_one_range():
     client = _client_with_framing_responses(batches)
     finding = stage4_adversarial(SATOSHI_FIXTURE.architecture, client)
     assert 0.0 < finding.robustness <= 1.0
-    # 24 HIGH × 0.30 = 7.2 weighted; exp(-1.08) = 0.3396
-    assert finding.robustness == pytest.approx(0.3396, abs=1e-3)
+    # 3 HIGH per framing × len(DEFAULT_FRAMINGS) framings × 0.30 weight,
+    # then exp(-decay_k * weighted_sum). Computed from the canonical
+    # framing list so the assertion stays correct if framing count moves.
+    expected_weighted = 3 * len(DEFAULT_FRAMINGS) * 0.30
+    expected_robustness = math.exp(-0.15 * expected_weighted)
+    assert finding.robustness == pytest.approx(expected_robustness, abs=1e-3)
 
 
 def test_stage4_drops_falsification_less_concerns():

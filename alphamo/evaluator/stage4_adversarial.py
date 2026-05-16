@@ -1,17 +1,23 @@
 """Stage 4 — adversarial robustness scoring.
 
 Replaces the standalone red-team agent. Every candidate that survives
-Stage 3 is scrutinised under 8 adversarial framings (regulatory, economic,
-operational, scaling, mechanism_robustness, hidden_dependencies,
-scaling_cliffs, legal_exposure) running concurrently. Each framing produces
-a list of concerns with falsification conditions and severity. The stage
-aggregates the concerns and computes a deterministic robustness score
-from their severity-weighted count via exponential decay.
+Stage 3 is scrutinised under N adversarial framings running concurrently
+(currently 9; see alphamo.prompts.stage4_prompts.DEFAULT_FRAMINGS for the
+canonical list). Each framing produces a list of concerns with
+falsification conditions and severity. The stage aggregates the concerns
+and computes a deterministic robustness score from their severity-weighted
+count via exponential decay.
 
 Robustness contributes to fitness as a fourth dimension alongside
 feasibility / structural / exemplar_similarity. Concerns are persisted on
 the candidate (stage4_findings JSON column) and projected into the
 handoff trail.
+
+Cost: each framing is one independent Opus call running in parallel, so
+Stage 4 per-candidate cost scales linearly with framing count. The
+deferred tiered-Stage-4 optimization (single broad framing first, fan out
+only if concerns surface) remains available as a follow-up if cost
+becomes painful.
 """
 
 from __future__ import annotations
