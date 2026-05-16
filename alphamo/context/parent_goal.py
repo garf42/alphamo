@@ -5,9 +5,18 @@ verifiability anchor — change it only when the parent goal itself is
 re-framed by the meta-curator, not for prompt tuning. PARENT_GOAL_VERSION
 must be bumped any time the text below changes so historical runs in the DB
 can be distinguished from runs under the new framing.
+
+Version history:
+  v1 — original framing; closing "verifiability anchor" line cited named
+       historical existence proofs (Satoshi, Rowling, Levels).
+  v2 — named citations removed. The proposer's system prompt no longer
+       sees historical-pattern names. Structural grounding remains via
+       the constraints themselves and the cascade's verification work.
+       Aligns with Sprint 3's intent that PARENT_GOAL ground the search
+       through criteria, not through named patterns.
 """
 
-PARENT_GOAL_VERSION = "v1"
+PARENT_GOAL_VERSION = "v2"
 
 PARENT_GOAL = """\
 Identify legal, structural, or protocol-level configurations in which a \
@@ -30,5 +39,5 @@ Load-bearing constraints:
 2. BILLION-DOLLAR QUANTUM — captured value reaches $1B+ in revenue, assets, or comparable measure.
 3. MIDDLE-CLASS ACCESSIBLE ENTRY — the configuration is enterable from modest savings, personal credit, skill, and time, with no privileged starting conditions. This is a STRUCTURAL FILTER, not a soft preference.
 
-Verifiability anchor: existence proofs (Satoshi, Rowling, Levels) plus structural characterization across configurations.
+Verifiability anchor: structural existence proofs exist across multiple verticals demonstrating the parent goal's achievability; the search is grounded in the constraints above, not in any named historical pattern.
 """
