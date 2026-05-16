@@ -49,8 +49,10 @@ from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
 from alphamo.errors import LLMOutputError
+from alphamo.errors import Stage4OutputError
 from alphamo.evaluator import EvaluatorCascade
 from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+from alphamo.evaluator.stage4_adversarial import FAILED_FRAMINGS_SENTINEL
 from alphamo.islands import IslandsManager, ResetEvent
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.meta.curator import Curator
@@ -73,6 +75,13 @@ from alphamo.schemas.findings import (
 STAGE4_AUDIT_TRIGGER = "stage4_routine"
 ISLAND_RESET_AUDIT_TRIGGER = "island_reset"
 BOOTSTRAP_AUDIT_TRIGGER = "bootstrap_islands"
+# Sprint 4: emitted when Stage 3 ran with partial framing coverage
+# (some framings failed after SDK-level retries exhausted) but enough
+# succeeded that the candidate was still scored. Catastrophic-failure
+# cases (< STAGE3_MIN_SUCCESSFUL_FRAMINGS succeeded) raise instead
+# and flow through the existing iteration-failure path.
+STAGE3_PARTIAL_FAILURE_TRIGGER = "stage3_partial_framing_failure"
+STAGE3_CATASTROPHIC_FAILURE_TRIGGER = "stage3_catastrophic_framing_failure"
 
 
 def _stage4_concerns_as_meta_findings(
@@ -347,6 +356,75 @@ class Orchestrator:
             )
         )
 
+    def _log_stage3_partial_failure(
+        self, candidate_id: int, sentinel: StructuralConcern
+    ) -> None:
+        """Sprint 4: record that Stage 3 ran with partial framing coverage.
+
+        Emitted when some framings failed but enough succeeded (≥
+        STAGE3_MIN_SUCCESSFUL_FRAMINGS) that the candidate was still
+        scored and inserted. The candidate row's stage4_findings JSON
+        already carries the `_meta` sentinel concern; this audit event
+        surfaces it as a first-class run-time signal for monitoring.
+        """
+        failed_framings = (
+            sentinel.evidence.split(", ") if sentinel.evidence else []
+        )
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=STAGE3_PARTIAL_FAILURE_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"candidate={candidate_id} partial Stage 3 coverage: "
+                    f"{len(failed_framings)} framing(s) failed "
+                    f"({', '.join(failed_framings)})"
+                ),
+                payload={
+                    "candidate_id": candidate_id,
+                    "failed_framings": failed_framings,
+                },
+            )
+        )
+
+    def _log_stage3_catastrophic_failure(
+        self,
+        generation: int,
+        island_id: int,
+        architecture: Architecture,
+        exc: Stage4OutputError,
+    ) -> None:
+        """Sprint 4: record a catastrophic Stage 3 failure.
+
+        Emitted when fewer than STAGE3_MIN_SUCCESSFUL_FRAMINGS framings
+        succeeded. The candidate is NOT inserted into the DB; the
+        iteration counts as a failure for the consecutive_failures gate.
+        The architecture spec is captured in the payload so the run can
+        be re-analyzed post-hoc to see which candidate triggered the
+        failure (it's not in the candidates table).
+        """
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=STAGE3_CATASTROPHIC_FAILURE_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"generation={generation} island={island_id} "
+                    f"architecture='{architecture.name}': {exc}"
+                ),
+                payload={
+                    "generation": generation,
+                    "island_id": island_id,
+                    "architecture": architecture.model_dump(mode="json"),
+                    "detail": exc.detail,
+                },
+            )
+        )
+
     def _log_island_reset(self, generation: int, event: ResetEvent) -> None:
         """Record a FunSearch-style island reset in the audit log.
 
@@ -447,6 +525,17 @@ class Orchestrator:
         try:
             result = self.cascade.evaluate(architecture)
         except LLMOutputError as exc:
+            # Sprint 4: distinguish catastrophic Stage 3 failure (most
+            # framings failed; signal degraded) from generic LLM-output
+            # failures. The former gets its own audit-event trigger so
+            # post-run analysis can identify Anthropic-side outages.
+            if (
+                isinstance(exc, Stage4OutputError)
+                and exc.stop_reason == "stage3_catastrophic_framing_failure"
+            ):
+                self._log_stage3_catastrophic_failure(
+                    generation, island_id, architecture, exc
+                )
             return IterationEvent(
                 generation=generation,
                 island_id=island_id,
@@ -479,6 +568,18 @@ class Orchestrator:
         # the only place the concerns themselves get persisted.
         if result.stage3 is not None:
             self._log_stage4_routine(candidate_id, result.stage3)
+            # Sprint 4: also emit a dedicated audit event when Stage 3 ran
+            # with partial coverage (one or more framings failed after SDK
+            # retries exhausted). The sentinel concern in stage3.concerns
+            # carries the failed-framings list.
+            failed_framings = [
+                c for c in result.stage3.concerns
+                if c.framing == FAILED_FRAMINGS_SENTINEL
+            ]
+            if failed_framings:
+                self._log_stage3_partial_failure(
+                    candidate_id, failed_framings[0]
+                )
 
         meta_trigger: str | None = None
         meta_decision: CuratorDecision | None = None

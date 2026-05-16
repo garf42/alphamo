@@ -1,23 +1,42 @@
-"""Stage 4 — adversarial robustness scoring.
+"""Stage 3 — adversarial robustness scoring (renamed from Stage 4 in Sprint 2).
 
-Replaces the standalone red-team agent. Every candidate that survives
-Stage 3 is scrutinised under N adversarial framings running concurrently
-(currently 9; see alphamo.prompts.stage4_prompts.DEFAULT_FRAMINGS for the
-canonical list). Each framing produces a list of concerns with
-falsification conditions and severity. The stage aggregates the concerns
-and computes a deterministic robustness score from their severity-weighted
-count via exponential decay.
+Every candidate that survives Stage 2 is scrutinised under N adversarial
+framings running concurrently (currently 9; see
+alphamo.prompts.stage4_prompts.DEFAULT_FRAMINGS for the canonical list).
+Each framing produces a list of concerns with falsification conditions
+and severity. The stage aggregates the concerns and computes a
+deterministic robustness score from their severity-weighted count via
+exponential decay.
 
-Robustness contributes to fitness as a fourth dimension alongside
-feasibility / structural / exemplar_similarity. Concerns are persisted on
-the candidate (stage4_findings JSON column) and projected into the
-handoff trail.
+File / symbol names retain the `stage4` historical prefix
+(`stage4_adversarial`, `Stage4OutputError`, `STAGE4_AUDIT_TRIGGER`) for
+persisted-JSON and audit-log compatibility with pre-Sprint-2 runs. The
+conceptual stage is now Stage 3 of three.
 
 Cost: each framing is one independent Opus call running in parallel, so
-Stage 4 per-candidate cost scales linearly with framing count. The
-deferred tiered-Stage-4 optimization (single broad framing first, fan out
-only if concerns surface) remains available as a follow-up if cost
-becomes painful.
+the stage's per-candidate cost scales linearly with framing count.
+
+SPRINT 4 — TIERED PARTIAL-FAILURE HANDLING:
+
+A single framing's API failure no longer aborts the whole candidate
+evaluation. The new flow:
+
+  - All 9 framings run concurrently via `run_parallel_collect_results`.
+    Exceptions are caught and returned in place of results.
+  - If ≥ STAGE3_MIN_SUCCESSFUL_FRAMINGS succeeded: compute robustness
+    from the successful framings' concerns, append a `_meta` sentinel
+    concern recording the failed framings (so the partial-coverage
+    fact is persisted on the candidate row), and continue normally.
+  - If < STAGE3_MIN_SUCCESSFUL_FRAMINGS succeeded: raise
+    Stage4OutputError so the orchestrator treats this candidate as
+    a cascade-level failure (not inserted as alive, counts toward
+    `consecutive_failures`).
+
+The 5-of-9 threshold is a constant (not a Hyperparameter); promote to
+HP if we need to tune. The Anthropic SDK's `max_retries=3` (configured
+at client construction) absorbs transient 408/409/429/500+/connection
+errors before a failure reaches us, so a "failed framing" by the time
+it gets here is a genuinely persistent failure — not a transient blip.
 """
 
 from __future__ import annotations
@@ -26,7 +45,7 @@ import math
 
 import anthropic
 
-from alphamo._concurrent import run_parallel
+from alphamo._concurrent import run_parallel_collect_results
 from alphamo.errors import Stage4OutputError, parse_or_raise
 from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.prompts.stage4_prompts import (
@@ -68,12 +87,29 @@ _SEVERITY_WEIGHT: dict[Severity, float] = {
 #       27 mixed (Medvi)   → 0.07
 DEFAULT_DECAY_K = 0.50
 
+# Sprint 4: tiered partial-failure threshold. With 9 framings, ≥5 must
+# succeed for the candidate to be scored at all. Below threshold the
+# signal is too degraded to trust — the candidate is treated as a
+# cascade-level failure.
+STAGE3_MIN_SUCCESSFUL_FRAMINGS = 5
+
+# Sentinel framing name used to record which framings failed in the
+# persisted stage4_findings JSON. The compute_robustness function and
+# all downstream consumers (handoff, audit) filter this out so it never
+# contributes to the robustness score, but it remains queryable for
+# forensics.
+FAILED_FRAMINGS_SENTINEL = "_meta"
+
 
 def compute_robustness(
     concerns: list[StructuralConcern],
     decay_k: float = DEFAULT_DECAY_K,
 ) -> float:
     """Robustness = exp(-decay_k * sum(severity_weight(c) for c in concerns)).
+
+    Sprint 4: `_meta` sentinel concerns (used to record failed framings)
+    are filtered out before weighting — they're forensic metadata, not
+    real findings against the candidate.
 
     Exponential decay gives graded output across realistic concern counts:
       0 concerns                    → 1.000
@@ -85,7 +121,8 @@ def compute_robustness(
 
     The return is mathematically in (0, 1]; no clamping required.
     """
-    weighted_sum = sum(_SEVERITY_WEIGHT[c.severity] for c in concerns)
+    real_concerns = [c for c in concerns if c.framing != FAILED_FRAMINGS_SENTINEL]
+    weighted_sum = sum(_SEVERITY_WEIGHT[c.severity] for c in real_concerns)
     return math.exp(-decay_k * weighted_sum)
 
 
@@ -128,6 +165,22 @@ def _run_framing(
     ]
 
 
+def _failed_framings_sentinel(failed_framings: list[str]) -> StructuralConcern:
+    """Build the `_meta` sentinel concern that records the failed framings.
+
+    Persisted as part of the candidate's stage4_findings JSON so the
+    partial-coverage fact survives any audit-log loss. compute_robustness
+    and downstream consumers filter on `framing == FAILED_FRAMINGS_SENTINEL`.
+    """
+    return StructuralConcern(
+        framing=FAILED_FRAMINGS_SENTINEL,
+        claim="framings_failed",
+        evidence=", ".join(failed_framings),
+        falsification_condition="all framings complete successfully",
+        severity=Severity.LOW,
+    )
+
+
 def stage4_adversarial(
     architecture: Architecture,
     client: anthropic.Anthropic,
@@ -135,29 +188,61 @@ def stage4_adversarial(
     model: str = OPUS_MODEL,
     decay_k: float = DEFAULT_DECAY_K,
 ) -> Stage4Finding:
-    """Run all framings (default: 8) concurrently, aggregate, score robustness.
+    """Run all framings concurrently with tiered partial-failure handling.
 
-    Falsification-less concerns are dropped before aggregation. The robustness
-    score is deterministic from the surviving concerns' severity — the LLM
-    judges concerns, the stage judges the candidate.
+    Sprint 4 behavior:
+      - All framings run in parallel via `run_parallel_collect_results`.
+      - If ≥ STAGE3_MIN_SUCCESSFUL_FRAMINGS succeed: build Stage4Finding
+        from survivors; append `_meta` sentinel concern recording the
+        failed framings; reasoning field notes partial coverage.
+      - If < STAGE3_MIN_SUCCESSFUL_FRAMINGS succeed: raise
+        Stage4OutputError. The orchestrator's cascade-failure path
+        catches this and treats the candidate as not-inserted.
+
+    Falsification-less concerns are dropped before aggregation. The
+    robustness score is deterministic from the surviving concerns'
+    severity — the LLM judges concerns, the stage judges the candidate.
     """
     framings = framings if framings is not None else DEFAULT_FRAMINGS
-    per_framing = run_parallel(
+
+    raw_results = run_parallel_collect_results(
         [
             (lambda f=f: _run_framing(architecture, client, f, model))
             for f in framings
         ]
     )
 
+    succeeded_framings: list[str] = []
+    failed_framings: list[str] = []
     all_concerns: list[StructuralConcern] = []
-    for concerns in per_framing:
-        all_concerns.extend(concerns)
+    for framing, result in zip(framings, raw_results):
+        if isinstance(result, Exception):
+            failed_framings.append(framing)
+        else:
+            succeeded_framings.append(framing)
+            all_concerns.extend(result)
+
+    if len(succeeded_framings) < STAGE3_MIN_SUCCESSFUL_FRAMINGS:
+        # Catastrophic Stage 3 failure: signal is too degraded to score
+        # the candidate. Raise so the orchestrator's existing
+        # `except LLMOutputError` path counts this as an iteration
+        # failure and skips insertion.
+        raise Stage4OutputError(
+            stop_reason="stage3_catastrophic_framing_failure",
+            content_block_types=[],
+            detail=(
+                f"only {len(succeeded_framings)} of {len(framings)} framings "
+                f"succeeded (min required: {STAGE3_MIN_SUCCESSFUL_FRAMINGS}); "
+                f"failed_framings={failed_framings}"
+            ),
+        )
+
     all_concerns = _enforce_falsification(all_concerns)
 
-    framings_with_concerns = sorted(
-        {c.framing for c in all_concerns}
-    )
-    framings_clean = [f for f in framings if f not in framings_with_concerns]
+    framings_with_concerns = sorted({c.framing for c in all_concerns})
+    framings_clean = [
+        f for f in succeeded_framings if f not in framings_with_concerns
+    ]
     if all_concerns:
         reasoning = (
             f"Concerns surfaced under: {', '.join(framings_with_concerns)}. "
@@ -165,9 +250,20 @@ def stage4_adversarial(
         )
     else:
         reasoning = (
-            f"All {len(framings)} framings returned clean — no structural "
-            "concerns surfaced."
+            f"All {len(succeeded_framings)} succeeded framings returned clean "
+            "— no structural concerns surfaced."
         )
+
+    if failed_framings:
+        reasoning += (
+            f" PARTIAL COVERAGE: {len(failed_framings)} of {len(framings)} "
+            f"framings failed ({', '.join(failed_framings)}); robustness "
+            "computed from the surviving framings only."
+        )
+        # Persist failed-framing list as a sentinel concern so the
+        # partial-coverage fact survives in the candidate's
+        # stage4_findings JSON. Filtered out of compute_robustness.
+        all_concerns.append(_failed_framings_sentinel(failed_framings))
 
     return Stage4Finding(
         robustness=compute_robustness(all_concerns, decay_k=decay_k),

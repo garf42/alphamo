@@ -29,7 +29,10 @@ pytestmark = [
 def anthropic_client():
     import anthropic
 
-    return anthropic.Anthropic()
+    # max_retries=3 — match production client construction (see Sprint
+    # 4 commit) so live test fixtures don't fail spuriously on transient
+    # API errors.
+    return anthropic.Anthropic(max_retries=3)
 
 
 def test_single_generation_step(anthropic_client, db, default_run):

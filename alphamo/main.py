@@ -275,7 +275,12 @@ def generate(
     from alphamo.sampler import Sampler
 
     db = ProgramsDB(_db_url(db_path))
-    client = anthropic.Anthropic()
+    # max_retries=3: the Anthropic SDK retries 408/409/429/500+ and
+    # connection/timeout errors with exponential backoff and Retry-After
+    # honoring. See Sprint 4 commit for the rationale and per-call
+    # failure-rate math (~84% chance of ≥1 failure per 25-gen run
+    # without retry).
+    client = anthropic.Anthropic(max_retries=3)
     resolved_run_id = _resolve_run_id(db, run_id)
 
     seeds = Sampler(db, run_id=resolved_run_id).draw(island_id=island_id, k=k_seeds)
@@ -381,7 +386,10 @@ def run(
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
-    client = anthropic.Anthropic()
+    # max_retries=3 — see Sprint 4 commit for the per-call-failure-rate
+    # rationale. The SDK absorbs transient 408/409/429/500+ and
+    # connection/timeout errors so a single API blip doesn't kill a run.
+    client = anthropic.Anthropic(max_retries=3)
 
     if resume_id is not None:
         try:
@@ -457,7 +465,10 @@ def harvest(
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
-    cascade = EvaluatorCascade(anthropic.Anthropic())
+    # max_retries=3 — see Sprint 4 commit. Harvest does one re-cascade
+    # call on the top discovery; transient API failures shouldn't drop
+    # an otherwise-complete handoff.
+    cascade = EvaluatorCascade(anthropic.Anthropic(max_retries=3))
 
     resolved_run_id = run_id or db.latest_run_id()
     if resolved_run_id is None:

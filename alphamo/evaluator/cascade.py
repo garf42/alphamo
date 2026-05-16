@@ -76,7 +76,10 @@ class EvaluatorCascade:
         stage2_threshold: float = 0.5,
         stage4_decay_k: float = 0.50,
     ) -> None:
-        self.client = client or anthropic.Anthropic()
+        # max_retries=3 — see Sprint 4 commit. The CLI passes a
+        # pre-configured client (also with max_retries=3); the fallback
+        # here protects ad-hoc / library callers that didn't supply one.
+        self.client = client or anthropic.Anthropic(max_retries=3)
         self.stage1_threshold = stage1_threshold
         self.stage2_threshold = stage2_threshold
         # Field name kept as `stage4_decay_k` for persisted-JSON
