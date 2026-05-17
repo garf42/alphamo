@@ -5,6 +5,11 @@ the Anthropic web_search server-tool to probe what the model can't already
 see. Output goes only to the meta-curator — NEVER to the proposer or
 evaluator. This isolation is the structural feature that keeps meta-drift
 from contaminating object-level optimization.
+
+Sprint 7 model routing: defaults to SONNET_MODEL (was OPUS_MODEL). The
+research task is information-gathering and findings-synthesis around
+search results — Sonnet's reasoning is sufficient and the cost savings
+accumulate across stall/milestone/scheduled invocations.
 """
 
 from __future__ import annotations
@@ -12,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from alphamo.errors import ResearchOutputError, parse_or_raise
-from alphamo.evaluator._common import MAX_TOKENS_XLONG, OPUS_MODEL, cached_system
+from alphamo.evaluator._common import MAX_TOKENS_XLONG, SONNET_MODEL, cached_system
 from alphamo.prompts.research_prompts import (
     RESEARCH_SYSTEM,
     Trigger,
@@ -30,7 +35,7 @@ WEB_SEARCH_TOOL: dict[str, Any] = {
 def run_research(
     trigger: str,
     client: Any,
-    model: str = OPUS_MODEL,
+    model: str = SONNET_MODEL,
 ) -> list[MetaFinding]:
     """Run one research pass; returns MetaFindings tagged source='research'."""
     batch = parse_or_raise(

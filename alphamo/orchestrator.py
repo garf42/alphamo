@@ -51,7 +51,11 @@ from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
 from alphamo.database import ProgramsDB
 from alphamo.errors import LLMOutputError
-from alphamo.errors import Stage4OutputError
+from alphamo.errors import (
+    Stage1OutputError,
+    Stage2OutputError,
+    Stage4OutputError,
+)
 from alphamo.evaluator import EvaluatorCascade
 from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
 from alphamo.evaluator.stage4_adversarial import FAILED_FRAMINGS_SENTINEL
@@ -84,6 +88,27 @@ BOOTSTRAP_AUDIT_TRIGGER = "bootstrap_islands"
 # and flow through the existing iteration-failure path.
 STAGE3_PARTIAL_FAILURE_TRIGGER = "stage3_partial_framing_failure"
 STAGE3_CATASTROPHIC_FAILURE_TRIGGER = "stage3_catastrophic_framing_failure"
+# Sprint 7: previously-silent failure paths in step() now emit dedicated
+# audit events. PROPOSER_FAILURE_TRIGGER fires when proposer.propose()
+# raises an LLMOutputError (parse error, refusal, truncation).
+# CASCADE_FAILURE_TRIGGER fires when cascade.evaluate() raises any
+# LLMOutputError that ISN'T the already-instrumented Stage 3
+# catastrophic case — e.g. Stage 1 (Haiku) or Stage 2 (Sonnet)
+# parse errors, or generic Stage 4OutputError without the catastrophic
+# stop_reason.
+PROPOSER_FAILURE_TRIGGER = "proposer_failure"
+CASCADE_FAILURE_TRIGGER = "cascade_failure"
+
+
+# Sprint 7: map exception class → stage label used in cascade_failure
+# audit events. Keeps the audit-payload string canonical and queryable.
+# Stage4OutputError covers adversarial scrutiny; the catastrophic
+# sub-case is filtered out before we get here.
+_CASCADE_FAILURE_STAGE_LABEL: dict[type, str] = {
+    Stage1OutputError: "feasibility",
+    Stage2OutputError: "structural",
+    Stage4OutputError: "adversarial",
+}
 
 
 def _stage4_concerns_as_meta_findings(
@@ -594,6 +619,83 @@ class Orchestrator:
             )
         )
 
+    def _log_proposer_failure(
+        self,
+        generation: int,
+        island_id: int,
+        exc: LLMOutputError,
+    ) -> None:
+        """Sprint 7: record a proposer-side LLMOutputError as a structured
+        audit event so the previously-silent failure path is queryable
+        post-run from audit.jsonl alone.
+
+        Carries stop_reason + truncated detail so post-run analysis can
+        distinguish parse failures (refusal / max_tokens / schema
+        mismatch) without needing the raw exception object.
+        """
+        stop_reason = getattr(exc, "stop_reason", None) or "unknown"
+        detail = str(exc)[:300]
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=PROPOSER_FAILURE_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"generation={generation} island_id={island_id} "
+                    f"stop_reason={stop_reason} detail={detail}"
+                ),
+                payload={
+                    "generation": generation,
+                    "island_id": island_id,
+                    "stop_reason": stop_reason,
+                    "detail": detail,
+                },
+            )
+        )
+
+    def _log_cascade_failure(
+        self,
+        generation: int,
+        island_id: int,
+        architecture: Architecture,
+        exc: LLMOutputError,
+    ) -> None:
+        """Sprint 7: record a cascade-side LLMOutputError as a structured
+        audit event. Covers Stage 1 / Stage 2 / non-catastrophic Stage 3
+        (adversarial) cases. The Stage 3 catastrophic sub-case has its
+        own dedicated trigger (`stage3_catastrophic_framing_failure`)
+        and is routed to `_log_stage3_catastrophic_failure` instead;
+        the caller filters that case out before invoking this method.
+        """
+        stage = _CASCADE_FAILURE_STAGE_LABEL.get(type(exc), "unknown")
+        stop_reason = getattr(exc, "stop_reason", None) or "unknown"
+        detail = str(exc)[:300]
+        arch_name = architecture.name if architecture is not None else "unknown"
+        self.audit_log.append(
+            AuditEvent(
+                timestamp=AuditLog.now(),
+                run_id=self.run_id,
+                trigger=CASCADE_FAILURE_TRIGGER,
+                classification="routine",
+                action="recorded",
+                rationale=(
+                    f"generation={generation} island_id={island_id} "
+                    f"stage={stage} architecture={arch_name} "
+                    f"stop_reason={stop_reason} detail={detail}"
+                ),
+                payload={
+                    "generation": generation,
+                    "island_id": island_id,
+                    "stage": stage,
+                    "architecture_name": arch_name,
+                    "stop_reason": stop_reason,
+                    "detail": detail,
+                },
+            )
+        )
+
     def _log_island_reset(self, generation: int, event: ResetEvent) -> None:
         """Record a FunSearch-style island reset in the audit log.
 
@@ -685,6 +787,11 @@ class Orchestrator:
         try:
             architecture = self.proposer.propose(seeds)
         except LLMOutputError as exc:
+            # Sprint 7: previously-silent proposer failure path now
+            # writes an audit event so the failure is diagnosable from
+            # audit.jsonl alone, regardless of whether stdout was
+            # captured.
+            self._log_proposer_failure(generation, island_id, exc)
             return IterationEvent(
                 generation=generation,
                 island_id=island_id,
@@ -698,11 +805,20 @@ class Orchestrator:
             # framings failed; signal degraded) from generic LLM-output
             # failures. The former gets its own audit-event trigger so
             # post-run analysis can identify Anthropic-side outages.
+            #
+            # Sprint 7: all OTHER cascade LLMOutputErrors (Stage 1 / Stage
+            # 2 / non-catastrophic Stage 3) now also write a structured
+            # audit event under the cascade_failure trigger. The
+            # previously-silent paths are diagnosable post-run.
             if (
                 isinstance(exc, Stage4OutputError)
                 and exc.stop_reason == "stage3_catastrophic_framing_failure"
             ):
                 self._log_stage3_catastrophic_failure(
+                    generation, island_id, architecture, exc
+                )
+            else:
+                self._log_cascade_failure(
                     generation, island_id, architecture, exc
                 )
             return IterationEvent(

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from alphamo.errors import ProposerOutputError
-from alphamo.evaluator._common import OPUS_MODEL
+from alphamo.evaluator._common import SONNET_MODEL
 from alphamo.proposer import Proposer
 from alphamo.schemas import Architecture
 from tests.fixtures.exemplars import ROWLING_FIXTURE, SATOSHI_FIXTURE
@@ -50,11 +50,14 @@ def test_propose_passes_seeds_in_user_message():
     assert "Rowling" in user_content
 
 
-def test_propose_uses_opus_model_by_default():
+def test_propose_uses_sonnet_model_by_default():
+    """Sprint 7: proposer default moved Opus → Sonnet. The component-
+    synthesis prompt structure (Sprint 6) constrains the task enough
+    for Sonnet to perform comparably at lower cost."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["model"] == OPUS_MODEL
+    assert kwargs["model"] == SONNET_MODEL
 
 
 def test_propose_includes_adaptive_thinking():

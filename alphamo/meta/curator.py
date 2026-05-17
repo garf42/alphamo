@@ -18,7 +18,7 @@ from typing import Any
 from alphamo._concurrent import run_parallel
 from alphamo.context.parent_goal import PARENT_GOAL
 from alphamo.errors import CuratorOutputError, parse_or_raise
-from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
+from alphamo.evaluator._common import MAX_TOKENS_LONG, SONNET_MODEL, cached_system
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas.findings import (
     Classification,
@@ -79,7 +79,15 @@ class Curator:
         client: Any,
         audit_log: AuditLog,
         run_id: str,
-        model: str = OPUS_MODEL,
+        # Sprint 7: default moved Opus → Sonnet. The curator's task is
+        # structured classification (STRUCTURAL vs COSMETIC verdict on
+        # a Stage 3 concern under the curator's classification rubric)
+        # where Sonnet's reasoning is sufficient and the cost savings
+        # accumulate across milestone candidates. Stage 3 adversarial
+        # stays on Opus because the cascade's CRITIQUE generation
+        # depends on Opus-class reasoning; the curator only judges
+        # critiques that Opus already produced.
+        model: str = SONNET_MODEL,
     ) -> None:
         if not run_id:
             raise ValueError("run_id is required for Curator")
