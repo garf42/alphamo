@@ -69,12 +69,12 @@ def test_passing_candidate_runs_all_three_stages(cascade, monkeypatch):
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: s1_calls.append(a) or _make_s1(0.9, True),
+        lambda a, c, **kw: s1_calls.append(a) or _make_s1(0.9, True),
     )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: s2_calls.append(a) or _make_s2(0.85),
+        lambda a, c, **kw: s2_calls.append(a) or _make_s2(0.85),
     )
     monkeypatch.setattr(
         cascade_mod,
@@ -98,10 +98,10 @@ def test_passing_candidate_runs_all_three_stages(cascade, monkeypatch):
 def test_middle_class_failure_short_circuits_to_zero_fitness(cascade, monkeypatch):
     s2_calls, s3_calls = [], []
     monkeypatch.setattr(
-        cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, False)
+        cascade_mod, "stage1_feasibility", lambda a, c, **kw: _make_s1(0.9, False)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage2_structured", lambda a, c: s2_calls.append(1) or _make_s2(0.9)
+        cascade_mod, "stage2_structured", lambda a, c, **kw: s2_calls.append(1) or _make_s2(0.9)
     )
     monkeypatch.setattr(
         cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
@@ -120,10 +120,10 @@ def test_middle_class_failure_short_circuits_to_zero_fitness(cascade, monkeypatc
 def test_low_stage1_score_skips_downstream_stages(cascade, monkeypatch):
     s2_calls, s3_calls = [], []
     monkeypatch.setattr(
-        cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.2, True)
+        cascade_mod, "stage1_feasibility", lambda a, c, **kw: _make_s1(0.2, True)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage2_structured", lambda a, c: s2_calls.append(1) or _make_s2(0.9)
+        cascade_mod, "stage2_structured", lambda a, c, **kw: s2_calls.append(1) or _make_s2(0.9)
     )
     monkeypatch.setattr(
         cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
@@ -140,10 +140,10 @@ def test_low_stage1_score_skips_downstream_stages(cascade, monkeypatch):
 def test_low_stage2_score_skips_stage3(cascade, monkeypatch):
     s3_calls = []
     monkeypatch.setattr(
-        cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, True)
+        cascade_mod, "stage1_feasibility", lambda a, c, **kw: _make_s1(0.9, True)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage2_structured", lambda a, c: _make_s2(0.3)
+        cascade_mod, "stage2_structured", lambda a, c, **kw: _make_s2(0.3)
     )
     monkeypatch.setattr(
         cascade_mod, "stage4_adversarial", lambda a, c, **kw: s3_calls.append(1) or _make_adversarial()
@@ -170,10 +170,10 @@ def test_cascade_aggregates_fitness_via_db(tmp_path, monkeypatch):
     )
     cascade = EvaluatorCascade(client=MagicMock())
     monkeypatch.setattr(
-        cascade_mod, "stage1_feasibility", lambda a, c: _make_s1(0.9, True)
+        cascade_mod, "stage1_feasibility", lambda a, c, **kw: _make_s1(0.9, True)
     )
     monkeypatch.setattr(
-        cascade_mod, "stage2_structured", lambda a, c: _make_s2(0.85)
+        cascade_mod, "stage2_structured", lambda a, c, **kw: _make_s2(0.85)
     )
     _patch_stage4(monkeypatch, robustness=0.80)
 

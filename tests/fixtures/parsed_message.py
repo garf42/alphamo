@@ -29,11 +29,12 @@ class FakeContentBlock:
 
 class FakeParsedMessage:
     """Production code reads: .parsed_output, .stop_reason, .content[*].type.
+    Sprint 8: .usage is also read for telemetry — see `usage` slot.
 
     Nothing else. Anything else raises AttributeError via __slots__.
     """
 
-    __slots__ = ("parsed_output", "stop_reason", "content")
+    __slots__ = ("parsed_output", "stop_reason", "content", "usage")
 
     def __init__(
         self,
@@ -41,10 +42,16 @@ class FakeParsedMessage:
         *,
         stop_reason: str | None = "end_turn",
         content: list[FakeContentBlock] | None = None,
+        usage: Any = None,
     ) -> None:
         self.parsed_output = parsed_output
         self.stop_reason = stop_reason
         self.content = content if content is not None else [FakeContentBlock()]
+        # Sprint 8: telemetry. Tests that want to assert against usage
+        # set this in __init__ or after construction. Defaults to None,
+        # which `_emit_llm_usage_event` treats as "no usage data" and
+        # records all token counts as zero.
+        self.usage = usage
 
 
 def make_truncation_error() -> Any:

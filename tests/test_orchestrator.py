@@ -44,7 +44,7 @@ def _stub_cascade(
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=feasibility,
             middle_class_accessible=middle_class,
             reasoning="stub",
@@ -53,7 +53,7 @@ def _stub_cascade(
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=structural,
             billion_dollar_potential=structural,
             labor_separation=structural,

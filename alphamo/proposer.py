@@ -29,7 +29,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from alphamo.errors import ProposerOutputError, parse_or_raise
+from alphamo.errors import (
+    ProposerOutputError,
+    TelemetryContext,
+    parse_or_raise,
+)
 from alphamo.evaluator._common import (
     MAX_TOKENS_XLONG,
     SONNET_MODEL,
@@ -60,7 +64,11 @@ class Proposer:
         self.client = client
         self.model = model
 
-    def propose(self, seeds: list[Seed] | list[Architecture]) -> Architecture:
+    def propose(
+        self,
+        seeds: list[Seed] | list[Architecture],
+        telemetry: TelemetryContext | None = None,
+    ) -> Architecture:
         if not seeds:
             raise ValueError(
                 "propose() requires at least one seed — empty islands are an "
@@ -73,6 +81,8 @@ class Proposer:
         return parse_or_raise(
             self.client,
             ProposerOutputError,
+            component="proposer",
+            telemetry=telemetry,
             model=self.model,
             # Sprint 7: bumped from MAX_TOKENS_LONG (8192) to
             # MAX_TOKENS_XLONG (16384). See module docstring for the

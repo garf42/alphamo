@@ -17,7 +17,7 @@ from typing import Any
 
 from alphamo._concurrent import run_parallel
 from alphamo.context.parent_goal import PARENT_GOAL
-from alphamo.errors import CuratorOutputError, parse_or_raise
+from alphamo.errors import CuratorOutputError, TelemetryContext, parse_or_raise
 from alphamo.evaluator._common import MAX_TOKENS_LONG, SONNET_MODEL, cached_system
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.schemas.findings import (
@@ -96,10 +96,16 @@ class Curator:
         self.run_id = run_id
         self.model = model
 
-    def classify(self, finding: MetaFinding) -> ClassificationVerdict:
+    def classify(
+        self,
+        finding: MetaFinding,
+        telemetry: TelemetryContext | None = None,
+    ) -> ClassificationVerdict:
         return parse_or_raise(
             self.client,
             CuratorOutputError,
+            component="curator",
+            telemetry=telemetry,
             model=self.model,
             max_tokens=MAX_TOKENS_LONG,
             thinking={"type": "adaptive"},
@@ -114,7 +120,10 @@ class Curator:
         )
 
     def curate(
-        self, findings: list[MetaFinding], trigger: str
+        self,
+        findings: list[MetaFinding],
+        trigger: str,
+        telemetry: TelemetryContext | None = None,
     ) -> CuratorDecision:
         """Classify every finding, derive a decision, log to the drift log.
 
@@ -123,7 +132,7 @@ class Curator:
         N sequential Opus calls to ceil(N / max_workers) rounds.
         """
         verdicts = run_parallel(
-            [(lambda f=f: self.classify(f)) for f in findings]
+            [(lambda f=f: self.classify(f, telemetry=telemetry)) for f in findings]
         )
         classified: list[ClassifiedFinding] = [
             ClassifiedFinding(

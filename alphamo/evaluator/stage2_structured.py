@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import anthropic
 
-from alphamo.errors import Stage2OutputError, parse_or_raise
+from alphamo.errors import Stage2OutputError, TelemetryContext, parse_or_raise
 from alphamo.evaluator._common import (
     MAX_TOKENS_MEDIUM,
     SONNET_MODEL,
@@ -20,12 +20,16 @@ from alphamo.schemas.findings import Stage2Finding
 
 
 def stage2_structured(
-    architecture: Architecture, client: anthropic.Anthropic
+    architecture: Architecture,
+    client: anthropic.Anthropic,
+    telemetry: TelemetryContext | None = None,
 ) -> Stage2Finding:
     """Score the candidate against the parent goal's structural criteria."""
     return parse_or_raise(
         client,
         Stage2OutputError,
+        component="stage2",
+        telemetry=telemetry,
         model=SONNET_MODEL,
         max_tokens=MAX_TOKENS_MEDIUM,
         system=cached_system(STAGE2_SYSTEM),

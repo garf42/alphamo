@@ -55,6 +55,7 @@ from alphamo.errors import (
     Stage1OutputError,
     Stage2OutputError,
     Stage4OutputError,
+    TelemetryContext,
 )
 from alphamo.evaluator import EvaluatorCascade
 from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
@@ -442,7 +443,16 @@ class Orchestrator:
         if self.db.count_candidates_in_run(self.run_id) > 0:
             return 0
 
-        result = self.cascade.evaluate(TRIVIAL_SEED)
+        # Sprint 8: bootstrap telemetry context — generation=0 marks the
+        # trivial seed's gen-0 placement; island_id is None because the
+        # same evaluation result is copied across all islands.
+        bootstrap_telemetry = TelemetryContext(
+            audit_log=self.audit_log,
+            run_id=self.run_id,
+            generation=0,
+            island_id=None,
+        )
+        result = self.cascade.evaluate(TRIVIAL_SEED, telemetry=bootstrap_telemetry)
         stage4_findings_payload = (
             [c.model_dump(mode="json") for c in result.stage3.concerns]
             if result.stage3 is not None
@@ -734,6 +744,7 @@ class Orchestrator:
         candidate_id: int,
         fitness: float,
         stage4: Stage4Finding,
+        telemetry: TelemetryContext | None = None,
     ) -> tuple[str, CuratorDecision] | None:
         """If the candidate is a milestone AND adversarial scrutiny surfaced
         concerns, invoke the curator's classify-and-gate path.
@@ -751,12 +762,16 @@ class Orchestrator:
             return None
         meta_findings = _stage4_concerns_as_meta_findings(stage4.concerns)
         decision = self.curator.curate(
-            meta_findings, trigger=Trigger.MILESTONE_CANDIDATE
+            meta_findings,
+            trigger=Trigger.MILESTONE_CANDIDATE,
+            telemetry=telemetry,
         )
         return Trigger.MILESTONE_CANDIDATE, decision
 
     def _maybe_research(
-        self, generation: int
+        self,
+        generation: int,
+        telemetry: TelemetryContext | None = None,
     ) -> tuple[str, CuratorDecision] | None:
         trigger: str | None = None
         if generation % self.hp.research_every_generations == 0:
@@ -765,8 +780,10 @@ class Orchestrator:
             trigger = Trigger.PROGRESS_STALL
         if trigger is None:
             return None
-        findings = run_research(trigger, self.client)
-        decision = self.curator.curate(findings, trigger=trigger)
+        findings = run_research(trigger, self.client, telemetry=telemetry)
+        decision = self.curator.curate(
+            findings, trigger=trigger, telemetry=telemetry
+        )
         return trigger, decision
 
     def step(self, generation: int) -> IterationEvent:
@@ -779,13 +796,23 @@ class Orchestrator:
         candidate — forward progress was made.
         """
         island_id = self.islands.pick_island()
+        # Sprint 8: one TelemetryContext per step, threaded through
+        # proposer + cascade + curator + research so every LLM call in
+        # this iteration emits an `llm_usage` audit event attributed
+        # back to this generation/island.
+        telemetry = TelemetryContext(
+            audit_log=self.audit_log,
+            run_id=self.run_id,
+            generation=generation,
+            island_id=island_id,
+        )
         seeds = self.sampler.draw(island_id=island_id, k=self.hp.k_seeds)
         # Empty seeds is OK: the proposer bootstraps from the reference
         # exemplars alone. This is the expected path on the first iteration
         # for each island (Sprint 2 redesign: islands start empty).
 
         try:
-            architecture = self.proposer.propose(seeds)
+            architecture = self.proposer.propose(seeds, telemetry=telemetry)
         except LLMOutputError as exc:
             # Sprint 7: previously-silent proposer failure path now
             # writes an audit event so the failure is diagnosable from
@@ -799,7 +826,7 @@ class Orchestrator:
             )
 
         try:
-            result = self.cascade.evaluate(architecture)
+            result = self.cascade.evaluate(architecture, telemetry=telemetry)
         except LLMOutputError as exc:
             # Sprint 4: distinguish catastrophic Stage 3 failure (most
             # framings failed; signal degraded) from generic LLM-output
@@ -872,7 +899,11 @@ class Orchestrator:
         try:
             milestone_outcome = (
                 self._maybe_milestone_curate(
-                    generation, candidate_id, row.fitness, result.stage3
+                    generation,
+                    candidate_id,
+                    row.fitness,
+                    result.stage3,
+                    telemetry=telemetry,
                 )
                 if result.stage3 is not None
                 else None
@@ -880,7 +911,9 @@ class Orchestrator:
             if milestone_outcome is not None:
                 meta_trigger, meta_decision = milestone_outcome
             else:
-                research_outcome = self._maybe_research(generation)
+                research_outcome = self._maybe_research(
+                    generation, telemetry=telemetry
+                )
                 if research_outcome is not None:
                     meta_trigger, meta_decision = research_outcome
         except LLMOutputError as exc:

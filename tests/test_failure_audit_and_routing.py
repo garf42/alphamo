@@ -102,13 +102,13 @@ def _bootstrap_orch(db, monkeypatch, tmp_path, hp=None):
     # tests override one of these to simulate the failure under test.
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.9, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="ok",
         ),
@@ -186,7 +186,7 @@ def test_stage1_failure_writes_cascade_failure_audit_event_with_feasibility_stag
     stage='feasibility'."""
     orch, audit = _bootstrap_orch(db, monkeypatch, tmp_path)
 
-    def stage1_raises(arch, c):
+    def stage1_raises(arch, c, **kw):
         raise Stage1OutputError(
             stop_reason="max_tokens",
             content_block_types=["thinking"],
@@ -215,7 +215,7 @@ def test_stage2_failure_writes_cascade_failure_audit_event_with_structural_stage
     stage='structural'."""
     orch, audit = _bootstrap_orch(db, monkeypatch, tmp_path)
 
-    def stage2_raises(arch, c):
+    def stage2_raises(arch, c, **kw):
         raise Stage2OutputError(
             stop_reason="parse_error",
             content_block_types=[],

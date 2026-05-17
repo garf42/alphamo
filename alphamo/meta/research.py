@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from alphamo.errors import ResearchOutputError, parse_or_raise
+from alphamo.errors import ResearchOutputError, TelemetryContext, parse_or_raise
 from alphamo.evaluator._common import MAX_TOKENS_XLONG, SONNET_MODEL, cached_system
 from alphamo.prompts.research_prompts import (
     RESEARCH_SYSTEM,
@@ -36,12 +36,15 @@ def run_research(
     trigger: str,
     client: Any,
     model: str = SONNET_MODEL,
+    telemetry: TelemetryContext | None = None,
 ) -> list[MetaFinding]:
     """Run one research pass; returns MetaFindings tagged source='research'."""
     batch = parse_or_raise(
         client,
         ResearchOutputError,
         detail=f"trigger={trigger!r}",
+        component="research",
+        telemetry=telemetry,
         model=model,
         max_tokens=MAX_TOKENS_XLONG,
         thinking={"type": "adaptive"},

@@ -36,14 +36,14 @@ def cascade(monkeypatch) -> EvaluatorCascade:
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.95, middle_class_accessible=True, reasoning="s1 ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9,
             billion_dollar_potential=0.9,
             labor_separation=0.9,

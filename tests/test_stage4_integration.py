@@ -103,14 +103,14 @@ def _stub_full_cascade(monkeypatch, stage4_concerns, stage4_robustness=0.99):
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.99, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.99, billion_dollar_potential=0.99,
             labor_separation=0.99, structural=0.99, reasoning="ok",
         ),

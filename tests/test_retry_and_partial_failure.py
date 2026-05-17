@@ -297,13 +297,13 @@ def test_orchestrator_emits_partial_failure_audit_event_when_stage3_partial(
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.9, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="ok",
         ),
@@ -381,13 +381,13 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.9, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="ok",
         ),

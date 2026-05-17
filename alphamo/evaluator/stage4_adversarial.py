@@ -46,7 +46,7 @@ import math
 import anthropic
 
 from alphamo._concurrent import run_parallel_collect_results
-from alphamo.errors import Stage4OutputError, parse_or_raise
+from alphamo.errors import Stage4OutputError, TelemetryContext, parse_or_raise
 from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
 from alphamo.prompts.stage4_prompts import (
     DEFAULT_FRAMINGS,
@@ -140,12 +140,15 @@ def _run_framing(
     client: anthropic.Anthropic,
     framing: str,
     model: str,
+    telemetry: TelemetryContext | None = None,
 ) -> list[StructuralConcern]:
     """Single Opus call for one framing; tag returned concerns with the framing."""
     batch: RawFindingsBatch = parse_or_raise(
         client,
         Stage4OutputError,
         detail=f"framing={framing!r}",
+        component=f"stage3_{framing}",
+        telemetry=telemetry,
         model=model,
         max_tokens=MAX_TOKENS_LONG,
         thinking={"type": "adaptive"},
@@ -187,6 +190,7 @@ def stage4_adversarial(
     framings: list[str] | None = None,
     model: str = OPUS_MODEL,
     decay_k: float = DEFAULT_DECAY_K,
+    telemetry: TelemetryContext | None = None,
 ) -> Stage4Finding:
     """Run all framings concurrently with tiered partial-failure handling.
 
@@ -207,7 +211,11 @@ def stage4_adversarial(
 
     raw_results = run_parallel_collect_results(
         [
-            (lambda f=f: _run_framing(architecture, client, f, model))
+            (
+                lambda f=f: _run_framing(
+                    architecture, client, f, model, telemetry=telemetry
+                )
+            )
             for f in framings
         ]
     )

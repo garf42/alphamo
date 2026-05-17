@@ -99,14 +99,14 @@ def _stub_full_cascade_with_concerns(monkeypatch, stage4_concerns):
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=0.9, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="ok",
         ),
@@ -204,7 +204,7 @@ def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
 
     monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
 
-    def stage1_branched(arch, c):
+    def stage1_branched(arch, c, **kw):
         if arch.name == TRIVIAL_SEED.name:
             return Stage1Finding(
                 feasibility=0.9, middle_class_accessible=True, reasoning="bootstrap ok"
@@ -216,7 +216,7 @@ def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
     monkeypatch.setattr(cascade_mod, "stage1_feasibility", stage1_branched)
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=0.9, billion_dollar_potential=0.9,
             labor_separation=0.9, structural=0.9, reasoning="x",
         ),

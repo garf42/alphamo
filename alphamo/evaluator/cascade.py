@@ -32,6 +32,7 @@ from dataclasses import dataclass
 
 import anthropic
 
+from alphamo.errors import TelemetryContext
 from alphamo.evaluator.middle_class_check import passes_middle_class_filter
 from alphamo.evaluator.stage1_feasibility import stage1_feasibility
 from alphamo.evaluator.stage2_structured import stage2_structured
@@ -87,8 +88,12 @@ class EvaluatorCascade:
         # robustness decay regardless of conceptual stage number.
         self.stage4_decay_k = stage4_decay_k
 
-    def evaluate(self, architecture: Architecture) -> CascadeResult:
-        s1 = stage1_feasibility(architecture, self.client)
+    def evaluate(
+        self,
+        architecture: Architecture,
+        telemetry: TelemetryContext | None = None,
+    ) -> CascadeResult:
+        s1 = stage1_feasibility(architecture, self.client, telemetry=telemetry)
 
         if not passes_middle_class_filter(s1):
             return CascadeResult(
@@ -120,7 +125,7 @@ class EvaluatorCascade:
                 early_exit="stage1_feasibility",
             )
 
-        s2 = stage2_structured(architecture, self.client)
+        s2 = stage2_structured(architecture, self.client, telemetry=telemetry)
         if s2.structural < self.stage2_threshold:
             return CascadeResult(
                 scores=Scores(
@@ -139,7 +144,10 @@ class EvaluatorCascade:
         # Adversarial scrutiny (was Stage 4) is now the only post-Stage-2
         # work — no parallel exemplar comparison.
         s3 = stage4_adversarial(
-            architecture, self.client, decay_k=self.stage4_decay_k
+            architecture,
+            self.client,
+            decay_k=self.stage4_decay_k,
+            telemetry=telemetry,
         )
 
         return CascadeResult(

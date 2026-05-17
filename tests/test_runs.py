@@ -31,14 +31,14 @@ def _stub_cascade(monkeypatch, fit=0.85):
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c: Stage1Finding(
+        lambda a, c, **kw: Stage1Finding(
             feasibility=fit, middle_class_accessible=True, reasoning="ok"
         ),
     )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c: Stage2Finding(
+        lambda a, c, **kw: Stage2Finding(
             one_person_threshold=fit,
             billion_dollar_potential=fit,
             labor_separation=fit,
