@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from alphamo.errors import ProposerOutputError
-from alphamo.evaluator._common import OPUS_MODEL
+from alphamo.evaluator._common import SONNET_MODEL
 from alphamo.proposer import Proposer
 from alphamo.schemas import Architecture
 from tests.fixtures.exemplars import ROWLING_FIXTURE, SATOSHI_FIXTURE
@@ -50,38 +50,37 @@ def test_propose_passes_seeds_in_user_message():
     assert "Rowling" in user_content
 
 
-def test_propose_uses_opus_model_by_default():
-    """Sprint 9: proposer default reverted Sonnet → Opus 4.7. Opus's
-    Jan-2026 reliable knowledge cutoff covers late-2025 agentic AI
-    pattern maturation that's load-bearing for the proposer's
-    reasoning; the cached_system marker brings the cost premium down
-    to ~25% at scale (cache hits drop input to 0.1× base)."""
+def test_propose_uses_sonnet_model_by_default():
+    """Sprint 11: full Opus removal for cost. Proposer moves Opus 4.7
+    → Sonnet 4.6 as part of the no-Opus directive (200-gen runs at
+    ~$190 on Opus were unaffordable). Sprint 9 had attempted bounded
+    thinking on a Sonnet proposer; Sprint 10 reverted to Opus +
+    adaptive because Opus 4.7 rejected the bounded form. Sprint 11
+    lands what Sprint 9 wanted: Sonnet 4.6 + bounded thinking."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["model"] == OPUS_MODEL
+    assert kwargs["model"] == SONNET_MODEL
 
 
-def test_propose_uses_adaptive_thinking_on_opus():
-    """Sprint 10: Opus 4.7 rejects the `{"type": "enabled",
-    "budget_tokens": N}` shape that Sprint 9 attempted (HTTP 400:
-    "thinking.type.enabled is not supported for this model. Use
-    thinking.type.adaptive and output_config.effort to control
-    thinking behavior"). The proposer uses adaptive — the same config
-    Stage 3 has been running across 9 framings per candidate without
-    failures."""
+def test_propose_uses_bounded_thinking_budget_6000():
+    """Sprint 11: bounded thinking on Sonnet. The Sprint 9 design
+    intent (deterministic ceiling on reasoning to prevent the
+    run-551c7c42-style failure where thinking consumes the entire
+    token cap) lands now that Opus 4.7's API rejection no longer
+    constrains the config. Sonnet 4.6 accepts the `enabled` shape."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["thinking"] == {"type": "adaptive"}
+    assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 6000}
+    # Regression guard: adaptive is gone again (Sprint 10 → 11).
+    assert kwargs["thinking"].get("type") != "adaptive"
 
 
-def test_propose_omits_output_config_to_default_high_effort():
-    """Sprint 10: the proposer call does NOT include output_config,
-    so Opus 4.7 uses its default high-effort thinking. If proposer
-    failures emerge under high effort, dial in
-    `output_config={"effort": "medium"}` (or "low") as a follow-up;
-    not needed at landing."""
+def test_propose_omits_output_config_under_bounded_thinking():
+    """Sprint 11: under bounded thinking, output_config is irrelevant
+    (the budget itself constrains thinking depth). No output_config
+    kwarg sent."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]

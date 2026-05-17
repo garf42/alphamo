@@ -13,8 +13,27 @@ File / symbol names retain the `stage4` historical prefix
 persisted-JSON and audit-log compatibility with pre-Sprint-2 runs. The
 conceptual stage is now Stage 3 of three.
 
-Cost: each framing is one independent Opus call running in parallel, so
+Cost: each framing is one independent LLM call running in parallel, so
 the stage's per-candidate cost scales linearly with framing count.
+
+SPRINT 11 — OPUS REMOVAL:
+
+Stage 3 ran on Opus 4.7 (Sprint 4 through Sprint 10) with adaptive
+thinking and was the dominant cost driver in 200-gen runs ($22.51 of
+$28.37 in run_80ae6e59 = 79% of total cost over 30 generations). The
+no-Opus directive moves Stage 3 to Sonnet 4.6 and bounds thinking to
+prevent the run-551c7c42-class failure mode where Sonnet's adaptive
+thinking can consume the entire token cap before producing JSON
+output. With 1800 framing calls per 200-gen run, even a 1%
+per-framing failure rate cascades into ~18 partial-failure events
+that push candidates over the 5-of-9 success threshold.
+
+Quality tradeoff (per the Sprint 11 audit): the `current_moment_
+dependency` framing is the most cutoff-sensitive on Sonnet (Aug 2025
+vs Opus's Jan 2026). The other 8 framings rely on more durable
+knowledge (statutes, doctrines, structural mechanisms). Gen-27
+critique caliber ("naked licensing under 15 USC §1064(5)(A)") is
+preserved on Sonnet since the citation is decades-old law.
 
 SPRINT 4 — TIERED PARTIAL-FAILURE HANDLING:
 
@@ -47,7 +66,7 @@ import anthropic
 
 from alphamo._concurrent import run_parallel_collect_results
 from alphamo.errors import Stage4OutputError, TelemetryContext, parse_or_raise
-from alphamo.evaluator._common import MAX_TOKENS_LONG, OPUS_MODEL, cached_system
+from alphamo.evaluator._common import MAX_TOKENS_LONG, SONNET_MODEL, cached_system
 from alphamo.prompts.stage4_prompts import (
     DEFAULT_FRAMINGS,
     render_candidate,
@@ -92,6 +111,13 @@ DEFAULT_DECAY_K = 0.50
 # signal is too degraded to trust — the candidate is treated as a
 # cascade-level failure.
 STAGE3_MIN_SUCCESSFUL_FRAMINGS = 5
+
+# Sprint 11: bounded thinking budget per Stage 3 framing call. Opus 4.7
+# adaptive (Sprint 4 through Sprint 10) worked, but on Sonnet a single
+# adaptive thinking-budget spike cascades into the 5-of-9 partial-
+# failure threshold. 4000 tokens of thinking + ~4000 for the concerns
+# JSON fits comfortably within MAX_TOKENS_LONG=8192.
+STAGE3_THINKING_BUDGET_TOKENS = 4000
 
 # Sentinel framing name used to record which framings failed in the
 # persisted stage4_findings JSON. The compute_robustness function and
@@ -142,7 +168,17 @@ def _run_framing(
     model: str,
     telemetry: TelemetryContext | None = None,
 ) -> list[StructuralConcern]:
-    """Single Opus call for one framing; tag returned concerns with the framing."""
+    """Single Sonnet call for one framing; tag returned concerns with the framing.
+
+    Sprint 11: bounded thinking on Sonnet for predictable cost across
+    1800+ framing calls per 200-gen run. Adaptive thinking worked on
+    Opus 4.7 (Sprint 4 through Sprint 10), but Sonnet has no empirical
+    precedent for Stage 3 — adaptive could spike thinking budget on
+    harder candidates, and even a 1% per-framing failure rate produces
+    ~18 partial-failure events across a 200-gen run (5-of-9 success
+    threshold from Sprint 4 cascades into iteration failures).
+    Bounded thinking gives a deterministic ceiling.
+    """
     batch: RawFindingsBatch = parse_or_raise(
         client,
         Stage4OutputError,
@@ -151,7 +187,15 @@ def _run_framing(
         telemetry=telemetry,
         model=model,
         max_tokens=MAX_TOKENS_LONG,
-        thinking={"type": "adaptive"},
+        # Sprint 11: bounded thinking on Sonnet. 4000 thinking + ~4000
+        # output within the 8192 cap; concerns JSON is typically
+        # 500-1500 tokens so the budget is comfortable. Sonnet 4.6
+        # accepts the `enabled` shape (the Opus 4.7 rejection that
+        # forced Sprint 10's adaptive revert doesn't apply here).
+        thinking={
+            "type": "enabled",
+            "budget_tokens": STAGE3_THINKING_BUDGET_TOKENS,
+        },
         system=cached_system(stage4_system(framing)),
         messages=[{"role": "user", "content": render_candidate(architecture)}],
         output_format=RawFindingsBatch,
@@ -188,7 +232,7 @@ def stage4_adversarial(
     architecture: Architecture,
     client: anthropic.Anthropic,
     framings: list[str] | None = None,
-    model: str = OPUS_MODEL,
+    model: str = SONNET_MODEL,
     decay_k: float = DEFAULT_DECAY_K,
     telemetry: TelemetryContext | None = None,
 ) -> Stage4Finding:

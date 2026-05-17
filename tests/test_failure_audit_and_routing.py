@@ -339,11 +339,13 @@ def test_proposer_max_tokens_is_xlong():
 # ---------------------------------------------------------------- Fix C: model routing
 
 
-def test_proposer_default_model_is_opus():
-    """Sprint 9: proposer default reverted Sonnet → Opus 4.7. Opus's
-    Jan-2026 reliable cutoff covers late-2025 agentic-AI pattern
-    maturation; cached_system on the 1268-token proposer system
-    prefix brings the cost premium to ~25% at scale rather than 5×."""
+def test_proposer_default_model_is_sonnet():
+    """Sprint 11: full Opus removal. Proposer moves Opus 4.7 → Sonnet
+    4.6 (no-Opus directive: 200-gen runs at ~$190 on Opus were
+    unaffordable). Tradeoffs accepted: Sonnet's Aug 2025 cutoff (vs
+    Opus's Jan 2026) is less critical for the proposer than for
+    Stage 3 because proposer reasoning is structural-component
+    synthesis, not current-event recall."""
     client = MagicMock()
     client.messages.parse.return_value = FakeParsedMessage(
         Architecture(
@@ -360,7 +362,7 @@ def test_proposer_default_model_is_opus():
         ]
     )
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["model"] == OPUS_MODEL
+    assert kwargs["model"] == SONNET_MODEL
 
 
 def test_curator_default_model_is_sonnet(tmp_path):
@@ -380,29 +382,30 @@ def test_research_default_model_is_sonnet():
     assert sig.parameters["model"].default == SONNET_MODEL
 
 
-def test_stage3_adversarial_default_model_stays_opus():
-    """Sprint 7 Fix C corollary: Stage 3 adversarial scrutiny stays on
-    Opus. The cascade's value depends on substantive falsifiable
-    critique with statute citations and mechanism-specific failure
-    modes — observed in run-ed6e72e1 gen-12 §203(b)(4) finding that
-    required Opus-class reasoning depth."""
+def test_stage3_adversarial_default_model_is_sonnet():
+    """Sprint 11: Stage 3 adversarial scrutiny moves Opus → Sonnet
+    as part of the full Opus removal. Stage 3 was the dominant cost
+    driver (79% of run_80ae6e59's $28.37 over 30 gens). Quality
+    tradeoff: the `current_moment_dependency` framing is the most
+    cutoff-sensitive on Sonnet (Aug 2025 vs Opus's Jan 2026); the
+    other 8 framings rely on more durable knowledge (statutes,
+    doctrines, structural mechanisms) and should preserve the
+    gen-27-caliber statute-citing critique."""
     import inspect
     from alphamo.evaluator.stage4_adversarial import stage4_adversarial
 
     sig = inspect.signature(stage4_adversarial)
-    assert sig.parameters["model"].default == OPUS_MODEL
+    assert sig.parameters["model"].default == SONNET_MODEL
 
 
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v5():
-    """Sprint 10 bumped PROPOSER_VERSION v4 → v5. v4 attempted
-    bounded thinking on Opus 4.7 with `{"type": "enabled",
-    "budget_tokens": 6000}`, which Opus rejects (HTTP 400). v5 keeps
-    the Opus 4.7 model from v4 but uses `{"type": "adaptive"}` —
-    Anthropic's documented recommendation for Opus 4.7 and the same
-    config Stage 3 has been running without failures. v4 attempts
-    never produced a valid run, so the version bump prevents
-    conflating those failed attempts with v5 trajectories in the DB."""
-    assert PROPOSER_VERSION == "v5"
+def test_proposer_version_advanced_to_v6():
+    """Sprint 11 bumped PROPOSER_VERSION v5 → v6. v5 was Opus 4.7 +
+    adaptive thinking; v6 is Sonnet 4.6 + bounded thinking
+    (`{"type": "enabled", "budget_tokens": 6000}`). v5 (Opus,
+    adaptive) and v6 (Sonnet, bounded) trajectories must be
+    distinguishable in the DB so cost/quality analyses across the
+    Opus → Sonnet transition aren't conflated."""
+    assert PROPOSER_VERSION == "v6"

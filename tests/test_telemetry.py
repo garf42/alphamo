@@ -181,9 +181,10 @@ def test_stage3_emits_llm_usage_event_per_framing_with_component_stage3_framing(
     components = {e.payload["component"] for e in usage_events}
     expected = {f"stage3_{f}" for f in DEFAULT_FRAMINGS}
     assert components == expected
-    # Every framing call records the Opus model and the cache_read.
+    # Sprint 11: Stage 3 moved Opus → Sonnet. Every framing call
+    # records the Sonnet model and the cache_read.
     for event in usage_events:
-        assert event.payload["model"] == OPUS_MODEL
+        assert event.payload["model"] == SONNET_MODEL
         assert event.payload["cache_read_input_tokens"] == 1350
 
 
@@ -203,8 +204,8 @@ def test_proposer_emits_llm_usage_event_with_component_proposer(tmp_path):
     assert len(usage_events) == 1
     payload = usage_events[0].payload
     assert payload["component"] == "proposer"
-    # Sprint 9: proposer reverted to OPUS_MODEL (was SONNET in Sprint 7).
-    assert payload["model"] == OPUS_MODEL
+    # Sprint 11: proposer moved Opus → Sonnet (full Opus removal).
+    assert payload["model"] == SONNET_MODEL
     assert payload["cache_creation_input_tokens"] == 1268
 
 

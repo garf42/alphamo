@@ -26,16 +26,19 @@ class Hyperparameters(BaseModel):
 
     num_islands: int = Field(default=8, ge=2)
     reset_every_generations: int = Field(
-        default=10,
+        default=40,
         ge=1,
         description=(
-            "Cadence of FunSearch-style island reset. At our typical run "
-            "length (15-100 generations) and per-generation cost "
-            "(~$0.40-0.60), cadence 10 produces 1-10 reset cycles per run "
-            "— enough pressure to escape attractors without resetting "
-            "before islands have evolved meaningful diversity. The "
-            "pre-Sprint-3 default of 200 effectively disabled the "
-            "mechanism for any realistic run."
+            "Cadence of FunSearch-style island reset. Sprint 11 raised the "
+            "default 10 → 40 for the 200-generation target run length. At "
+            "cadence 10 over 200 gens, 20 reset events fire with only ~10 "
+            "generations between resets — not enough for within-island "
+            "evolution to produce diversity worth propagating. At cadence "
+            "40, 5 reset events fire with ~40 generations between, "
+            "matching FunSearch's 'occasional' character at our scale. "
+            "The Sprint 3 default of 10 was calibrated for 15-100 gen "
+            "runs; the pre-Sprint-3 default of 200 effectively disabled "
+            "reset for any realistic run."
         ),
     )
     top_seed_count: int = Field(

@@ -66,13 +66,17 @@ from alphamo.schemas.findings import Severity, StructuralConcern
 # with HTTP 400 (the integer-budget form is Sonnet-era; Opus 4.7
 # requires adaptive). The v4 trajectory regime never produced a
 # valid run as a result.
-# v4 → v5 (Sprint 10): kept the Opus 4.7 model from v4 but reverted
-# the thinking config to `{"type": "adaptive"}` — Anthropic's
-# documented recommendation for Opus 4.7 and the same config Stage 3
-# has been running without failures. v4 (failed config) and v5
-# (corrected config) trajectories must be distinguishable so the
-# never-completed v4 attempts aren't conflated with v5 success.
-PROPOSER_VERSION = "v5"
+# v4 → v5 (Sprint 10): kept Opus 4.7 from v4 but reverted thinking
+# to adaptive — Anthropic's documented recommendation for Opus 4.7.
+# v5 → v6 (Sprint 11): full Opus removal for cost (200-gen runs at
+# ~$190 on Opus were unaffordable). Model: Opus 4.7 → Sonnet 4.6.
+# Thinking: adaptive → bounded `{"type": "enabled",
+# "budget_tokens": 6000}` (the Sprint 9 design intent, now valid
+# because Sonnet 4.6 accepts this shape). Stage 3 also moved to
+# Sonnet with bounded thinking (4000 budget) in the same sprint.
+# v5 (Opus, adaptive) and v6 (Sonnet, bounded) trajectories are
+# distinguishable in the DB.
+PROPOSER_VERSION = "v6"
 
 # Sprint 6: per-candidate budget for the concerns section in the
 # proposer's user message. Concerns are truncated by severity (all
