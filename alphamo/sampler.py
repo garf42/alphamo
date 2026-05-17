@@ -22,17 +22,27 @@ if TYPE_CHECKING:
     from alphamo.database import ProgramsDB
 
 from alphamo.schemas import Architecture, Scores
+from alphamo.schemas.findings import StructuralConcern
 
 ClusterSignature = tuple[float, float, float | None, bool]
 
 
 @dataclass(frozen=True)
 class Seed:
-    """One candidate drawn from the population, with its scoring metadata."""
+    """One candidate drawn from the population, with its scoring metadata.
+
+    Sprint 6: `stage4_findings` carries the adversarial-scrutiny concerns
+    persisted on the candidate row. The proposer condenses these into
+    its user-turn prompt so the RL loop's signal (cascade -> proposer)
+    is closed. `None` when the candidate predates Stage 4 / exited the
+    cascade early / is the trivial bootstrap seed. Empty list when
+    adversarial scrutiny ran clean.
+    """
 
     architecture: Architecture
     scores: Scores
     fitness: float
+    stage4_findings: list[StructuralConcern] | None = None
 
 
 def _softmax(values: list[float], temperature: float) -> list[float]:
@@ -111,10 +121,16 @@ def _cluster_temperature(t0: float, n: int, period: int) -> float:
 
 
 def _row_to_seed(row) -> Seed:
+    raw_findings = row.stage4_findings
+    if raw_findings is None:
+        findings: list[StructuralConcern] | None = None
+    else:
+        findings = [StructuralConcern(**f) for f in raw_findings]
     return Seed(
         architecture=Architecture(**row.architecture_spec),
         scores=Scores(**row.scores),
         fitness=row.fitness,
+        stage4_findings=findings,
     )
 
 
