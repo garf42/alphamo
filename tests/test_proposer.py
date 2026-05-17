@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from alphamo.errors import ProposerOutputError
-from alphamo.evaluator._common import SONNET_MODEL
+from alphamo.evaluator._common import OPUS_MODEL
 from alphamo.proposer import Proposer
 from alphamo.schemas import Architecture
 from tests.fixtures.exemplars import ROWLING_FIXTURE, SATOSHI_FIXTURE
@@ -50,21 +50,31 @@ def test_propose_passes_seeds_in_user_message():
     assert "Rowling" in user_content
 
 
-def test_propose_uses_sonnet_model_by_default():
-    """Sprint 7: proposer default moved Opus → Sonnet. The component-
-    synthesis prompt structure (Sprint 6) constrains the task enough
-    for Sonnet to perform comparably at lower cost."""
+def test_propose_uses_opus_model_by_default():
+    """Sprint 9: proposer default reverted Sonnet → Opus 4.7. Opus's
+    Jan-2026 reliable knowledge cutoff covers late-2025 agentic AI
+    pattern maturation that's load-bearing for the proposer's
+    reasoning; the cached_system marker brings the cost premium down
+    to ~25% at scale (cache hits drop input to 0.1× base)."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["model"] == SONNET_MODEL
+    assert kwargs["model"] == OPUS_MODEL
 
 
-def test_propose_includes_adaptive_thinking():
+def test_propose_includes_bounded_thinking_budget():
+    """Sprint 9: adaptive thinking replaced with an explicit
+    {budget_tokens: 6000} cap. Under Sprint 6's component-synthesis
+    prompt, adaptive scaled to consume the whole 16384 token cap
+    before producing JSON; bounded thinking eliminates that failure
+    mode by design (run-551c7c42 had 20% silent failures on the
+    harder islands)."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["thinking"] == {"type": "adaptive"}
+    assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 6000}
+    # Regression guard: adaptive is gone.
+    assert kwargs["thinking"].get("type") != "adaptive"
 
 
 def test_propose_sets_output_format_to_architecture():

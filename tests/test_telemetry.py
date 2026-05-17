@@ -203,7 +203,8 @@ def test_proposer_emits_llm_usage_event_with_component_proposer(tmp_path):
     assert len(usage_events) == 1
     payload = usage_events[0].payload
     assert payload["component"] == "proposer"
-    assert payload["model"] == SONNET_MODEL
+    # Sprint 9: proposer reverted to OPUS_MODEL (was SONNET in Sprint 7).
+    assert payload["model"] == OPUS_MODEL
     assert payload["cache_creation_input_tokens"] == 1268
 
 

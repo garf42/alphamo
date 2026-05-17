@@ -49,20 +49,24 @@ from alphamo.schemas.findings import Severity, StructuralConcern
 
 # Bump on any change to PROPOSER_SYSTEM text, to render_seeds /
 # render_seeds_from_architectures / format_concerns_for_proposer output
-# shape, OR to the model executing the proposer prompt. PARENT_GOAL_VERSION
-# exists for the search-criterion identity; PROPOSER_VERSION exists for
-# the prompt-construction-AND-model-execution identity. A run persists
-# PROPOSER_VERSION nowhere yet — the version is consulted by tests and is
-# available for future inclusion in run rows or audit events if we want
-# to distinguish proposer eras in the DB.
+# shape, OR to the model executing the proposer prompt OR to the thinking
+# strategy. PARENT_GOAL_VERSION exists for the search-criterion identity;
+# PROPOSER_VERSION exists for the prompt-construction-AND-execution
+# identity. A run persists PROPOSER_VERSION nowhere yet — the version
+# is consulted by tests and is available for future inclusion in run
+# rows or audit events if we want to distinguish proposer eras in the DB.
 #
 # v1 → v2 (Sprint 6): added Stage 3 concerns to user turn + reframed
 # system prompt around component synthesis.
 # v2 → v3 (Sprint 7): swapped proposer model Opus → Sonnet and bumped
-# max_tokens 8192 → 16384. The prompt structure didn't change but the
-# model executing it did — v2 (Opus proposer) and v3 (Sonnet proposer)
-# trajectories must be distinguishable in the DB for analysis.
-PROPOSER_VERSION = "v3"
+# max_tokens 8192 → 16384.
+# v3 → v4 (Sprint 9): reverted model Sonnet → Opus 4.7 (Jan-2026
+# cutoff covers late-2025 agentic patterns) and replaced adaptive
+# thinking with bounded budget (6000 tokens) to eliminate the
+# thinking-eats-the-whole-cap failure mode observed in run-551c7c42.
+# v3 (Sonnet, adaptive) and v4 (Opus, bounded thinking) trajectories
+# must be distinguishable in the DB for analysis.
+PROPOSER_VERSION = "v4"
 
 # Sprint 6: per-candidate budget for the concerns section in the
 # proposer's user message. Concerns are truncated by severity (all

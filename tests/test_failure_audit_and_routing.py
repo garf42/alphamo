@@ -339,8 +339,11 @@ def test_proposer_max_tokens_is_xlong():
 # ---------------------------------------------------------------- Fix C: model routing
 
 
-def test_proposer_default_model_is_sonnet():
-    """Sprint 7 Fix C: proposer moved Opus → Sonnet."""
+def test_proposer_default_model_is_opus():
+    """Sprint 9: proposer default reverted Sonnet → Opus 4.7. Opus's
+    Jan-2026 reliable cutoff covers late-2025 agentic-AI pattern
+    maturation; cached_system on the 1268-token proposer system
+    prefix brings the cost premium to ~25% at scale rather than 5×."""
     client = MagicMock()
     client.messages.parse.return_value = FakeParsedMessage(
         Architecture(
@@ -357,7 +360,7 @@ def test_proposer_default_model_is_sonnet():
         ]
     )
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["model"] == SONNET_MODEL
+    assert kwargs["model"] == OPUS_MODEL
 
 
 def test_curator_default_model_is_sonnet(tmp_path):
@@ -393,9 +396,10 @@ def test_stage3_adversarial_default_model_stays_opus():
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v3():
-    """Sprint 7 bumped PROPOSER_VERSION v2 → v3. The prompt structure
-    didn't change but the model executing it did; v2 trajectories
-    (Opus proposer) and v3 trajectories (Sonnet proposer) must be
-    distinguishable in the DB for analysis."""
-    assert PROPOSER_VERSION == "v3"
+def test_proposer_version_advanced_to_v4():
+    """Sprint 9 bumped PROPOSER_VERSION v3 → v4. Both the executing
+    model (Sonnet → Opus 4.7) and the thinking strategy (adaptive →
+    bounded 6000 tokens) changed. v3 trajectories (Sonnet, adaptive)
+    and v4 trajectories (Opus, bounded) must be distinguishable in
+    the DB for analysis."""
+    assert PROPOSER_VERSION == "v4"
