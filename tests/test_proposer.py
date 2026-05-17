@@ -62,19 +62,30 @@ def test_propose_uses_opus_model_by_default():
     assert kwargs["model"] == OPUS_MODEL
 
 
-def test_propose_includes_bounded_thinking_budget():
-    """Sprint 9: adaptive thinking replaced with an explicit
-    {budget_tokens: 6000} cap. Under Sprint 6's component-synthesis
-    prompt, adaptive scaled to consume the whole 16384 token cap
-    before producing JSON; bounded thinking eliminates that failure
-    mode by design (run-551c7c42 had 20% silent failures on the
-    harder islands)."""
+def test_propose_uses_adaptive_thinking_on_opus():
+    """Sprint 10: Opus 4.7 rejects the `{"type": "enabled",
+    "budget_tokens": N}` shape that Sprint 9 attempted (HTTP 400:
+    "thinking.type.enabled is not supported for this model. Use
+    thinking.type.adaptive and output_config.effort to control
+    thinking behavior"). The proposer uses adaptive — the same config
+    Stage 3 has been running across 9 framings per candidate without
+    failures."""
     client = _client_returning(_fake_architecture())
     Proposer(client).propose([SATOSHI_FIXTURE.architecture])
     kwargs = client.messages.parse.call_args[1]
-    assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 6000}
-    # Regression guard: adaptive is gone.
-    assert kwargs["thinking"].get("type") != "adaptive"
+    assert kwargs["thinking"] == {"type": "adaptive"}
+
+
+def test_propose_omits_output_config_to_default_high_effort():
+    """Sprint 10: the proposer call does NOT include output_config,
+    so Opus 4.7 uses its default high-effort thinking. If proposer
+    failures emerge under high effort, dial in
+    `output_config={"effort": "medium"}` (or "low") as a follow-up;
+    not needed at landing."""
+    client = _client_returning(_fake_architecture())
+    Proposer(client).propose([SATOSHI_FIXTURE.architecture])
+    kwargs = client.messages.parse.call_args[1]
+    assert "output_config" not in kwargs
 
 
 def test_propose_sets_output_format_to_architecture():

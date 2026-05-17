@@ -28,24 +28,29 @@ Curator and Research stay on SONNET_MODEL (Sprint 7 routing for those
 unchanged — structured classification and information-gathering tasks
 where Sonnet's reasoning is sufficient).
 
-Sprint 9 thinking budget: explicit budget cap replaces adaptive.
+Sprint 10 thinking config: adaptive on Opus 4.7.
 
-  thinking = {"type": "enabled", "budget_tokens": 6000}
+  thinking = {"type": "adaptive"}
 
-Sprint 7's max_tokens=16384 bump was insufficient on its own. Adaptive
-thinking scales with task complexity, and Sprint 6's component-
-synthesis prompt is sufficiently complex (3-step decomposition /
-diagnosis / synthesis with per-candidate concerns context) to trigger
-the thinking budget consuming the entire token cap before the JSON
-output is produced. Empirical evidence from run-551c7c42 (Sonnet
-diagnostic): 20% of generations on island 5 failed with
-stop_reason=max_tokens and content_blocks=['thinking'] only — no
-JSON output reached.
+Sprint 9 attempted to bound the thinking budget with
+`{"type": "enabled", "budget_tokens": 6000}` — Opus 4.7 rejects this
+shape with HTTP 400: "thinking.type.enabled is not supported for this
+model. Use thinking.type.adaptive and output_config.effort to control
+thinking behavior." The integer-budget thinking config was a Sonnet-
+era pattern; Opus 4.7 requires adaptive.
 
-Bounded thinking gives a hard ceiling: 6000 tokens for reasoning,
-~10K for the JSON output, eliminating the failure mode by design.
-Sprint 4's SDK retry layer continues to absorb transient API
-failures independently.
+The Sonnet-specific failure mode that motivated Sprint 9's bounded
+budget (run-551c7c42: thinking consuming the entire 16384 token cap
+before JSON output reached parse_response) was empirically a Sonnet
+issue. Stage 3 has been running adaptive Opus thinking across 9
+framings per candidate for many runs without that failure mode
+surfacing — Opus 4.7's adaptive scheduler handles the output budget
+correctly.
+
+If proposer failures do emerge on Opus 4.7's adaptive mode, dial in
+`output_config={"effort": "medium"}` (or "low") for more conservative
+thinking. Defaulting to no output_config = high effort, the
+Anthropic-documented recommendation for Opus 4.7.
 
 Sprint 7 token cap: max_tokens stays at MAX_TOKENS_XLONG (16384).
 The Research module uses the same cap for similar reasoning-heavy
@@ -75,13 +80,6 @@ from alphamo.sampler import Seed
 from alphamo.schemas import Architecture
 
 
-# Sprint 9: explicit thinking budget on the proposer. Adaptive scaling
-# under Sprint 6's component-synthesis prompt consumed the whole token
-# cap on the harder islands; bounded thinking gives a deterministic
-# ceiling. 6000 leaves ~10K for the JSON output within the 16384 cap.
-PROPOSER_THINKING_BUDGET_TOKENS = 6000
-
-
 class Proposer:
     """Calls Opus with k island-drawn candidates and parses the response
     as a new Architecture.
@@ -89,7 +87,10 @@ class Proposer:
     The proposer sees ONLY candidates from the current island (Sprint 3 /
     FunSearch §A.1 alignment) — no global reference library. Sprint 9
     reverted the default model from Sonnet back to Opus 4.7 (see module
-    docstring for the late-2025-cutoff + caching rationale).
+    docstring for the late-2025-cutoff + caching rationale). Sprint 10
+    reverted the Sprint 9 bounded-thinking config to adaptive because
+    Opus 4.7 doesn't support the `{"type": "enabled", "budget_tokens":
+    N}` shape — see module docstring.
     """
 
     def __init__(self, client: Any, model: str = OPUS_MODEL) -> None:
@@ -120,15 +121,15 @@ class Proposer:
             # MAX_TOKENS_XLONG (16384). See module docstring for the
             # empirical rationale (run-c8b5144e silent drops).
             max_tokens=MAX_TOKENS_XLONG,
-            # Sprint 9: bounded thinking. Replaces Sprint 6+7's adaptive.
-            # See module docstring + run-551c7c42 diagnostic for why
-            # adaptive failed; bounded budget eliminates the
-            # thinking-eats-the-whole-cap failure mode by design.
-            thinking={
-                "type": "enabled",
-                "budget_tokens": PROPOSER_THINKING_BUDGET_TOKENS,
-            },
+            # Sprint 10: Opus 4.7 requires adaptive thinking; the
+            # budget_tokens form is deprecated and the API rejects it
+            # with HTTP 400. Stage 3 uses the same adaptive Opus
+            # thinking config and runs without failures. If proposer
+            # failures emerge, dial in output_config.effort
+            # (medium/low) for more conservative thinking.
+            thinking={"type": "adaptive"},
             system=cached_system(PROPOSER_SYSTEM),
             messages=[{"role": "user", "content": user_content}],
             output_format=Architecture,
         )
+

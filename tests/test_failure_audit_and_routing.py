@@ -396,10 +396,13 @@ def test_stage3_adversarial_default_model_stays_opus():
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v4():
-    """Sprint 9 bumped PROPOSER_VERSION v3 → v4. Both the executing
-    model (Sonnet → Opus 4.7) and the thinking strategy (adaptive →
-    bounded 6000 tokens) changed. v3 trajectories (Sonnet, adaptive)
-    and v4 trajectories (Opus, bounded) must be distinguishable in
-    the DB for analysis."""
-    assert PROPOSER_VERSION == "v4"
+def test_proposer_version_advanced_to_v5():
+    """Sprint 10 bumped PROPOSER_VERSION v4 → v5. v4 attempted
+    bounded thinking on Opus 4.7 with `{"type": "enabled",
+    "budget_tokens": 6000}`, which Opus rejects (HTTP 400). v5 keeps
+    the Opus 4.7 model from v4 but uses `{"type": "adaptive"}` —
+    Anthropic's documented recommendation for Opus 4.7 and the same
+    config Stage 3 has been running without failures. v4 attempts
+    never produced a valid run, so the version bump prevents
+    conflating those failed attempts with v5 trajectories in the DB."""
+    assert PROPOSER_VERSION == "v5"
