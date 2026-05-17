@@ -216,6 +216,49 @@ class ProgramsDB:
                 session.expunge(row)
             return rows
 
+    def extendable_runs(self) -> list[Run]:
+        """Sprint 5: runs that completed cleanly via max_generations and
+        are eligible to be EXTENDED (continued with a higher target).
+
+        Distinguished from `incomplete_runs` (crashed, completed_at NULL)
+        and from runs stopped by `consecutive_failures` or `curator_pause`
+        (which require explicit --force to resume — those stop reasons
+        signal something worth a human review before pressing on).
+
+        Sorted most-recent first.
+        """
+        stmt = (
+            select(Run)
+            .where(Run.stopped_reason == "max_generations")
+            .order_by(Run.created_at.desc())
+        )
+        with self._session() as session:
+            rows = list(session.scalars(stmt))
+            for row in rows:
+                session.expunge(row)
+            return rows
+
+    def uncomplete_run(self, run_id: str) -> None:
+        """Sprint 5: clear `completed_at` and `stopped_reason` so a
+        previously-stopped run can be extended via resume.
+
+        Called from `Orchestrator.resume_run` when the run row is in a
+        completed state. The orchestrator's `run()` loop will re-stamp
+        these fields on the new termination (max_generations or
+        otherwise). `last_resumed_at` is set separately via
+        `mark_run_resumed` so the resume timestamp survives.
+
+        Raises KeyError if no such run row exists.
+        """
+        with self._session() as session:
+            result = session.execute(
+                update(Run)
+                .where(Run.run_id == run_id)
+                .values(completed_at=None, stopped_reason=None)
+            )
+            if result.rowcount == 0:
+                raise KeyError(f"no run row for run_id={run_id!r}")
+
     def latest_generation_in_run(self, run_id: str) -> int:
         """Sprint 4: max(generation) across alive candidates in this run.
 

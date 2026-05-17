@@ -511,7 +511,7 @@ def test_cli_run_detects_in_progress_run_and_prompts(tmp_path, monkeypatch):
         input_text="n\n",
     )
     assert result.exit_code == 0, result.output
-    assert "Incomplete run detected" in result.output
+    assert "Incomplete (crashed) run detected" in result.output
     assert captured_run_id.get("mode") == "fresh"
     # Fresh run produced a different run_id from the existing incomplete one.
     assert captured_run_id["used"] != incomplete_rid

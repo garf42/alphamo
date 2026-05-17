@@ -340,6 +340,21 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
 
 @cli.command()
 @click.option("--generations", type=int, default=50, show_default=True)
+@click.option(
+    "--target-generation",
+    "target_generation",
+    type=int,
+    default=None,
+    help=(
+        "Sprint 5: target generation for an EXTENDED resume. When combined "
+        "with --resume, the resumed run continues from its current latest "
+        "generation + 1 through this target (inclusive). Must be strictly "
+        "greater than the resumed run's current latest generation. "
+        "Requires --resume; errors if used standalone. When --resume is set "
+        "but --target-generation is not, --generations is used as the target "
+        "(backward-compat with Sprint 4 resume of crashed runs)."
+    ),
+)
 @click.option("--num-islands", "num_islands", type=int, default=8, show_default=True)
 @click.option(
     "--milestone-min-generation",
@@ -370,18 +385,31 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     "no_resume",
     is_flag=True,
     default=False,
-    help="Force a fresh run even if an incomplete run is detected. Skips the prompt.",
+    help="Force a fresh run even if a resumable run is detected. Skips the prompt.",
+)
+@click.option(
+    "--force-resume",
+    "force_resume",
+    is_flag=True,
+    default=False,
+    help=(
+        "Sprint 5: override the stopped_reason block for runs stopped via "
+        "`consecutive_failures` or `curator_pause`. Requires --resume; "
+        "errors if used standalone."
+    ),
 )
 @_DB_OPTION
 @_AUDIT_OPTION
 def run(
     generations: int,
+    target_generation: int | None,
     num_islands: int,
     milestone_min_generation: int,
     milestone_fitness_delta: float,
     research_every: int,
     resume_id: str | None,
     no_resume: bool,
+    force_resume: bool,
     db_path: Path,
     audit_path: Path,
 ) -> None:
@@ -397,6 +425,18 @@ def run(
 
     if resume_id is not None and no_resume:
         raise click.ClickException("--resume and --no-resume are mutually exclusive")
+    if target_generation is not None and resume_id is None:
+        # Pre-empt the auto-detect path picking up a run that --target-generation
+        # was implicitly meant to extend; require explicit --resume to bind
+        # the target to a specific run.
+        raise click.ClickException(
+            "--target-generation requires --resume <run_id> — pass the run "
+            "you want to extend explicitly"
+        )
+    if force_resume and resume_id is None:
+        raise click.ClickException(
+            "--force-resume requires --resume <run_id>"
+        )
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
@@ -405,31 +445,71 @@ def run(
     # connection/timeout errors so a single API blip doesn't kill a run.
     client = anthropic.Anthropic(max_retries=3)
 
-    # Sprint 4: auto-detect-incomplete-run prompt path. Skipped when the
-    # user passed an explicit flag.
+    # Sprint 4 + 5: auto-detect-resumable-run prompt path. Skipped when the
+    # user passed --resume or --no-resume explicitly. Considers both
+    # incomplete (crashed) and extendable (max_generations stop) runs.
     if resume_id is None and not no_resume:
         incomplete = db.incomplete_runs()
+        extendable = db.extendable_runs()
+        # Pick the most recent resumable candidate. Crashed runs always
+        # offered. Extendable runs offered only when --generations would
+        # actually extend (i.e., > the run's current latest generation).
+        chosen = None
         if incomplete:
             stale = incomplete[0]
             last_gen = db.latest_generation_in_run(stale.run_id)
             click.echo(
-                f"WARN: Incomplete run detected: {stale.run_id} "
+                f"WARN: Incomplete (crashed) run detected: {stale.run_id} "
                 f"(created {stale.created_at.isoformat()}, "
                 f"last completed generation {last_gen})"
             )
-            if click.confirm("Resume?", default=False):
-                resume_id = stale.run_id
+            if click.confirm("Resume crashed run?", default=False):
+                chosen = stale.run_id
+        if chosen is None and extendable:
+            done = extendable[0]
+            last_gen = db.latest_generation_in_run(done.run_id)
+            if generations > last_gen:
+                click.echo(
+                    f"WARN: Extendable completed run detected: {done.run_id} "
+                    f"(completed at generation {last_gen}; "
+                    f"--generations={generations} would extend to gen {generations})"
+                )
+                if click.confirm("Extend completed run?", default=False):
+                    chosen = done.run_id
+        if chosen is not None:
+            resume_id = chosen
 
     if resume_id is not None:
         try:
-            orchestrator = Orchestrator.resume_run(db, client, audit, resume_id)
+            orchestrator = Orchestrator.resume_run(
+                db, client, audit, resume_id, force=force_resume
+            )
         except KeyError as exc:
             raise click.ClickException(str(exc)) from exc
         except ResumeIncompatibleError as exc:
             raise click.ClickException(
                 f"{exc} — start a fresh run with `alphamo run --no-resume`"
             ) from exc
-        click.echo(f"resuming run {resume_id}")
+
+        # Sprint 5: validate target_generation > current latest generation
+        # before kicking off run(). Without this guard, the orchestrator
+        # would silently exit with zero iterations (start_generation >
+        # max_generations -> empty range -> mark complete).
+        latest_gen = db.latest_generation_in_run(resume_id)
+        effective_target = (
+            target_generation if target_generation is not None else generations
+        )
+        if effective_target <= latest_gen:
+            raise click.ClickException(
+                f"--target-generation/--generations must be strictly greater "
+                f"than the resumed run's current latest generation "
+                f"(latest={latest_gen}, requested={effective_target})"
+            )
+        generations = effective_target
+        click.echo(
+            f"resuming run {resume_id} from generation {latest_gen + 1} "
+            f"through {generations}"
+        )
     else:
         hp = Hyperparameters(
             num_islands=num_islands,

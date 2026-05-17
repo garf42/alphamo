@@ -135,6 +135,15 @@ class RunResult:
     consecutive_failures_at_stop: int = 0
 
 
+# Sprint 5: stopped_reasons that block resume unless `force=True` is passed.
+# `max_generations` is the intentional-stop case and is freely extendable;
+# the other two reasons signal that the run hit something worth a human
+# review before pressing on.
+_FORCE_REQUIRED_STOPPED_REASONS = frozenset(
+    {"consecutive_failures", "curator_pause"}
+)
+
+
 class ResumeIncompatibleError(Exception):
     """Raised by `Orchestrator.resume_run` when the persisted run cannot
     be safely resumed under the current code.
@@ -317,6 +326,7 @@ class Orchestrator:
         run_id: str,
         rng: random.Random | None = None,
         on_warning: Callable[[str], None] | None = None,
+        force: bool = False,
     ) -> "Orchestrator":
         """Attach to an existing Run row. Hyperparameters come from the row.
 
@@ -326,10 +336,18 @@ class Orchestrator:
         `ResumeIncompatibleError`; SOFT-WARN conditions go to `on_warning`
         (defaults to stderr-print) and resume proceeds.
 
+        Sprint 5: resume supports extending completed runs (those whose
+        `stopped_reason="max_generations"`) — the row's `completed_at`
+        and `stopped_reason` get cleared so the next `run()` call can
+        treat it as in-progress again. Runs stopped via
+        `consecutive_failures` or `curator_pause` are BLOCKED unless
+        `force=True`: those stop reasons signal something worth a human
+        review before pressing on.
+
         Raises KeyError if run_id does not exist. Raises
-        ResumeIncompatibleError on a structural mismatch. Sets
-        `last_resumed_at` on the run so the handoff can report
-        fresh-vs-resumed.
+        ResumeIncompatibleError on a structural mismatch or on a
+        blocked stopped_reason without force. Sets `last_resumed_at`
+        on the run so the handoff can report fresh-vs-resumed.
         """
         run = db.get_run(run_id)
         hp = Hyperparameters(**run.hyperparameters) if run.hyperparameters else Hyperparameters()
@@ -342,10 +360,33 @@ class Orchestrator:
         )
         if blocking:
             raise ResumeIncompatibleError(run_id, blocking)
+
+        if (
+            not force
+            and run.stopped_reason in _FORCE_REQUIRED_STOPPED_REASONS
+        ):
+            raise ResumeIncompatibleError(
+                run_id,
+                [
+                    f"stopped_reason={run.stopped_reason!r} requires "
+                    "--force-resume to resume — this stop reason "
+                    "signals something worth a human review before "
+                    "pressing on"
+                ],
+            )
+
         if warnings:
             emit = on_warning if on_warning is not None else _default_resume_warning
             for warning in warnings:
                 emit(warning)
+
+        # Sprint 5: previously-completed runs (max_generations stop) need
+        # their completion markers cleared so the next run() call can
+        # extend them. The orchestrator will re-stamp these on the next
+        # termination. Crashed runs (completed_at NULL) skip this
+        # branch and proceed straight to mark_run_resumed.
+        if run.completed_at is not None or run.stopped_reason is not None:
+            db.uncomplete_run(run_id)
 
         db.mark_run_resumed(run_id)
         return cls(db, client, audit_log, run_id=run_id, hp=hp, rng=rng)
