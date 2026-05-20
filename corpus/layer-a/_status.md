@@ -3,17 +3,19 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 62 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video, polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack) + 3 seed (bloomberg-terminal, visa-interchange, standard-oil)
+**Completed:** 68 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video, polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack, pets-com, theranos, ltcm, quotron, moviepass, myspace) + 3 seed (bloomberg-terminal, visa-interchange, standard-oil) = **71 total**
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
 **Schema version:** v1.5 (mid-Layer-A-build amendments, May 2026 — v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D)
 **Schema gaps:** 0 confirmed for v1.5 (v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D after 3-instance saturation via Berkshire + Twitter/X + IBM); 0 candidates currently tracked
-**Cross-architecture patterns surfaced:** 11 (#10 promoted batch 5; **#11 promoted batch 6 — failed-architecture-as-cultural-cautionary-asset**; #6 sub-pattern bracketed-discipline-eras designated batch 6; see Cross-architecture patterns section below + separate `corpus/patterns/_saturated.md` catalog)
+**Cross-architecture patterns surfaced:** 11 + 2 candidate-patterns (pattern #12: fraud-as-architecture saturated at 5 instances via theranos entry; pattern #13 candidate: systemic-leverage-failure saturated at 8 instances via ltcm entry; see Cross-architecture patterns section below + separate `corpus/patterns/_saturated.md` catalog)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
 **Batch 5 COMPLETE:** 10 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video); 2 threshold-surfacing events triggered + handled in-batch (#10 pattern saturation → pattern catalog promotion; Sub-pattern D → v1.5 schema amendment). 53 newly-built + 4 seed = 57 total Layer A entries.
-**Batch 6 COMPLETE:** 10 of 10 entries built (polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack); 1 threshold-surfacing event triggered + handled in-batch (#11 pattern saturation → pattern catalog promotion); #6 sub-pattern bracketed-discipline-eras designated. **62 newly-built + 3 seed = 65 total Layer A entries.** **Halting for chat review.**
-**Pending:** ~14 (Section E remainder: pets-com, webvan, moviepass, wework, theranos, ftx, enron, lehman-brothers, ltcm, quotron, telerate, drugstore-com, myspace, buzzfeed-news)
+**Batch 6 COMPLETE:** 10 of 10 entries built (polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack); 1 threshold-surfacing event triggered + handled in-batch (#11 pattern saturation → pattern catalog promotion); #6 sub-pattern bracketed-discipline-eras designated. 62 newly-built + 3 seed = 65 total Layer A entries.
+**Batch 7 COMPLETE (Section E strategic-selection):** 6 of 6 entries built (pets-com, theranos, ltcm, quotron, moviepass, myspace); 2 candidate-pattern surfacing events (pattern #12 fraud-as-architecture via theranos; potential pattern #13 systemic-leverage-failure via ltcm). **68 newly-built + 3 seed = 71 total Layer A entries.** **Halting for chat review.**
+**Skipped (per strategic-selection batch 7):** 8 entries judged redundant: webvan, drugstore-com (redundant with pets-com); ftx, enron (redundant with theranos); wework (overlaps moviepass); lehman-brothers (overlaps ltcm); telerate (overlaps quotron); buzzfeed-news (overlaps myspace)
+**Pending:** Layer A substantially complete. Next phase: Layer D synthesis + Layer B current-developments substrate.
 
 ## Log
 
@@ -266,6 +268,70 @@ for chat review.
   - Pattern #6 20th instance via Best-founder-CEO + creator-first-+-no-ads + commission-not-ads discipline
   - Pattern #7 8th instance + pattern #1 11th instance
   - **Architecture-of-architectures-enabler 2nd corroborating instance** (Substack-as-substrate; approaching pattern saturation)
+
+## Section E — Batch 7 (6 strategic entries; 2 candidate-pattern surfacing events)
+
+- [2026-05-20] pets-com: success — audit 51E/10I/7C/0U/68 — canonical dot-com-era premature-scale-on-uncertain-economics architectural-failure
+  - 6th instance of pattern #11 (failed-architecture-as-cultural-cautionary-asset)
+  - Canonical premature-scale-on-uncertain-economics template approaching pattern saturation (Pets.com + Drugstore.com + Webvan + Boo.com + MoviePass = 5 instances)
+  - Amazon-vs-Pets.com canonical pairing reveals operator-discipline + unit-economics-validation determinant
+- [2026-05-20] theranos: success — audit 53E/8I/7C/0U/68 — **CANDIDATE PATTERN #12 SURFACING EVENT** (fraud-as-architecture saturated at 5 instances)
+  - Canonical fraud-as-architecture instance + structurally distinct from premature-scale-on-uncertain-economics
+  - 7th instance of pattern #11
+  - **Fraud-as-architecture pattern #12 candidate at 5 instances** (Theranos + Enron + FTX + Wirecard + Madoff via negative-pairs); user's strategic-selection captured via Theranos-canonical-decomposition + negative-pair-references rather than separate entries
+  - Cultivated-credibility-via-prestigious-counterparties as architectural-mechanism-signature
+- [2026-05-20] ltcm: success — audit 52E/9I/7C/0U/68 — canonical systemic-leverage-failure architecture
+  - Canonical systemic-leverage-failure instance + 1st canonical instance preceding 2008 multi-architecture-failure
+  - 8th instance of pattern #11
+  - **Systemic-leverage-failure pattern #13 candidate at 8 instances** (LTCM+Bear+Lehman+AIG-2008+Wachovia+WaMu+Platinum-Grove+JWM)
+  - Operator-pattern-repeat observation (Meriwether: Salomon-1991+LTCM-1998+JWM-2009; Scholes: LTCM-1998+Platinum-Grove-2008)
+- [2026-05-20] quotron: success — audit 47E/14I/7C/0U/68 — canonical pre-Bloomberg substrate-replacement
+  - Canonical Bloomberg-negative-pair illustrating substrate-+-architecture-replacement
+  - 9th instance of pattern #11
+  - **Substrate-architect-displacing-narrower-architecture observation** suggesting Sub-pattern B mechanism-variant (Bloomberg-Quotron + Facebook-Myspace + Netflix-Blockbuster + iPhone-Nokia + Google-+-Facebook-Yahoo)
+- [2026-05-20] moviepass: success — audit 53E/8I/7C/0U/68 — canonical recent-era business-model-fragility
+  - 10th instance of pattern #11
+  - **Fraud-as-architecture-overlay observation**: MoviePass hybrid-business-model-fragility-+-operator-fraud (Lowe conviction October 2024 + Farnsworth guilty-plea August 2023); fraud-as-architecture overlay can be added-during-failure-cascade as well as foundational
+  - **Operator-recovery-via-architecture-relaunch observation**: Spikes-relaunched-2022 sustainable-architecture
+- [2026-05-20] myspace: success — audit 51E/10I/7C/0U/68 — **FINAL BATCH 7** + canonical substrate-shift-defunct social-platform
+  - 11th instance of pattern #11
+  - **Substrate-architect-displacing-narrower-architecture observation strengthened** (Myspace-Facebook + Quotron-Bloomberg cross-domain parallel)
+  - Cross-corpus parallel observation: Quotron-Bloomberg + Myspace-Facebook structurally-isomorphic substrate-replacement events in different domains
+
+## Batch 7 summary
+
+6 newly-built strategic-selection entries: pets-com + theranos + ltcm + quotron +
+moviepass + myspace.
+
+Major events handled in-batch:
+1. **Candidate pattern #12 (fraud-as-architecture) saturated at 5 instances** via theranos
+   entry: Theranos + Enron + FTX + Wirecard + Madoff. Captured via theranos-canonical-
+   decomposition + negative-pair-references per user's strategic-selection (rather than
+   building separate enron/ftx entries).
+2. **Candidate pattern #13 (systemic-leverage-failure) saturated at 8 instances** via
+   ltcm entry: LTCM + Bear Stearns + Lehman Brothers + AIG-2008-financial-products-segment
+   + Wachovia + Washington Mutual + Platinum Grove Asset Management + JWM Associates.
+3. **Substrate-architect-displacing-narrower-architecture sub-pattern observation** at 5+
+   instances (Bloomberg-Quotron + Facebook-Myspace + Netflix-Blockbuster + iPhone-Nokia +
+   Google-+-Facebook-Yahoo). Approaching saturation threshold for sub-pattern designation.
+4. **Fraud-as-architecture-overlay observation** (MoviePass hybrid case): fraud-overlay
+   can be added-during-failure-cascade as well as foundational.
+5. **Operator-pattern-repeat observation** (Meriwether + Scholes + others repeating
+   architecture-failures across successor-architectures).
+
+Pattern #11 (failed-architecture-as-cultural-cautionary-asset) now at 11 instances:
+blockbuster + polaroid + sears + yahoo + nokia-phones + pets-com + theranos + ltcm +
+quotron + moviepass + myspace. Continues saturated.
+
+Layer A 71 total entries (68 newly-built + 3 seed); substantially complete.
+
+Skipped per strategic-selection (judged redundant):
+- webvan, drugstore-com (redundant with pets-com)
+- ftx, enron (redundant with theranos)
+- wework (overlaps moviepass)
+- lehman-brothers (overlaps ltcm)
+- telerate (overlaps quotron)
+- buzzfeed-news (overlaps myspace)
 
 ## Batch 6 summary
 
