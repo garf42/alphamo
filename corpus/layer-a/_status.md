@@ -3,15 +3,16 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 43 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
+**Completed:** 46 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
 **Schema version:** v1.4 (mid-Layer-A-build amendment, May 2026)
 **Schema gaps:** 0 confirmed for v1.4 (v1.4 absorbed the defunct-as-subject + restructured-but-preserved + restructured-with-successor-entities sub-patterns); 1 v1.5 candidate tracked (Sub-pattern D: architecture-voluntarily-transformed via Berkshire 1965 single-case)
-**Cross-architecture patterns surfaced:** 9 (see Cross-architecture patterns section below)
+**Cross-architecture patterns surfaced:** 10 (see Cross-architecture patterns section below; #10 promoted to formal pattern in batch 5 with separate `corpus/patterns/_saturated.md` catalog)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
-**Pending:** ~46 (remaining Sections B-F entries; awaiting chat review of this batch)
+**Batch 5 in progress:** 3 of 10 entries built (intel, hims-hers, refinitiv-eikon); threshold-surfacing triggered after refinitiv-eikon for discipline-LOSS pattern saturation; resumed at walgreens-boots-alliance per chat decision
+**Pending:** ~17 (remaining batch 5 entries + Sections D-F)
 
 ## Log
 
@@ -114,6 +115,26 @@ Batch 1 of Section B finance/payments complete. Awaiting chat review.
 
 **BATCH 2 COMPLETE.** 23 newly-built entries + 4 seed = 27 total. Halting for chat review.
 
+## Section C-end + Section D-start — Batch 5 (in progress, halted at #3 for threshold-surfacing)
+
+- [2026-05-20] intel: success — audit 50E/11I/7C/0U/68 — IDM + capability-asymmetry-eroded + Lip-Bu Tan 2025 "demolition crew" restructuring
+  - **4th instance of architectural-discipline-LOSS-as-anti-asset** (Intel G6 tick-tock-cadence-execution-failure 2014-2017 10nm delay)
+  - Sub-pattern C candidate via Lip-Bu Tan 2025 restructuring (similar to Boeing 2024 Ortberg); pending 18A volume execution + foundry external-customer commitments
+  - 6th instance of pattern #3 (load-bearing-for-civilization-stack) via CHIPS Act + August 2025 US gov 10% equity stake (first formal-equity-stake mechanism)
+  - Canonical TSMC/Intel discipline-as-asset vs discipline-LOSS-as-anti-asset comparator-pairing
+- [2026-05-20] hims-hers: success — audit 46E/13I/7C/0U/66 — DTC telehealth + compounded-to-branded GLP-1 substrate-transition
+  - New pattern #6 mechanism: pre-emptive-strategic-architecture (April 2024 Novo Nordisk pre-announcement)
+  - Sub-pattern D-adjacent (operator-voluntary upstream substrate-transition) but architecturally less dramatic than Berkshire 1965 — flow continues unchanged. Documented but not promoted to formal Sub-pattern D.
+  - Pattern #6 now at 13 instances with diversified mechanism set
+- [2026-05-20] refinitiv-eikon: success — audit 49E/12I/7C/0U/68 — **THRESHOLD-SURFACING TRIGGERED** (5th instance of discipline-LOSS-as-anti-asset)
+  - G7 persistent-second + ownership-transition-interrupting-discipline (Reuters → Thomson Reuters → Refinitiv → LSEG sequence vs Bloomberg's continuous founder-CEO 1981-present)
+  - Canonical "near-miss" pairing with Bloomberg-Terminal across structurally identical template
+  - Pattern #4 NEW NUANCE: zero-sum-per-end-user-with-non-zero-sum-at-market-level
+  - Sub-pattern C-adjacent via M&A-+-rebranding 2018-2023 preserved architecture through ownership-transitions
+  - **Threshold surface → chat decision: promote discipline-LOSS-as-anti-asset to formal cross-corpus pattern #10**
+
+**Resumed at walgreens-boots-alliance per chat decision; pattern #10 documented in `corpus/patterns/_saturated.md` with Layer D synthesis notes.**
+
 ## v1.4 schema amendment (May 2026 mid-build)
 
 **Chat approved Option 1: mid-build amendment with retroactive normalization.**
@@ -197,6 +218,14 @@ Batch 2 resuming with ims-health using v1.4 vocabulary natively.
 8. **Crisis-acquirer-of-last-resort as accumulated force.** Surfaced in JPM G7 (Bear, WaMu, First Republic). Parallel to TSMC silicon-shield + SWIFT G7 + Goldman 2008 + Moody's G1 but operating via active acquisition opportunity vs passive protection. Self-reinforcing position-strengthening via each successful crisis acquisition.
 
 9. **Architecture-survival-via-radical-restructuring as alternative to architectural failure.** Surfaced via Lloyd's 1996 R&R + Equitas; also operates in NYSE 2006 demutualization + 2013 ICE acquisition, Berkshire textile-mill-to-capital-allocation transition. AT&T pre-1984 Kingsbury Commitment + Hims & Hers pre-emptive Novo Nordisk partnership 2026 are analogous. Pattern: preserve architectural identity + accumulated forces via radical restructuring of substrate that fails.
+
+10. **Architectural-discipline-LOSS-as-anti-asset (SATURATED).** Saturated at 5 instances batch 5 May 2026: boeing G6 + ford G6 + general-electric G6 + intel G6 + refinitiv-eikon G7. Inverted form of pattern #6 (architectural-discipline-as-asset). Invariants: discipline-as-asset inverted into anti-asset that resists recovery; comparator-survivors retained discipline; loss takes ~3-5 years while reconstitution takes longer or fails (structural asymmetry); substrate didn't disappear, discipline degraded. Full catalog in `corpus/patterns/_saturated.md` with Layer D synthesis notes + Sprint 12 V7 proposer prompt design implications (layer-architecture distinction: Layer A substrate primitives vs Layer D evaluative constraints).
+
+## Refinements to existing patterns from batch 5
+
+- **Pattern #4 (Identity-as-non-zero-sum-position-occupation) NEW NUANCE:** Refinitiv-Eikon vs Bloomberg-Terminal is the first corpus instance where the position-occupation is zero-sum-per-end-user-with-non-zero-sum-at-market-level — terminal users typically choose one platform per seat (within-firm zero-sum) while global market accommodates both (market-level non-zero-sum). Distinct from coca-cola/pepsi (consumers can drink both), visa/mastercard (merchants accept both), where the per-end-user choice is itself non-zero-sum.
+- **Pattern #6 (Architectural-discipline-as-asset) NEW MECHANISM:** Hims & Hers G6 (pre-emptive-strategic-architecture via April 2024 Novo Nordisk partnership pre-announcement) adds anticipatory-strategic-positioning-as-discipline mechanism. Pattern #6 now at 13 instances with substantially diversified mechanism set.
+- **Pattern #3 (Load-bearing-for-civilization-stack) at 6th instance:** Intel G7 via CHIPS Act + August 2025 US government 10% equity stake + sovereign-strategic-significance. First instance with formal-equity-stake mechanism (vs informal regulatory protection or coalition).
 
 ## Schema stress accumulation (defunct-as-subject status-vocabulary)
 
