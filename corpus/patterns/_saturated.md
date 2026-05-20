@@ -212,6 +212,383 @@ substrate-state-at-loss + accumulated-force-resilience.
 
 ---
 
+## Pattern #12: Fraud-as-architecture
+
+### Status
+Saturated at 5 instances, batch 7, May 2026. Formalized per chat
+decision May 2026 with Theranos as canonical Layer A entry +
+4 negative-pair-references (Enron, FTX, Wirecard, Madoff) capturing
+remaining instances.
+
+### Mechanism
+Architectures that were **never viable from emergence**. Distinguished
+from "architecture emerged then failed" patterns (Pattern #11 cultural-
+cautionary-asset, Sub-pattern B substrate-shift-defunct, premature-
+scale-on-uncertain-economics) by **claimed-foundation that doesn't
+exist at claimed-capability**.
+
+Common architectural-mechanism elements:
+- Claimed-business-foundation that doesn't exist at claimed-capability
+  (technology for Theranos; mark-to-market-+-SPEs for Enron;
+  customer-deposit-handling for FTX; Asian-subsidiary-operations for
+  Wirecard; investment-returns-via-split-strike-conversion for Madoff)
+- Cultivated-credibility-via-prestigious-counterparties (board-of-
+  directors + strategic-partners + celebrity-endorsements + political-
+  connections + media)
+- Sustained-for-multi-year before exposure-event (Theranos 12+ years;
+  Enron 10+ years; Madoff 20+ years; FTX 4 years; Wirecard 5+ years)
+- Cascade-collapse via investigative-journalism + whistleblower +
+  regulatory-+-criminal-cascade
+- Founder-+-executive criminal-prosecution + multi-year incarceration
+
+### Instances
+- **theranos** (2003-2018; canonical Layer A entry): Edison-device
+  never-existed at claimed-capability + 12+ year duration + Holmes
+  conviction January 2022 + sentenced 11 years 3 months. Cultivated-
+  board (Kissinger + Shultz + Mattis + Perry + Nunn + Frist) +
+  Walgreens-partnership + Holmes-Steve-Jobs-persona-cultivation.
+  Sole-accumulated-force was post-defunct cultural-cautionary-asset
+  (Pattern #11 7th instance).
+- **enron** (1985-2001; via negative-pair): mark-to-market accounting
+  + special-purpose-entities + cultivated-board (Jaedicke, Gramm,
+  Savage, Wakeham, LeMaistre) + 10+ year duration + Lay + Skilling
+  + Fastow criminal-convictions + Bethany McLean Fortune March 2001
+  investigative-exposure trigger.
+- **ftx** (2019-2022; via negative-pair): customer-deposit-misappropriation
+  + Alameda-FTX-entity-mixing + celebrity-endorsements (Brady +
+  Bündchen + Curry + Osaka + Larry David) + effective-altruism-
+  positioning + political-donations cultivation + 4-year duration +
+  SBF criminal-conviction October 2023 (25-year sentence). Shortest
+  duration of pattern instances.
+- **wirecard** (1999-2020; via negative-pair): ~€1.9B missing-from-
+  balance-sheet + claimed-Asian-subsidiary-operations-fabricated +
+  cultivated-credibility-via-prestigious-counterparties + 5+ year
+  duration + Marsalek-fugitive + Braun convicted May 2024.
+- **madoff** (1960s-2008; via negative-pair): Ponzi-investment-fund
+  structure + ~$64.8B claimed-AUM + cultivated-credibility-via-
+  prestigious-investor-base + 20+ year duration (longest of pattern
+  instances) + collapse during 2008 customer-redemption surge +
+  Madoff sentenced 150 years (died in prison 2021).
+
+### Invariant features
+- Claimed-foundation never existed at claimed-capability (the
+  architectural-foundation-falsity is the defining structural
+  distinction)
+- Cultivated-credibility-via-prestigious-counterparties as substitute-
+  for-real-substrate-validation
+- Multi-year-duration (4-20+ years) before exposure-event
+- Cascade-collapse via investigative-journalism + whistleblower +
+  regulatory-+-criminal-cascade
+- Founder-+-executive criminal-prosecution + multi-year incarceration
+- Cross-industry: healthtech (Theranos), energy-trading (Enron),
+  crypto (FTX), payments (Wirecard), investment-funds (Madoff)
+- Post-defunct cultural-cautionary-asset accumulation (overlaps
+  Pattern #11)
+
+### Distinguishing from related patterns
+- **Pattern #11 (cultural-cautionary-asset)**: pattern #12 architectures
+  typically also become cultural-cautionary-assets, but #11 includes
+  non-fraud cases (Blockbuster, Polaroid, Sears, Yahoo, Nokia phones,
+  Quotron, Myspace, LTCM). Pattern #12 is the **architectural-
+  foundation-falsity** subset.
+- **Premature-scale-on-uncertain-economics** (Pets.com, Webvan, etc):
+  the business was real-but-uneconomic. Pattern #12 architectures
+  have non-existent-foundation.
+- **MoviePass hybrid case**: business-model-fragility primary +
+  operator-fraud-overlay added during failure-cascade (Lowe conviction
+  October 2024). Distinct from pattern #12 in that real-product
+  existed but unsustainable; fraud-as-overlay rather than foundational.
+- **Sub-pattern B (substrate-shift-defunct)**: pattern #12 has no
+  substrate-shift — architecture was never viable to begin with.
+
+### Layer D synthesis notes
+- Anti-pattern for proposer reasoning: architectures whose foundation
+  cannot be independently validated should trigger heightened
+  scrutiny. Cultivated-credibility-via-prestigious-counterparties
+  should not substitute for substrate-validation.
+- Selection-bias caveat: corpus enumeration of fraud-as-architecture
+  is selection-biased toward exposed-frauds. The full population
+  may include undetected-frauds-still-operating. Pattern is for
+  recognition + avoidance, not for prediction of detection-frequency.
+- Cross-pattern interaction: fraud-as-architecture can be added as
+  overlay during failure-cascade (MoviePass case) as well as
+  foundational. Proposer should distinguish foundational-vs-overlay
+  fraud-architecture variants.
+
+---
+
+## Pattern #13: Systemic-leverage-failure
+
+### Status
+Saturated at 8 instances, batch 7, May 2026. Formalized per chat
+decision May 2026 with LTCM as canonical Layer A entry + 7 cluster
+instances (Bear Stearns + Lehman Brothers + AIG-2008-financial-
+products-segment + Wachovia + Washington Mutual + Platinum Grove
+Asset Management + JWM Associates).
+
+### Mechanism
+Common architectural-mechanism elements:
+- Extreme-leverage (~10x+ balance-sheet typical; >25x in canonical
+  instances)
+- Counterparty-concentration creating systemic-implications
+- Tail-risk-realization frequency exceeding historical-data-modeling
+  assumptions
+- Liquidity-disappearance simultaneously across positions
+- Crowded-trades creating correlated-deleveraging-cascade
+- Defunct via collapse OR Fed-intervention (orderly-wind-down vs
+  disorderly-collapse depends on intervention-availability)
+
+Cross-era validation: 1998 LTCM + 2008 crisis cluster + post-2008
+successor-architectures repeating pattern.
+
+### Instances
+- **ltcm** (1994-2000; canonical Layer A entry): PhD-+-Nobel-laureate-
+  quant-arbitrage + extreme-leverage (~25-30x balance-sheet + >100x
+  with derivative-notional) + 14 major Wall Street counterparty-
+  concentration + 1998 Russian-crisis correlated-divergence + Fed-
+  orchestrated $3.625B private-sector bailout September 23, 1998 +
+  2000 wind-down.
+- **bear-stearns** (March 2008; via cluster): investment-bank with
+  extreme-leverage + 2008 mortgage-+-CDO-concentration + JP Morgan
+  acquisition March 16, 2008 with Fed $29B backstop on toxic-assets.
+  **Notable**: Bear Stearns declined to participate in 1998 LTCM
+  bailout — established precedent that became consequential 2008
+  when Bear itself required intervention.
+- **lehman-brothers** (September 2008; via cluster): investment-bank
+  with extreme-leverage (~30x at peak) + mortgage-+-CDO concentration
+  + September 15, 2008 Chapter 11 bankruptcy filing (largest in US
+  history at time). No Fed intervention (architecture-disorderly-
+  collapse rather than orderly-wind-down).
+- **aig-2008-financial-products-segment** (September 2008; via aig-2008
+  Layer A entry): AIG Financial Products London-based segment + CDS
+  exposure + extreme-leverage at segment-level + Fed $182B
+  intervention September 2008. AIG corporate-architecture preserved
+  as Sub-pattern A+C simultaneous classification per aig-2008 entry.
+- **wachovia** (September 2008; via cluster): bank with mortgage-+-
+  Golden-West-Financial-acquisition exposure + Wells Fargo acquisition
+  October 2008.
+- **washington-mutual** (September 2008; via cluster): thrift with
+  mortgage-concentration + FDIC seizure September 25, 2008 (largest
+  bank failure in US history) + JP Morgan acquisition.
+- **platinum-grove-asset-management** (1999-2008; via Scholes-successor):
+  Myron Scholes + Chi-Fu Huang founded post-LTCM-+-similar quant-
+  arbitrage approach + closed October-November 2008. Same architectural-
+  template + same operator (Scholes) + second-collapse pattern-repeat.
+- **jwm-associates** (1999-2009; via Meriwether-successor): John
+  Meriwether founded post-LTCM-+-similar quant-arbitrage approach +
+  closed 2009. Same architectural-template + same operator
+  (Meriwether) + second-collapse pattern-repeat.
+
+### Invariant features
+- Extreme-leverage as architectural-foundation
+- Counterparty-concentration creating systemic-implications
+- Tail-risk-realization frequency exceeds modeling-assumptions
+- Crowded-trade-correlated-deleveraging cascade
+- Fed-intervention-or-disorderly-collapse binary outcome
+- Cross-era reproduction (1998, 2008, post-2008)
+- Often-PhD-+-quantitative-pedigree as cultural-feature (LTCM canonical;
+  not universal — Bear, Lehman, WaMu were traditional-banks)
+
+### Sub-pattern: Operator-pattern-repeat
+**Operator-discipline-as-architectural-risk-when-discipline-is-flawed**.
+Pattern #13 (and adjacent failure-patterns) admits a sub-pattern
+where **same operator repeats architectural-failure across successor-
+architectures**. Connects to pattern #6 inversely: where pattern #6
+treats operator-discipline as accumulated-asset, operator-pattern-
+repeat treats operator-discipline-flaws as recurring-architectural-
+risk.
+
+#### Instances of operator-pattern-repeat
+- **Meriwether across Salomon → LTCM → JWM**:
+  - Salomon Brothers 1991: bond-trading-scandal + Salomon fixed-income-
+    arbitrage architecture problems (Meriwether departed)
+  - LTCM 1998: extreme-leverage-failure (Meriwether as founder + lead
+    architect)
+  - JWM Associates 2009: similar quant-arbitrage approach + closure
+    amid losses
+  - Three separate leverage-+-risk-management failures across 1991-2009
+- **Scholes across LTCM → Platinum Grove**:
+  - LTCM 1998: extreme-leverage-failure (Scholes as co-founder)
+  - Platinum Grove 2008: similar quant-arbitrage approach + closure
+    October-November 2008
+  - Two separate leverage-events 1998-2008
+
+#### Mechanism
+Same operator + same architectural-template + similar-leverage produces
+repeated-architectural-failure. Academic-pedigree + mathematical-
+sophistication + historical-data-modeling did not protect against
+tail-risk-realization-frequency exceeding modeled-assumptions even
+after canonical 1998 lesson.
+
+#### Distinct from operator-recovery-via-architecture-relaunch
+Spikes-relaunched-MoviePass-2022 demonstrates operator-recovery via
+reacquired-brand-IP + architecture-template-modification. Distinct
+from operator-pattern-repeat (Meriwether + Scholes) in that Spikes-
+relaunched architecture is **structurally-improved rather than
+structurally-repeated**. Two adjacent operator-trajectory-variants
+post-architectural-failure:
+- Operator-pattern-repeat (LTCM Meriwether + JWM): same architectural-
+  template-repeated, second-collapse
+- Operator-recovery-via-architecture-relaunch (Spikes-MoviePass-2022):
+  modified-architectural-template, sustainable
+
+#### Layer D synthesis notes
+- Proposer reasoning: operator-track-record across multiple-
+  architectures provides signal-value about operator-discipline-
+  quality. Operator with multiple-failure-instances on same template
+  should trigger heightened-scrutiny vs operator with single-failure-
+  followed-by-template-modification.
+- Pattern #6 inversion: discipline-as-asset (#6) and discipline-flaw-
+  as-risk (operator-pattern-repeat) are complementary patterns.
+  Proposer should evaluate operator-discipline both for positive
+  accumulation (#6) and negative recurrence (operator-pattern-repeat).
+
+### Layer D synthesis notes
+- Anti-pattern for proposer reasoning: extreme-leverage + counterparty-
+  concentration + tail-risk-modeling-based-on-historical-data should
+  trigger heightened scrutiny. Especially when these features combine
+  with operator-pattern-repeat signal.
+- Cross-architecture-systemic-risk: pattern #13 architectures threaten
+  not only themselves but counterparty-network + broader-financial-
+  system. Fed-intervention-availability is exogenous variable that
+  can produce orderly-wind-down (LTCM 1998, AIG 2008, Bear 2008) vs
+  disorderly-collapse (Lehman 2008).
+- Cross-era reproduction: pattern persisted across 1998 → 2008 → post-
+  2008 despite canonical-1998-lesson. Suggests structural-mechanism-
+  rather-than-knowledge-deficiency drives recurrence.
+- Comparator-survivors: Renaissance Medallion + DE Shaw + Citadel +
+  Two Sigma survived via leverage-discipline + counterparty-
+  diversification + capital-discipline. Specific architectural-
+  mechanisms distinguish surviving-quant-architecture from pattern
+  #13-architecture.
+
+---
+
+## Sub-pattern B mechanism-variants
+
+### Status
+Sub-pattern B (substrate-shift-defunct-with-niche-persistence)
+admits 3 mechanism-variants identified through Layer A build.
+Formalized per chat decision May 2026.
+
+### Variant 1: Technology-substrate-shift (canonical)
+Substrate-shift mechanism is technology-substitute replacing
+incumbent-substrate. Substrate-attacker is named-technology.
+
+**Instances:**
+- **kodak-film**: digital-photography substrate replacing film-photography
+  substrate. Substrate-attacker: digital-cameras + smartphone-cameras.
+- **polaroid**: digital-photography + smartphone-photography substrate
+  replacing instant-photography. Substrate-attacker: Fujifilm-instax
+  (variant) + smartphone-photography.
+- **blockbuster-video**: streaming substrate replacing brick-and-mortar-
+  rental substrate. Substrate-attacker: Netflix.
+- **nokia-phones**: smartphone-+-app-ecosystem substrate replacing
+  feature-phone substrate. Substrate-attacker: iPhone + Android.
+
+Canonical Sub-pattern B mechanism. Substrate-attacker is typically
+a specific-technology-substitute that displaces incumbent at substrate-
+level (not just product-level).
+
+### Variant 2: Substrate-architect-displacement
+Substrate-shift mechanism is **architecturally-broader-architect
+displacing narrower-architectural-template simultaneously**. Substrate-
+attacker emerges with broader-architectural-template + displaces
+multiple-narrower-architectural-templates as part of broader category-
+expansion.
+
+**Distinguishing from Variant 1**: substrate-attacker is not just
+technology-substitute but architecturally-broader-product-category
+replacement. The substrate-architect becomes architectural-template-
+of-the-future-substrate (not just specific-product-replacement).
+
+**Instances (5+ confirmed):**
+- **bloomberg-vs-quotron**: Bloomberg Terminal architecturally-broader-
+  product combining quotes + historical + news + analytics +
+  communication + Excel + two-screen + keyboard + global + multi-
+  asset-class. Quotron narrow-template (stock-quotes-only) displaced.
+  Also displaced Telerate (parallel pre-Bloomberg narrower-template).
+- **facebook-vs-myspace**: Facebook architecturally-broader product
+  via real-name-identity + News Feed algorithmic-content + university-
+  +-real-network seeding + superior-mobile + ad-targeting + ecosystem
+  (apps + Like-button + login + integrations). Myspace customizable-
+  profile-+-music-discovery narrower-template displaced.
+- **netflix-vs-blockbuster** (canonical Variant 2 cross-classification):
+  Netflix streaming-+-DVD-mail-+-original-content architecturally-
+  broader vs Blockbuster brick-and-mortar-rental-only. Substrate-
+  attacker became substrate-architect for streaming-+-content category.
+- **iphone-vs-nokia-+-blackberry** (canonical Variant 2 cross-
+  classification): iPhone smartphone-+-app-ecosystem-+-developer-
+  platform architecturally-broader vs Nokia feature-phone-+-Symbian
+  + BlackBerry email-+-keyboard narrower-templates. Substrate-attacker
+  became substrate-architect for smartphone-+-mobile-app-ecosystem.
+- **google-+-facebook-vs-yahoo**: search-+-social-+-targeted-ads
+  architecturally-broader-template-pair vs Yahoo portal-+-display-
+  ads narrower-template. Two substrate-architects simultaneously
+  displaced single narrower-incumbent.
+
+**Cross-domain validation**: financial-services (Bloomberg-Quotron) +
+social-networking (Facebook-Myspace) + entertainment (Netflix-Blockbuster)
++ mobile (iPhone-Nokia-BlackBerry) + internet-portals (Google-Facebook-
+Yahoo). Pattern reproduces across 5+ domains.
+
+### Variant 3: Regulatory-substrate-closure
+Substrate-shift mechanism is **regulatory-enforcement closure of legal
+pathway** rather than technology-substitute. Substrate-attacker is
+regulatory-action + branded-alternative.
+
+**Distinguishing from Variants 1 + 2**: substrate-attacker is
+regulatory-action rather than technology-or-architecturally-broader-
+template. Underlying technology does not become inferior; regulatory
+permission to operate at scale closes.
+
+**Instances (1 candidate + watchpoints):**
+- **medvi-Branch-B-candidate** (if regulatory closure executes): FDA
+  503B Bulks List finalization + DOJ enforcement + Novo+Lilly
+  litigation closes compounded-GLP-1 legal pathway. Underlying
+  technology (compounded-GLP-1) does not become inferior; regulatory
+  permission to operate at scale closes. **Currently in-process**;
+  Sub-pattern B candidate via Variant 3.
+
+**Watchpoints for additional instances**:
+- Telehealth-compounding architectures broadly during regulatory
+  transitions (Hims & Hers compounded-GLP-1 + Ro + Henry Meds + Trimi
+  all face same regulatory-substrate-closure if 503B Bulks List
+  finalizes)
+- Crypto architectures under regulatory-substrate-closure (if/when
+  enforcement-discretion regimes close)
+- Cannabis-state-legal-federal-illegal architectures under federal-
+  regulatory-changes
+- Online-gambling architectures under jurisdiction-by-jurisdiction
+  regulatory-closure
+
+Below 3-instance threshold for full Variant 3 saturation. Watch
+Layer B current-developments substrate.
+
+### Three-mechanism-variant relationship
+All three variants produce same Sub-pattern B outcome (substrate-
+shift-defunct-with-niche-persistence) but via structurally-distinct
+mechanisms:
+
+| Variant | Substrate-attacker | Underlying-technology-status | Comparator-survivor mechanism |
+|---|---|---|---|
+| 1: Technology-substrate-shift | Specific technology-substitute | Incumbent-technology becomes inferior | Architecture pivoted to substitute-technology (Fujifilm-instax) |
+| 2: Substrate-architect-displacement | Architecturally-broader product-category | Incumbent-technology often-still-functional but architecturally-narrower | Architecture pivoted to architecturally-broader template (Reuters acquisition-consolidation strategy) |
+| 3: Regulatory-substrate-closure | Regulatory-action + branded-alternative | Underlying-technology unchanged; regulatory-permission closes | Architecture transitioned to branded-product partnership (Hims-and-Hers Novo Nordisk pivot) |
+
+### Layer D synthesis notes
+- Proposer reasoning: identifying which Variant a candidate
+  architecture faces determines which substrate-mitigation strategies
+  apply. Variant 1 requires technology-pivot; Variant 2 requires
+  architectural-breadth-expansion; Variant 3 requires regulatory-
+  strategy + alternative-substrate-positioning.
+- Architectures-near-substrate-shift-threshold should be evaluated
+  for which Variant they face. Multiple-variant-simultaneous-
+  exposure (e.g., facing both Variant 2 substrate-architect AND
+  Variant 3 regulatory-closure) produces compound substrate-risk.
+
+---
+
 ## Approaching-saturation tracking
 
 Patterns currently below 5-instance threshold but accumulating
@@ -395,6 +772,13 @@ additional cases. May warrant formal sub-classification if 3+
 instances emerge.
 
 ### Architecture-of-architectures-enabler (currently 2 corpus + 2 candidate-analog instances)
+<!--
+  Note (batch 7): related observations from theranos + ltcm + moviepass
+  entries promoted to formal patterns #12 + #13 + Sub-pattern B
+  mechanism-variants (see above). Operator-pattern-repeat sub-pattern
+  designated under pattern #13.
+-->
+
 
 Pattern: architecture-as-substrate-enabling-other-architectures.
 Architecture's value-capture mechanism includes serving-as-input-
