@@ -12,7 +12,7 @@ Verified primary facts as of May 2026: Standard Oil Company founded 1870 by John
   name: Standard Oil (Trust)
   era: 1870-1911
   industry: energy/petroleum-refining
-  status: [E] restructured / forcibly-dissolved-1911 / 33-34-successor-entities
+  status: [E] restructured-with-successor-entities / forcibly-dissolved-1911 / 33-34-successor-entities
   scale: [E] peak-~90%-us-refining-late-1890s / declining-to-<70%-by-1911 / pre-breakup-valuation-$660M / largest-corporation-in-united-states-pre-1911
   scope: [E] standard-oil-trust-as-unified-entity-1882-1911 / pre-trust-cleveland-period-1870-1882 / excludes-all-post-1911-successor-companies(separate-entries-if-added)
 
@@ -77,25 +77,25 @@ Verified primary facts as of May 2026: Standard Oil Company founded 1870 by John
 
   forces-accumulated:
     - id: G1
-      description: [E] refining-capacity-scale-+-operational-efficiency / by-1890s-standard-oil-refined-more-cheaply-per-unit-than-any-competitor
+      description: [E] refining-capacity-scale-+-operational-efficiency / by-1890s-standard-oil-refined-more-cheaply-per-unit-than-any-competitor / scale-persisted-in-jersey-standard-successor-but-was-divided-across-33-entities
       since: 1880s
-      status-now: redistributed-1911 / scale-persisted-in-jersey-standard-successor-but-was-divided-across-33-entities
+      status-now: redistributed
     - id: G2
-      description: [E] pipeline-network-ownership / built-1880s-1890s-as-vertical-integration / locked-distribution
+      description: [E] pipeline-network-ownership / built-1880s-1890s-as-vertical-integration / locked-distribution / pipeline-assets-divided-across-successor-companies-1911
       since: 1880s
-      status-now: redistributed-1911 / pipeline-assets-divided-across-successor-companies
+      status-now: redistributed
     - id: G3
-      description: [E] international-export-infrastructure / kerosene-exports-to-europe-+-asia / standard-was-largest-us-exporter-of-any-product-pre-1900
+      description: [E] international-export-infrastructure / kerosene-exports-to-europe-+-asia / standard-was-largest-us-exporter-of-any-product-pre-1900 / export-business-divided-among-successors-1911
       since: 1880s
-      status-now: redistributed-1911 / export-business-divided-among-successors
+      status-now: redistributed
     - id: G4
       description: [E] political-and-press-relationships / political-influence-was-substantial-pre-1900-but-eroding-as-public-opinion-shifted-with-tarbell-+-muckraker-reporting
       since: 1880s
-      status-now: closed-pre-dissolution-(political-relationships-could-not-prevent-litigation)
+      status-now: closed
     - id: G5
-      description: [E] retained-earnings-+-rockefeller-family-wealth / capital-base-to-finance-acquisition-strategy-and-vertical-integration
+      description: [E] retained-earnings-+-rockefeller-family-wealth / capital-base-to-finance-acquisition-strategy-and-vertical-integration / rockefeller's-personal-wealth-tripled-post-dissolution-due-to-successor-share-appreciation
       since: 1870s-continuous
-      status-now: redistributed-1911 / rockefeller's-personal-wealth-tripled-post-dissolution-due-to-successor-share-appreciation
+      status-now: redistributed
 
   evolution: [E] 1870-standard-oil-of-ohio-founded-cleveland-by-rockefeller / 1872-cleveland-massacre-acquired-22-of-26-cleveland-competitors / 1882-standard-oil-trust-formed-pooling-40-companies / 1890-sherman-antitrust-act-passed-(no-immediate-enforcement) / 1899-trust-restructured-as-standard-oil-of-new-jersey-holding-company / 1902-1904-ida-tarbell-history-of-the-standard-oil-company-serialized-in-mcclure's / 1904-federal-investigation-begins / 1906-hepburn-act-criminalizes-railroad-rebates / 1909-lower-court-dissolution-decree-(december) / 1911-may-15-supreme-court-affirms-dissolution-creates-rule-of-reason-doctrine / 1911-actual-dissolution-into-33-34-successor-entities / 1911-rockefeller's-wealth-tripled-as-successor-shares-rose
 

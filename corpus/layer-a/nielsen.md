@@ -14,7 +14,7 @@ Critical force-topology updates training data would miss: (1) **2022 PE buyout f
   name: Nielsen Holdings (post-2022-PE-buyout private company)
   era: 1923-present (modern public 2010-2022; private since Oct 2022)
   industry: media/data/audience-measurement
-  status: [E] operating-+-restructured-via-2022-PE-buyout-from-public-to-private / [E] transforming-via-Nielsen-ONE-cross-platform-measurement / [C] pressured-by-alternative-currency-competition-(comscore-+-ispot-+-videoamp)
+  status: [E] restructured-but-preserved / [E] 2022-PE-buyout-from-public-to-private / [E] transforming-via-Nielsen-ONE-cross-platform-measurement / [C] pressured-by-alternative-currency-competition-(comscore-+-ispot-+-videoamp)
   scale: [I] rev-~$3.5-4B-estimated-(private-+-no-disclosure-post-2022) / $16B-buyout-valuation-2022 / panel-+-big-data-from-45M-US-households-+-75M-devices / ~16k-employees
   scope: [E] nielsen-audience-measurement-+-Big-Data-+-Panel-+-Nielsen-ONE-+-related-measurement-+-data-services / excludes-pre-2014-Nielsen-NV-acquired-businesses-divested-via-spin-off-(Connect-business-spun-off-2021-as-NielsenIQ)
 

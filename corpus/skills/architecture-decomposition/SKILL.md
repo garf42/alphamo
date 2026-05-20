@@ -476,7 +476,7 @@ tokens of QA ergonomics.
   name: <display name>
   era: <year-range>           # e.g. "2024-2026", "1981-present", "1870-1911"
   industry: <slash-path>      # e.g. "healthcare/telehealth/dtc-rx"
-  status: <controlled>        # operating | operating-pressured | declining | defunct | transformed | forcibly-restructured
+  status: <controlled>        # operating | operating-pressured | declining | defunct | transformed | forcibly-restructured | restructured-with-successor-entities | defunct-with-niche-persistence | restructured-but-preserved
   scale: <[E|I|C|U] value>    # order-of-magnitude with vintage
   scope: <[E|I|C|U] value>    # what this entry covers and excludes
 
@@ -525,7 +525,7 @@ tokens of QA ergonomics.
   forces-emergence:                       # explicit numbered force-topology elements at emergence
     - id: F1
       description: <[E|I|C|U] value>     # one-sentence describing the force
-      status-now: <controlled>            # active | active-strengthening | active-durable | closing | closed | transformed | unknown
+      status-now: <controlled>            # active | active-strengthening | active-durable | closing | closed | transformed | redistributed | partially-persistent-at-reduced-scale | unknown
     - id: F2
       ...
 
@@ -559,13 +559,145 @@ tokens of QA ergonomics.
 
 **Controlled-vocabulary status note.** The enumerated value sets in
 the schema above (status, recurrence tags, concentration,
-relationship, force status-now, trajectory) are v1.2 working
-defaults. They will be locked after the Bloomberg validation run,
-when we have two structurally-different entries to validate the
-vocabulary against. If a value doesn't fit an existing enumerated
-slot, write what fits and flag in `notes` — the vocabulary will
-expand to accommodate genuine variation rather than the entry
-being distorted to fit existing slots.
+relationship, force status-now, trajectory) are working defaults,
+currently at v1.4 (mid-Layer-A-build amendment May 2026 — see
+"v1.4 status vocabulary guidance" section below). If a value doesn't
+fit an existing enumerated slot, write what fits and flag in
+`notes` — the vocabulary will expand to accommodate genuine
+variation rather than the entry being distorted to fit existing
+slots. Vocabulary expansions are gated on accumulated evidence
+(typically ~5 instances of a consistent sub-pattern); single-case
+deviations are accommodated via compound-string bridges and tracked
+for future amendment review.
+
+
+## v1.4 status vocabulary guidance
+
+The v1.3 enum had a single `forcibly-restructured` value and a single
+`defunct` value. Section A and Section B batch 1 Layer A entries
+surfaced three structurally distinct restructured/defunct profiles
+that the single values could not cleanly capture. The v1.4 amendment
+(May 2026) added three new `status` enum values and two new
+`forces-accumulated.status-now` values to absorb the patterns.
+
+### New `status` enum values
+
+- **`restructured-with-successor-entities`** (Sub-pattern A).
+  Architecture forcibly dissolved or restructured into multiple
+  successor entities; underlying productive assets redistributed
+  across new entities; original architecture closed but assets
+  persistent under new ownership. Canonical example: Standard Oil
+  1911 (33-34 successor entities). Use when:
+  - The original architecture is no longer operating as a single entity
+  - Successor entities continue holding the productive assets
+  - The restructuring was externally forced (court, regulator, government)
+
+- **`defunct-with-niche-persistence`** (Sub-pattern B).
+  Architecture defunct as mass-medium or original-scale operation;
+  successor entity exists operating a related but architecturally
+  distinct flow at substantially reduced scale; some accumulated
+  forces persistent in niche form. Canonical example: Kodak
+  (chemical film business) — defunct as mass-medium photography
+  architecture, niche enthusiast film revival via successor entity
+  Eastman Kodak at ~5-8% of peak scale. Use when:
+  - Original architecture no longer viable at its original scale
+  - Successor entity operates distinct architecture using some preserved assets
+  - Substrate shift (digital, AI, etc.) drove the closure
+
+- **`restructured-but-preserved`** (Sub-pattern C).
+  Architecture survives radical restructuring (corporate-form change,
+  ownership change, governance change, capital architecture change)
+  while preserving G-forces and underlying flow. Canonical examples:
+  NYSE 2006 demutualization + 2013 ICE acquisition; Lloyd's of London
+  1996 R&R + Equitas; Nielsen October 2022 PE buyout. Use when:
+  - Same architecture continues operating after restructuring
+  - G1-G5+ accumulated forces preserved through transformation
+  - Restructuring changed capital/governance/discipline but not flow
+
+### New `forces-accumulated.status-now` values
+
+- **`redistributed`** — Accumulated force's underlying assets divided
+  across successor entities post-restructuring; not closed (the
+  force still operates) but no longer concentrated in the original
+  architecture. Pairs with `restructured-with-successor-entities`
+  status. Canonical example: Standard Oil G1-G5 forces tagged
+  `redistributed` because pipeline + refining + export + capital
+  assets persisted in Jersey Standard, Standard Oil of NY, Standard
+  Oil of California, etc.
+
+- **`partially-persistent-at-reduced-scale`** — Accumulated force
+  partially preserved but operating at substantially reduced scale
+  than original architecture's load-bearing operation. Pairs with
+  `defunct-with-niche-persistence` status. Canonical example:
+  Kodak G1 (emulsion chemistry IP) and G2 (Kodak-moment brand)
+  tagged this — chemistry expertise + brand identity persist in
+  Eastman Kodak's 2024-26 niche film revival but at ~5-8% of peak
+  mass-medium scale.
+
+### Decision tree: choosing between Sub-pattern A vs C
+
+Both Sub-pattern A and Sub-pattern C describe restructured architectures
+that preserve some assets. The distinguishing question:
+
+> **Does the original architecture continue operating as a single
+> entity post-restructuring, or has it been divided into multiple
+> successor entities?**
+
+- If **single entity continues** (governance/capital/discipline
+  changed but identity + flow intact): `restructured-but-preserved`
+  (Sub-pattern C). NYSE post-2006 demutualization + post-2013 ICE
+  acquisition still operates NYSE as identifiable equity exchange.
+  Lloyd's post-1996 R&R still operates Lloyd's marketplace.
+  Nielsen post-2022 PE buyout still operates Nielsen measurement.
+
+- If **multiple successor entities** carry forward the productive
+  assets: `restructured-with-successor-entities` (Sub-pattern A).
+  Standard Oil 1911 → 33-34 successor entities each holding
+  fragments of original architecture's assets.
+
+Edge cases for chat-side review:
+- ATT pre-1984 → AT&T + 7 Baby Bells: looks like Sub-pattern A
+  (multiple successor entities receiving divided assets)
+- AIG 2008 → government bailout + restructuring while preserving
+  AIG identity: likely Sub-pattern C (entity continues)
+- IBM 1956 consent decree + 1980s antitrust pressure: not a clean
+  restructuring event; IBM continued operating; probably standard
+  `operating` with regulatory-pressure context in notes
+
+### Decision tree: Sub-pattern B vs `transformed` vs `defunct`
+
+The pre-v1.4 enum had `transformed` and `defunct` but no middle
+ground. Sub-pattern B fills the gap.
+
+- **`defunct`** — original architecture ceased operating, no
+  successor entity, no remaining persistence at scale. Pre-v1.4
+  use case stands: complete architectural failure.
+
+- **`defunct-with-niche-persistence`** (Sub-pattern B) — original
+  architecture ceased at original scale, successor entity operates
+  reduced-scale niche using preserved assets/IP. Kodak chemical
+  film canonical. Polaroid (defunct 2008, IP continued under
+  multiple successor brands) likely fits.
+
+- **`transformed`** — architecture continues but in fundamentally
+  different form than original; G-forces partially preserved but
+  flow has shifted. Pre-v1.4 use case: companies like General
+  Electric (industrial conglomerate → restructured into separate
+  businesses) or Twitter→X (deliberate platform transformation).
+
+### v1.5 candidate: Sub-pattern D (architecture-voluntarily-transformed)
+
+Berkshire Hathaway 1965 (Buffett acquisition of failing textile
+mill + voluntary redirection toward capital allocation) was
+considered for Sub-pattern C during v1.4 amendment but determined
+to be structurally distinct: the textile architecture was
+abandoned (not preserved), and the capital-allocation architecture
+was built new using the corporate vehicle. This is
+operator-driven voluntary transformation rather than external-
+pressure restructuring with architectural preservation.
+
+Single instance so far — tracked for future review as v1.5
+candidate. Do not add vocabulary for single case.
 
 ### Cross-entry references
 

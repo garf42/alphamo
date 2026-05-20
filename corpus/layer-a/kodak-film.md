@@ -14,7 +14,7 @@ Critical force-topology updates training data would miss: film photography reviv
   name: Kodak (chemical film business)
   era: 1888-2012
   industry: imaging/consumer-goods/chemical-film
-  status: [E] defunct-as-mass-medium-architecture / persists-in-niche-enthusiast-form-via-successor-entity-eastman-kodak
+  status: [E] defunct-with-niche-persistence / mass-medium-architecture-closed-2012 / niche-enthusiast-form-via-successor-entity-eastman-kodak-2024-26
   scale: [E] peak-rev-~$13-15B-1990s / peak-emp-~140k-1988 / bankruptcy-filing-jan-19-2012 / post-bankruptcy-rev-~$1B-2024 / post-bankruptcy-emp-~3.8k / film-business-~85%-of-peak-revenue
   scope: [E] chemical-film-business-1888-2012(consumer-film+motion-picture-film+photographic-paper+processing-chemicals) / excludes-pre-bankruptcy-digital-camera-business / excludes-post-2013-eastman-kodak-AM&C-pivot / excludes-kodak-alaris-distribution-entity-separate
 
@@ -79,13 +79,13 @@ Critical force-topology updates training data would miss: film photography reviv
 
   forces-accumulated:
     - id: G1
-      description: [E] cumulative-emulsion-chemistry-trade-secret-knowledge / ~100yr-R&D-investment-in-color-+-grain-+-stability-properties / kodachrome-portra-tri-x-formulations-as-IP-stock
+      description: [E] cumulative-emulsion-chemistry-trade-secret-knowledge / ~100yr-R&D-investment-in-color-+-grain-+-stability-properties / kodachrome-portra-tri-x-formulations-as-IP-stock / partially-persistent-in-eastman-kodak-2024-26-niche-revival-but-no-longer-mass-medium-substrate
       since: 1900s-continuous-through-1990s
-      status-now: closed-as-architecturally-load-bearing / partially-persistent-in-eastman-kodak-2024-26-niche-revival-but-no-longer-mass-medium-substrate
+      status-now: partially-persistent-at-reduced-scale
     - id: G2
-      description: [E] "kodak-moment"-cultural-+-brand-identity-accumulation / universal-household-recognition / cultural-archetype-status
+      description: [E] "kodak-moment"-cultural-+-brand-identity-accumulation / universal-household-recognition / cultural-archetype-status / brand-survives-but-commercial-leverage-diminished-as-photographic-substrate-shifted / 2025-revival-marketing-trades-on-residual-identity
       since: 1900-brownie-onward-continuous
-      status-now: partially-persistent / brand-survives-but-commercial-leverage-diminished-as-photographic-substrate-shifted / 2025-revival-marketing-trades-on-residual-identity
+      status-now: partially-persistent-at-reduced-scale
     - id: G3
       description: [E] global-manufacturing-scale-rochester-+-worldwide-plants / chemical-batch-manufacturing-with-decades-of-process-optimization
       since: 1920s-1990s-build-out

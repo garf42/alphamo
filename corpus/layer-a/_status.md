@@ -7,7 +7,8 @@
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
-**Schema gaps:** 1 confirmed + THRESHOLD TRIGGERED for v1.4 review (defunct-as-subject status-vocabulary; 5 instances now: kodak-film, nyse, lloyd's-of-london, standard-oil, nielsen — all required compound status values; convergence with redistributed pattern + restructured-but-preserved pattern + substrate-shift-with-niche-persistence sub-patterns confirmed; threshold per chat adjustment rule reached at nielsen 2022 PE buyout fitting sub-pattern C)
+**Schema version:** v1.4 (mid-Layer-A-build amendment, May 2026)
+**Schema gaps:** 0 confirmed for v1.4 (v1.4 absorbed the defunct-as-subject + restructured-but-preserved + restructured-with-successor-entities sub-patterns); 1 v1.5 candidate tracked (Sub-pattern D: architecture-voluntarily-transformed via Berkshire 1965 single-case)
 **Cross-architecture patterns surfaced:** 9 (see Cross-architecture patterns section below)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
 **Pending:** ~46 (remaining Sections B-F entries; awaiting chat review of this batch)
@@ -87,6 +88,70 @@ Batch 1 of Section B finance/payments complete. Awaiting chat review.
   - Quasi-regulatory positions pattern confirmed (Nielsen MRC + JIC = third instance after S&P G2 + Moody's G1)
 
 **HALTING BATCH PER THRESHOLD RULE.** v1.4 amendment review requested. Pending: 8 remaining batch 2 entries (ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud).
+
+## v1.4 schema amendment (May 2026 mid-build)
+
+**Chat approved Option 1: mid-build amendment with retroactive normalization.**
+
+### Schema changes
+
+Added to `status` enum (3 new values):
+- `restructured-with-successor-entities` (Sub-pattern A)
+- `defunct-with-niche-persistence` (Sub-pattern B)
+- `restructured-but-preserved` (Sub-pattern C)
+
+Added to `forces-accumulated.status-now` vocabulary (2 new values):
+- `redistributed`
+- `partially-persistent-at-reduced-scale`
+
+Skill version: v1.3 → v1.4. SKILL.md updated with new vocabulary,
+decision-tree guidance for choosing between Sub-pattern A vs C,
+and Sub-pattern B vs `transformed` vs `defunct`.
+
+### Retroactive normalization
+
+5 existing entries normalized:
+- **standard-oil**: status → `restructured-with-successor-entities`; G1+G2+G3+G5 status-now → `redistributed` (G4 → `closed`)
+- **kodak-film**: status → `defunct-with-niche-persistence`; G1+G2 status-now → `partially-persistent-at-reduced-scale`
+- **nyse**: status → `restructured-but-preserved`
+- **lloyds-of-london**: status → `restructured-but-preserved`
+- **nielsen**: status → `restructured-but-preserved`
+
+Descriptive metadata retained in each entry's status compound string
+and accumulated-force description fields. Audit counts unchanged.
+
+### Berkshire Hathaway verification (per chat verification step)
+
+Berkshire's 1965 textile-to-capital-allocation transition was
+considered for Sub-pattern C but determined to be structurally
+distinct:
+
+| Feature | Sub-pattern C (NYSE/Lloyd's/Nielsen) | Berkshire 1965 |
+|---|---|---|
+| Pre-restructuring architecture | Operating under existential/severe pressure | Failing textile business |
+| Accumulated forces (G1-G5+) | Preserved through restructuring | Abandoned (textile expertise dropped) |
+| Underlying flow | Same flow continues | Different flow (textiles → capital allocation) |
+| Restructuring trigger | External pressure forcing response | Opportunistic operator acquisition |
+| Continuity asset | Architecture identity + G-forces | Corporate shell (name + listing) |
+
+Berkshire is operator-driven voluntary transformation of corporate
+shell — old architecture abandoned, new architecture built using
+the corporate vehicle. Single instance so far; per chat instruction,
+documented as **v1.5 candidate Sub-pattern D
+(architecture-voluntarily-transformed-by-operator)** and Berkshire's
+status retained as current-state compound bridge (not normalized to
+Sub-pattern C).
+
+Berkshire's current status (`operating-durable / post-buffett-
+transition-uncertain / first-major-leadership-transition-in-60-
+years`) is already a current-state compound, not an
+architectural-restructuring compound — the 1965 transformation is
+captured in the `evolution` field, not `status`. No retroactive
+normalization needed.
+
+### Resume plan
+
+Batch 2 resuming with ims-health using v1.4 vocabulary natively.
 
 ## Cross-architecture patterns surfaced (9 total, post-Section-A + Section-B-batch-1)
 

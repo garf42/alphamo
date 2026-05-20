@@ -14,7 +14,7 @@ Critical force-topology updates training data would miss: (1) Equitas + Reconstr
   name: Lloyd's of London
   era: 1688-present (337 years; modern Lloyd's Act 1871; current structure 1996 R&R onward)
   industry: insurance/specialty-+-reinsurance-+-marketplace
-  status: [E] operating-durable / [E] survived-1990s-asbestos-near-failure-via-equitas-radical-restructuring / [C] increasing-competitive-pressure-2026-from-bermuda-+-alternative-capital
+  status: [E] restructured-but-preserved / [E] survived-1990s-asbestos-near-failure-via-1996-R&R-+-equitas / [C] increasing-competitive-pressure-2026-from-bermuda-+-alternative-capital
   scale: [E] GWP-£57.9B-FY2025 / profit-£10.6B / combined-ratio-87.6% / 84-syndicates-+-special-purpose-+-syndicates-in-a-box / ~$100B+-capital-base-(corporate-+-Names-+-institutional)
   scope: [E] lloyd's-marketplace-+-syndicate-+-Names-+-corporate-capital-+-third-party-capital-+-franchise-board-+-society-of-lloyd's-+-equitas-runoff-vehicle / specialty-insurance-+-reinsurance-+-marine-+-aviation-+-energy-+-political-+-cyber-+-other-specialty-lines
 

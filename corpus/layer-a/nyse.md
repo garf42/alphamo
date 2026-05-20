@@ -14,7 +14,7 @@ Critical force-topology updates training data would miss: (1) Listing competitio
   name: New York Stock Exchange
   era: 1817-present (208 years; modern public-company form since 2006)
   industry: finance/exchange/equities
-  status: [E] operating-durable / [E] forcibly-restructured-2006-via-demutualization / [E] subsidiary-of-ICE-2013-onward / [C] core-listings-position-eroding-to-nasdaq
+  status: [E] restructured-but-preserved / [E] demutualized-2006 / [E] subsidiary-of-ICE-2013-onward / [C] core-listings-position-eroding-to-nasdaq
   scale: [E] ~3,400-listed-companies / ~$30T-listed-market-cap / part-of-ICE-($9.9B-fy2025-consolidated-rev-+-$3.3B-net-income) / nyse-segment-revenue-not-separately-disclosed-but-meaningful-fraction-of-ICE-cash-equities-+-listings-segment
   scope: [E] nyse-equity-exchange-+-listings-+-related-options-+-exchange-data-products / includes-nyse-american-+-arca-+-chicago-+-national-+-options-business / excludes-ice-futures-+-clearing-+-fixed-income-+-mortgage-+-data-services-not-equity-specific
 
