@@ -3,7 +3,7 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 13 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
+**Completed:** 23 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
@@ -87,7 +87,32 @@ Batch 1 of Section B finance/payments complete. Awaiting chat review.
   - Pattern #4 confirmed at 7th instance
   - Quasi-regulatory positions pattern confirmed (Nielsen MRC + JIC = third instance after S&P G2 + Moody's G1)
 
-**HALTING BATCH PER THRESHOLD RULE.** v1.4 amendment review requested. Pending: 8 remaining batch 2 entries (ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud).
+**BATCH 2 RESUMED post-v1.4 amendment** — 8 remaining entries completed natively in v1.4:
+
+- [2026-05-19] ims-health: success — audit 49E/11I/7C/0U/67 — v1.4 native, no schema stress; healthcare-data + CRO multi-segment via 2016 Quintiles merger
+  - Pattern #7 confirmed at 7th instance + quasi-regulatory positions pattern at 4th instance
+- [2026-05-19] disney-ip: success — audit 47E/13I/7C/0U/67 — tier-1 IP + franchise + M&A-extended (Pixar/Marvel/Lucasfilm/Fox)
+  - Pattern #6 at 6th instance via Iger serial-M&A discipline; G1 102-year cumulative IP longest identity-architecture in corpus
+- [2026-05-19] microsoft-windows-office: success — audit 50E/11I/7C/0U/68 — tier-1 OS + productivity + multi-segment + Nadella discipline
+  - Pattern #4 at 10th instance (Microsoft/Google Workspace); pattern #6 at 7th instance (Nadella)
+  - 2001 consent decree Sub-pattern C candidate but architecture preserved via regulatory-imposed constraints (G4 force capture, no status change needed)
+- [2026-05-19] azure: success — audit 51E/10I/7C/0U/68 — tier-1 hyperscaler + AI substrate + Microsoft cross-product
+  - Pattern #6 at 8th instance; OpenAI 2025 multi-vendor restructuring Sub-pattern A/C boundary at partner-coupling level
+- [2026-05-19] aws: success — audit 52E/10I/6C/0U/68 — tier-1 hyperscaler first-mover + Anthropic AI substrate + Trainium custom silicon
+  - Pattern #4 at 11th instance (AWS/Azure direct comparator); pattern #6 at 9th instance with cultural-from-parent-company flavor
+  - New pattern candidate: vertical-integration-to-reduce-supplier-asymmetry (Trainium reducing NVIDIA dependence)
+- [2026-05-19] oracle-database: success — audit 51E/11I/6C/0U/68 — canonical switching-cost-dominant database + late-mover hyperscaler + AI substrate
+  - First explicit switching-cost-dominant architecture in corpus; pattern #6 at 10th instance (saturation reached)
+  - New pattern candidates: architectural-extension-via-coopetition (MultiCloud); strategic-customer-concentration-risk (Stargate/OpenAI)
+- [2026-05-19] salesforce: success — audit 51E/11I/6C/0U/68 — tier-1 SaaS CRM + multi-product + Trailblazer community + AI/Data 360
+  - Pattern #6 at 11th instance; pattern #4 at 12th instance with NOTE Dynamics +23% may indicate erosion toward zero-sum
+  - New pattern candidates: AI-business-model-pricing-experimentation (Agentforce 3 models in 18 months); cultural-community-as-architectural-asset (Trailblazer/Behance/Disney/Coca-Cola pattern); founder-CEO-discipline-resistance-to-co-CEO
+- [2026-05-19] adobe-creative-cloud: success — audit 50E/12I/6C/0U/68 — FINAL of batch 2; tier-1 creative software + 2013 subscription transformation + AI substrate + Figma acquisition failure
+  - Pattern #6 at 12th instance (Narayen); pattern #4 at 13th instance (Adobe/Figma)
+  - New pattern candidate: antitrust-as-architectural-extension-barrier (distinct from regulatory-protection/survival); regulatory-friendly-architecture-as-differentiation (Firefly commercial-safe training)
+  - 2013 Creative Cloud Sub-pattern C-adjacent (business-model-pivot variant) but status retained as operating-durable given 12+ year integration
+
+**BATCH 2 COMPLETE.** 23 newly-built entries + 4 seed = 27 total. Halting for chat review.
 
 ## v1.4 schema amendment (May 2026 mid-build)
 
