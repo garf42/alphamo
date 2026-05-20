@@ -14,7 +14,8 @@ Critical force-topology updates training data would miss: (1) Buffett succession
   name: Berkshire Hathaway Inc.
   era: 1965-present (Buffett era / current form); 1839 textile mill origin
   industry: insurance/conglomerate/capital-allocation
-  status: [E] operating-durable / [C] post-buffett-transition-uncertain / first-major-leadership-transition-in-60-years
+  status: [E] architecture-voluntarily-transformed-by-operator / operating-durable / [C] post-buffett-transition-uncertain / first-major-leadership-transition-in-60-years / sub-pattern-D-canonical-first-instance-1965-textile-to-capital-allocation
+  schema_version: v1.5
   scale: [E] rev-~$370B-FY2025-(operating-businesses) / market-cap-~$1.1T / cash-+-treasuries-$397B-Q1-2026-record / insurance-float-$176B / ~390k-employees-across-subsidiaries / 60+-direct-operating-subsidiaries
   scope: [E] capital-allocation-+-insurance-+-operating-subsidiaries / includes-GEICO-+-BNSF-+-Berkshire-Hathaway-Energy-+-McLane-+-Pilot-+-Marmon-+-Lubrizol-+-Precision-Castparts-+-See's-+-Dairy-Queen-+-Acme-Brick-+-many-others / includes-equity-portfolio-(Apple-+-American-Express-+-Coca-Cola-+-Bank-of-America-+-Chevron-+-Alphabet-+-Chubb-+-Occidental-+-others) / excludes-individual-subsidiary-architectures-as-separate-RAD-entries-where-applicable
 

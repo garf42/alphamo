@@ -3,16 +3,16 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 46 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
+**Completed:** 52 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
-**Schema version:** v1.4 (mid-Layer-A-build amendment, May 2026)
-**Schema gaps:** 0 confirmed for v1.4 (v1.4 absorbed the defunct-as-subject + restructured-but-preserved + restructured-with-successor-entities sub-patterns); 1 v1.5 candidate tracked (Sub-pattern D: architecture-voluntarily-transformed via Berkshire 1965 single-case)
+**Schema version:** v1.5 (mid-Layer-A-build amendments, May 2026 — v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D)
+**Schema gaps:** 0 confirmed for v1.5 (v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D after 3-instance saturation via Berkshire + Twitter/X + IBM); 0 candidates currently tracked
 **Cross-architecture patterns surfaced:** 10 (see Cross-architecture patterns section below; #10 promoted to formal pattern in batch 5 with separate `corpus/patterns/_saturated.md` catalog)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
-**Batch 5 in progress:** 3 of 10 entries built (intel, hims-hers, refinitiv-eikon); threshold-surfacing triggered after refinitiv-eikon for discipline-LOSS pattern saturation; resumed at walgreens-boots-alliance per chat decision
-**Pending:** ~17 (remaining batch 5 entries + Sections D-F)
+**Batch 5 in progress:** 9 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s); 2 threshold-surfacing events triggered + handled (#10 pattern saturation + Sub-pattern D v1.5 schema amendment); 1 remaining entry: blockbuster-video
+**Pending:** ~11 (blockbuster-video + Sections E-F)
 
 ## Log
 
@@ -134,6 +134,80 @@ Batch 1 of Section B finance/payments complete. Awaiting chat review.
   - **Threshold surface → chat decision: promote discipline-LOSS-as-anti-asset to formal cross-corpus pattern #10**
 
 **Resumed at walgreens-boots-alliance per chat decision; pattern #10 documented in `corpus/patterns/_saturated.md` with Layer D synthesis notes.**
+
+- [2026-05-20] walgreens-boots-alliance: success — audit 49E/12I/7C/0U/68 — retail-pharmacy multi-front decline + Sycamore PE buyout 2025
+  - 6th instance of pattern #10 (immediate reinforcement post-saturation): G6 serial-M&A-execution-failure across Rite Aid + VillageMD + Shields + CareCentrix
+  - 3rd Sub-pattern A voluntary sub-variant: PE-intermediary corporate-split (joining GE 2024 corporate-split + eBay 2015 partner-spinoff)
+  - 5th instance of pattern #9 (architecture-survival-via-radical-restructuring) — pattern at saturation threshold but not formally promoted
+  - Comparator-survivor: CVS Health (architectural-discipline-as-asset via successful M&A integration)
+- [2026-05-20] twitter-x: success — audit 47E/13I/7C/0U/67 — global-conversation-platform + founder-driven deliberate-transformation
+  - 2nd Sub-pattern D candidate (Berkshire-second-instance): Musk acquisition + workforce + culture + product + moderation reset; substrate continues
+  - Pattern #10 NEW MECHANISM: operator-voluntary discipline-abandonment (distinct from prior involuntary-deterioration in Boeing/Ford/GE/Intel/Refinitiv/WBA)
+  - First corpus instance of simultaneous discipline-LOSS + discipline-AS-ASSET in same architecture (G6 dual-pattern)
+  - Pattern #6 NEW MECHANISM: operator-personal-direction-as-discipline (Musk-era)
+- [2026-05-20] att-pre-1984: success — audit 52E/9I/7C/0U/68 — canonical regulated-natural-monopoly + 1984 MFJ divestiture
+  - Canonical Sub-pattern A forcible-restructuring confirmation per watchpoint #1 (joins Standard Oil 1911 as canonical pair)
+  - NEW NUANCE: Sub-pattern A forcible litigated-imposed (Standard Oil) vs negotiated-settlement (AT&T) mechanism distinction
+  - NEW NUANCE: pre-emptive-strategic-restructuring mechanism for pattern #9 (Kingsbury Commitment 1913)
+  - 7th instance of pattern #3 + 8th instance of pattern #1 (Vail doctrine)
+- [2026-05-20] microsoft-antitrust-era: success — audit 50E/11I/7C/0U/68 — canonical Sub-pattern C antitrust-conduct-constraints-without-divestiture
+  - Canonical Sub-pattern C confirmation per watchpoint #2 (6th instance total joining NYSE + Lloyd's + Nielsen + PayPal + Refinitiv-Eikon)
+  - **NEW NUANCE: Sub-pattern C mechanism-variants taxonomy surfaced** (case-dropped IBM 1982; appellate-reversal-then-settlement Microsoft 2001; consent-decree-conduct-restrictions AT&T 1956 + Microsoft 1994; market-pressure-driven Lloyd's/Nielsen/WBA; federal-rescue-preservation AIG 2008 partial)
+  - Sub-pattern A vs Sub-pattern C architectural-determinants identified: appellate-process opportunity, remedy-design feasibility, vertical-integration separability, negotiation-mechanism
+  - 6th instance of pattern #9
+- [2026-05-20] aig-2008: success — audit 51E/10I/7C/0U/68 — ambiguous A vs C resolution + federal-rescue mechanism
+  - **FIRST CORPUS INSTANCE OF SIMULTANEOUS SUB-PATTERN A + SUB-PATTERN C** per watchpoint #3 (segment-level-separability creates simultaneous classification: AIA/ALICO/non-core Sub-pattern A divested; US P&C/US Life Sub-pattern C preserved)
+  - 7th instance of pattern #10 (first financial-services + first regulatory-arbitrage-as-mechanism via AIGFP)
+  - 8th instance of pattern #3 + canonical AIG-vs-Lehman illustration (load-bearing-status as architectural-determinant of bailout-vs-bankruptcy)
+  - 3rd instance of architectural-perspective-dependent classification (AIG joins eBay/PayPal + de-beers)
+  - 14th instance of pattern #6 with bracketed-discipline-eras mechanism (Greenberg→loss→Benmosche)
+  - Federal-rescue-as-novel-restructuring-mechanism for Sub-pattern A
+- [2026-05-20] ibm-1980s: success — audit 52E/9I/7C/0U/68 — **THRESHOLD-SURFACING TRIGGERED #2** (3rd Sub-pattern D instance reaches v1.5 schema amendment threshold per watchpoint #4)
+  - Sub-pattern D 3rd canonical instance (Berkshire 1965 + Twitter/X 2022 + IBM 1993 Gerstner-pivot)
+  - 8th instance of pattern #10 via mainframe-cliff 1985-1993 (missed-substrate-shift-response mechanism)
+  - Sub-pattern C case-dropped-variant confirmed (IBM 1969-1982 DOJ case dropped predates Microsoft 2001 settlement variant)
+  - 15th instance of pattern #6 with multi-era bracketing discipline (Watson + Gerstner + post-Gerstner CEOs)
+  - **Threshold surface → chat decision: v1.5 schema amendment now**
+
+## v1.5 schema amendment (May 2026 mid-build, second amendment)
+
+**Chat approved: amend v1.4 → v1.5 with retroactive normalization of 3 entries.**
+
+### Schema changes
+
+Added to `status` enum (1 new value):
+- `architecture-voluntarily-transformed-by-operator` (Sub-pattern D)
+
+Added to `forces-accumulated.status-now` vocabulary (1 new value):
+- `replaced-by-operator-transformation`
+
+Skill version: v1.4 → v1.5. SKILL.md updated with new vocabulary +
+decision tree for Sub-pattern D vs B vs C choice + retroactive
+normalization log.
+
+### Retroactive normalization (v1.5)
+
+3 existing entries normalized:
+- **berkshire-hathaway**: status compound bridge replaced with
+  `architecture-voluntarily-transformed-by-operator / operating-durable
+  / post-buffett-transition-uncertain / sub-pattern-D-canonical-first-
+  instance-1965-textile-to-capital-allocation`
+- **twitter-x**: status updated to `architecture-voluntarily-
+  transformed-by-operator / operating / under-xAI-since-2025 /
+  sub-pattern-D-second-instance-2022-Musk-acquisition-architecture-reset`
+- **ibm-1980s**: status updated to `architecture-voluntarily-
+  transformed-by-operator / mainframe-era-architecture-largely-abandoned
+  / corporate-vehicle-preserved-via-services-+-software-pivot /
+  sub-pattern-D-third-instance-1993-Gerstner-pivot`
+
+Descriptive metadata retained in each entry's status compound string
+and accumulated-force description fields. Audit counts unchanged.
+
+### Resume plan post-v1.5
+
+Continue batch 5 with blockbuster-video (#53 + batch-end) under v1.5
+vocabulary natively. Halt at 10-entry checkpoint after blockbuster-video
+for chat review.
 
 ## v1.4 schema amendment (May 2026 mid-build)
 

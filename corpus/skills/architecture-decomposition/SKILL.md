@@ -476,7 +476,7 @@ tokens of QA ergonomics.
   name: <display name>
   era: <year-range>           # e.g. "2024-2026", "1981-present", "1870-1911"
   industry: <slash-path>      # e.g. "healthcare/telehealth/dtc-rx"
-  status: <controlled>        # operating | operating-pressured | declining | defunct | transformed | forcibly-restructured | restructured-with-successor-entities | defunct-with-niche-persistence | restructured-but-preserved
+  status: <controlled>        # operating | operating-pressured | declining | defunct | transformed | forcibly-restructured | restructured-with-successor-entities | defunct-with-niche-persistence | restructured-but-preserved | architecture-voluntarily-transformed-by-operator
   scale: <[E|I|C|U] value>    # order-of-magnitude with vintage
   scope: <[E|I|C|U] value>    # what this entry covers and excludes
 
@@ -560,8 +560,9 @@ tokens of QA ergonomics.
 **Controlled-vocabulary status note.** The enumerated value sets in
 the schema above (status, recurrence tags, concentration,
 relationship, force status-now, trajectory) are working defaults,
-currently at v1.4 (mid-Layer-A-build amendment May 2026 — see
-"v1.4 status vocabulary guidance" section below). If a value doesn't
+currently at v1.5 (mid-Layer-A-build amendments May 2026 — see
+"v1.4 status vocabulary guidance" and "v1.5 Sub-pattern D amendment"
+sections below). If a value doesn't
 fit an existing enumerated slot, write what fits and flag in
 `notes` — the vocabulary will expand to accommodate genuine
 variation rather than the entry being distorted to fit existing
@@ -685,19 +686,96 @@ ground. Sub-pattern B fills the gap.
   Electric (industrial conglomerate → restructured into separate
   businesses) or Twitter→X (deliberate platform transformation).
 
-### v1.5 candidate: Sub-pattern D (architecture-voluntarily-transformed)
+## v1.5 Sub-pattern D amendment (May 2026)
 
-Berkshire Hathaway 1965 (Buffett acquisition of failing textile
-mill + voluntary redirection toward capital allocation) was
-considered for Sub-pattern C during v1.4 amendment but determined
-to be structurally distinct: the textile architecture was
-abandoned (not preserved), and the capital-allocation architecture
-was built new using the corporate vehicle. This is
-operator-driven voluntary transformation rather than external-
-pressure restructuring with architectural preservation.
+Section C + D batch 5 Layer A entries surfaced 3 instances of a
+structurally distinct restructuring profile from Sub-pattern A
+(forcibly-restructured) and Sub-pattern C (restructured-but-
+preserved): operator-driven voluntary transformation while the
+corporate vehicle persists. The v1.5 amendment (May 2026) adds
+one new `status` enum value and one new `forces-accumulated.
+status-now` value to absorb the pattern.
 
-Single instance so far — tracked for future review as v1.5
-candidate. Do not add vocabulary for single case.
+### New `status` enum value (v1.5)
+
+- **`architecture-voluntarily-transformed-by-operator`** (Sub-
+  pattern D). Operator (founder, acquirer, incoming CEO)
+  voluntarily transforms the architecture — accumulated forces +
+  operating discipline + capture mechanism substantially replaced
+  — while the corporate vehicle (legal identity, brand, customer
+  relationships) persists. Distinct from Sub-pattern C
+  (restructured-but-preserved): in Sub-pattern C the accumulated
+  forces are preserved through restructuring; in Sub-pattern D
+  the accumulated forces are partially or fully replaced.
+  Distinct from Sub-pattern B (defunct-with-niche-persistence):
+  in Sub-pattern B the substrate disappeared and operator was not
+  able to pivot; in Sub-pattern D the substrate continued and
+  operator chose to transform. Canonical examples:
+  - Berkshire Hathaway 1965 (Buffett acquisition; textile-to-
+    capital-allocation transformation)
+  - Twitter → X 2022-onward (Musk acquisition; Twitter-era-to-
+    Musk-era architectural reset)
+  - IBM 1993 (Gerstner CEO; mainframe-hardware-led-to-services-+-
+    software-led pivot)
+  Use when:
+  - Operator-voluntary transformation (not crisis-forced like
+    AIG-2008 federal-rescue, not regulatory-forced like
+    Standard-Oil-1911 or AT&T-1984)
+  - Corporate-vehicle continuity (entity preserved + brand +
+    legal identity)
+  - Architecture-substantially-different from prior (accumulated
+    forces partially or fully replaced)
+  - Substrate did NOT disappear (distinct from Kodak Sub-pattern B)
+
+### New `forces-accumulated.status-now` value (v1.5)
+
+- **`replaced-by-operator-transformation`** — Original accumulated
+  force partially or fully replaced via operator-voluntary
+  architectural transformation. Pairs with `architecture-
+  voluntarily-transformed-by-operator` status. Use for legacy-era
+  accumulated forces that were substantially abandoned during the
+  voluntary transformation (distinct from `closed` which implies
+  exhaustion or substrate disappearance, and from `redistributed`
+  which implies external-pressure-distribution to successor
+  entities).
+
+### Decision tree: Sub-pattern D vs Sub-pattern B vs Sub-pattern C
+
+Decision criteria for choosing between voluntary-transformation,
+defunct-with-niche-persistence, and restructured-but-preserved:
+
+1. **Did the substrate disappear?**
+   - Yes → Sub-pattern B (`defunct-with-niche-persistence`) — Kodak
+   - No → continue to step 2
+
+2. **Were the accumulated forces preserved through restructuring?**
+   - Yes (G-forces continue carrying value capture) → Sub-pattern C
+     (`restructured-but-preserved`) — NYSE, Lloyd's, Nielsen,
+     PayPal, Microsoft 2001
+   - No (G-forces substantially replaced) → continue to step 3
+
+3. **Was the transformation operator-voluntary or externally-forced?**
+   - Externally-forced (court, regulator, market-crisis) →
+     Sub-pattern A (`restructured-with-successor-entities`) or
+     bankruptcy-recovery — Standard Oil, AT&T, AIG-2008
+   - Operator-voluntary (founder/acquirer/incoming-CEO choice) →
+     Sub-pattern D (`architecture-voluntarily-transformed-by-
+     operator`) — Berkshire, Twitter/X, IBM-Gerstner
+
+### Retroactive normalization (v1.5)
+
+3 existing entries normalized:
+- **berkshire-hathaway**: status compound bridge replaced with
+  `architecture-voluntarily-transformed-by-operator / operating-
+  durable / post-buffett-transition-uncertain`; 1965-era textile
+  accumulated forces tagged `replaced-by-operator-transformation`
+- **twitter-x**: status updated to `architecture-voluntarily-
+  transformed-by-operator / under-xAI-since-2025`; Twitter-era
+  G-forces tagged `replaced-by-operator-transformation`
+- **ibm-1980s**: status updated to `architecture-voluntarily-
+  transformed-by-operator / mainframe-era-largely-abandoned /
+  corporate-vehicle-preserved`; mainframe-era G-forces tagged
+  `replaced-by-operator-transformation` where applicable
 
 ### Cross-entry references
 

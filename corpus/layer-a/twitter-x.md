@@ -57,8 +57,8 @@ slug: twitter-x
 name: X Corp. (formerly Twitter) — under xAI Holdings since March 2025
 industry: social/internet
 era: 2006-present
-status: operating / actively-transformed-by-operator / sub-pattern-D-candidate-(Berkshire-second-instance) / under-xAI-since-2025
-schema_version: v1.4
+status: architecture-voluntarily-transformed-by-operator / operating / under-xAI-since-2025 / sub-pattern-D-second-instance-2022-Musk-acquisition-architecture-reset
+schema_version: v1.5
 
 scope:
   included: [E] Twitter Inc. 2006-2022 + X Corp. 2022-2025 + xAI Holdings subsidiary
