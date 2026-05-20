@@ -76,6 +76,142 @@ A completes; this is not a Sprint 12 blocker.
 
 ---
 
+## Pattern #11: Failed-architecture-as-cultural-cautionary-asset
+
+### Status
+Saturated at 5 instances, batch 6, May 2026.
+
+### Mechanism
+Failed architecture itself becomes durable cultural artifact via
+business-school case-study circulation + cultural metonym formation +
+business-press repetition cycle. Accumulated-force operates via
+**failure-cultural-output** rather than **success-value-capture** —
+structurally distinct from all patterns #1-#10 which operate via
+success.
+
+### Instances
+- blockbuster-video: Netflix-acquisition-decline 2000 + incumbent-
+  failure-to-pivot. "Blockbuster" became metonymic-shorthand for
+  incumbent-failure-to-pivot.
+- polaroid: founder-departure + substrate-shift failure + 2x Chapter
+  11. Canonical case-study for founder-CEO-discipline-loss preceding
+  substrate-shift defeat.
+- sears: Lampert-financial-engineering + multi-decade decline +
+  outcompeted-by-superior-composition. Canonical case-study for
+  financial-engineering-substituting-for-operating-discipline.
+- yahoo: 1998 Google $1M decline + 2008 Microsoft $44.6B rejection +
+  serial-missed-opportunities. "Yahoo'd" entered some usage as
+  verb-for-missing-opportunity.
+- nokia-phones: "Burning platform" memo + Microsoft acquisition +
+  writedown + multi-OS confusion. "Burning platform" metaphor
+  entered business-strategy vocabulary widely.
+
+### Invariant features
+- Failed architecture itself becomes durable cultural artifact (case
+  studies, metonyms, business school curricula)
+- Failure-cultural-output operates via decade-long cycle independent
+  of original architecture's residual operations
+- Cross-industry: photography (Polaroid), retail (Blockbuster,
+  Sears), internet (Yahoo), mobile (Nokia)
+- Specific cultural artifacts emerge (3310 nostalgia, "burning
+  platform" metaphor, "Yahoo'd" verb, Blockbuster-as-metonym, Sears-
+  Tower-as-symbolic-peak)
+- Pattern operates via FAILURE rather than SUCCESS — structurally
+  distinct from all #1-#10 patterns
+
+### Layer D synthesis notes
+- This pattern is itself a Layer D evaluative-input: it suggests that
+  the failure-cultural-output of an architecture can be more durable
+  than its operating-architectural-output. For proposer reasoning:
+  the cultural-cautionary-asset is a different optimization target
+  from architectural-success-target.
+- Selection-bias caveat: business-school-case-study curation itself
+  biases toward dramatic failures + iconic missed-opportunities.
+  Whether this is a true cross-architecture pattern OR an observation-
+  of-corpus-curation-artifact merits Layer D examination. Both
+  interpretations have implications for proposer reasoning.
+- Architectures that should AVOID becoming-cultural-cautionary-assets
+  are those operating-near-substrate-shift-thresholds — proposer
+  reasoning should weigh trajectory-toward-failure-cultural-output as
+  itself an outcome-class.
+
+### Comparator survivors
+All 5 instances have named substrate-attacker-survivors that became
+the architectural-template-of-the-future-substrate:
+- Blockbuster → Netflix (substrate-attacker became substrate-architect)
+- Polaroid → Fujifilm-instax + smartphone-photography (substrate-
+  attacker-+-substitute)
+- Sears → Walmart + Amazon (superior-composition substrate-attackers)
+- Yahoo → Google + Facebook + smartphones (multi-substrate-attackers)
+- Nokia phones → Apple + Samsung + Chinese-OEMs (substrate-attacker-
+  survivors)
+
+The substrate-attacker-becomes-substrate-architect pattern is itself
+visible in 3+ of these comparator-survivors (Netflix, Google, Apple).
+
+---
+
+## Pattern #6 sub-pattern: Bracketed-discipline-eras
+
+### Status
+Designated as sub-pattern of #6 (architectural-discipline-as-asset)
+at 3 instances, batch 6, May 2026.
+
+### Mechanism
+Operator-discipline-eras bracket a crisis-period-of-discipline-loss,
+with subsequent operator-discipline-restoration preserving
+accumulated-forces. Distinct from continuous-discipline-pattern
+(Berkshire, Bloomberg, TSMC) in that there is an explicit-loss-period
+between discipline-eras.
+
+### Instances
+- AIG: Greenberg 1968-2005 discipline-era (37 years) + 2005-2008 loss-
+  period (3 years) + Benmosche 2009-2014 discipline-restoration (5
+  years). Architecture survived crisis via discipline-restoration.
+- IBM: Watson-doctrine 1924-1971 + 1985-1993 mainframe-cliff loss-
+  period (8 years) + Gerstner-restoration 1993-2002 + post-Gerstner
+  discipline-maintenance. Architecture survived crisis via Sub-pattern
+  D execution.
+- BlackBerry: Lazaridis-Balsillie co-CEO 1984-2012 + Heins-period
+  2012-2013 loss-period (1 year) + Chen 2013-present discipline-
+  restoration with architectural-pivot. Architecture transformed via
+  Sub-pattern D execution.
+
+### Invariant features
+- Multi-era operator-discipline with explicit loss-period between
+- Loss-period typically 1-10 years (shorter than continuous-discipline)
+- Restoration-period operator-mechanism varies: same-vehicle-different-
+  CEO (AIG Benmosche, IBM Gerstner, BlackBerry Chen)
+- Outcome: architecture survived or transformed via discipline-
+  restoration
+- Distinct from pattern #10 (discipline-LOSS-as-anti-asset): these
+  3 had successful-restoration; pattern #10 instances had failed-
+  restoration
+
+### Note on relationship to pattern #10
+The bracketed-discipline-eras sub-pattern and pattern #10
+(architectural-discipline-LOSS-as-anti-asset) are related but
+distinct:
+- Bracketed-discipline-eras = discipline-loss-followed-by-successful-
+  restoration (preserves architecture)
+- Pattern #10 = discipline-loss-as-anti-asset that resists recovery
+  (some attempt restoration but outcomes pending or failed)
+
+The structural-determinant of which outcome obtains may be:
+operator-discontinuity-mechanism + capability-of-incoming-operator +
+substrate-state-at-loss + accumulated-force-resilience.
+
+### Layer D synthesis notes
+- For proposer reasoning: architectures with multi-decade-founder-CEO
+  discipline carry both upside (continuous-discipline-as-asset) and
+  downside (operator-discontinuity at succession creates loss-period-
+  risk).
+- Discipline-restoration-mechanism is itself an architectural-asset
+  (separate from prior-era-discipline) — proposer should evaluate
+  architectures for discipline-succession-mechanism robustness.
+
+---
+
 ## Approaching-saturation tracking
 
 Patterns currently below 5-instance threshold but accumulating
@@ -141,61 +277,51 @@ both A AND C at different segment-levels with no perspective shift.
 Documented as novel finding. Single instance; watch Section E + F
 for additional cases.
 
-### Architectural-perspective-dependent classification (currently 3 instances)
+### Architectural-perspective-dependent classification (currently 4 instances)
 - eBay/PayPal 2015: Sub-pattern A from eBay multi-segment view +
   Sub-pattern C from PayPal preserved-architecture view
 - de-beers cartel-to-post-2000 transformation: classifications differ
   by sub-architecture
 - AIG 2008: divested-segment perspective + preserved-core perspective
+- nokia-phones-vs-Nokia-Corporation: phone-architecture is Sub-pattern
+  B; Nokia Corporation-as-corporate-vehicle pivoted to networks-+-
+  licensing is Sub-pattern D
 
 Note: AIG case is structurally distinct (see "Simultaneous Sub-
 pattern A+C classification" above) but documented under both
 trackers for cross-reference.
 
-Approaching saturation at 3 instances; 4th would trigger formal
-pattern designation. Watch Section D + E for additional instances.
+Approaching saturation at 4 instances; 5th would trigger formal
+pattern designation. Watch Section E remainder + F for additional
+instances.
 
-### Failed-architecture-as-cultural-cautionary-asset (currently 1 instance)
+### Failed-architecture-as-cultural-cautionary-asset (PROMOTED to #11 — see above)
 
-Blockbuster-Video surfaced a novel accumulated-force-type:
-**failed-architecture-as-cultural-cautionary-asset** operates via
-failure-cultural-output rather than success-value-capture. The
-Blockbuster-Netflix-acquisition-decline 2000 + business-school-case-
-study + technology-strategy-cautionary-example cycle has created
-sustained cultural-asset around the failed architecture itself —
-"Blockbuster" has become metonymic-shorthand for incumbent-failure-
-to-pivot.
+5 instances saturation reached at batch 6 (Blockbuster + Polaroid +
+Sears + Yahoo + Nokia phones). Promoted to formal cross-corpus
+pattern #11 (see above).
 
-Watch in Section E remainder for additional instances likely to
-appear at: Polaroid (canonical instant-photography substrate-vanished),
-Sears (canonical retail incumbent-substituted-by-superior-composition),
-Yahoo (canonical search-portal-position-substituted), Kodak (already
-a Layer A entry, but cultural-asset-as-referent persists at scale).
+### Category-extinction-event observation (currently 3 candidates)
 
-Below 3-instance threshold for formal pattern designation. Tracked.
+3 category-extinction-event candidates surfaced through batch 5 + 6:
 
-### Category-extinction-event observation (currently 1 instance)
-
-Blockbuster-Video surfaced a related but distinct observation: the
-entire architectural-category (brick-and-mortar movie-rental) went
-defunct/near-defunct simultaneously (Hollywood Video + Movie Gallery +
-Family Video + Blockbuster all closed or near-closed by ~2014/2021).
-This is a **defunct-without-persistence variant** distinct from
-single-architecture defunct cases.
+1. **Brick-and-mortar movie-rental** (Blockbuster + Hollywood Video +
+   Movie Gallery + Family Video all defunct/near-defunct by ~2014/2021)
+2. **Mid-century-American-department-store** (Sears + Kmart + JC Penney
+   + Lord & Taylor + others defunct or under pressure; Macy's, Kohl's,
+   Dillard's continue at reduced scale — partial category-extinction)
+3. **Pre-iPhone-era-mobile-OEM** (Nokia + BlackBerry + Motorola + HTC
+   + Sony Ericsson + Palm all defunct or near-defunct as original
+   architecture; multiple successor mechanisms)
 
 Different from Sub-pattern B (defunct-with-niche-persistence) which
 preserves architecture in narrower-niche-via-successor-entity. In
-category-extinction the entire category vanishes; the closest analog
-in current architecture-list is the brick-and-mortar movie-rental
-extinction.
+category-extinction the entire architectural-category vanishes; in
+some cases individual companies persist as licensee + niche but the
+category-as-template is closed.
 
-Watch Section E for additional category-extinction events likely at:
-photography (Polaroid + Kodak + others; though digital photography
-preserves the imaging substrate at scale via new architectures),
-department stores (Sears + Kmart + JC Penney + Lord & Taylor + Macy's
-under pressure; partial category-extinction event), pre-iPhone
-mobile-phone architectures (Nokia + BlackBerry + Motorola + Sony
-Ericsson).
+Watch Section E for additional category-extinction events. Approaching
+3-instance threshold; 4th would trigger formal pattern designation.
 
 Below threshold for v1.6 schema amendment. Tracked.
 
@@ -219,18 +345,10 @@ Watch luxury + IP-licensed-product entries for 3rd-4th instance.
 Both instances currently semiconductor-domain. Non-semiconductor
 instance would resolve domain-specific-vs-general question.
 
-### Bracketed-discipline-eras (currently 2 instances)
-- AIG (Greenberg 1968-2005 discipline-era + 2005-2008 loss-period +
-  Benmosche 2009-2014 discipline-restoration)
-- IBM (Watson-doctrine 1924-1971 + 1985-1993 loss-period + Gerstner
-  1993-2002 discipline-restoration)
+### Bracketed-discipline-eras (PROMOTED to #6 sub-pattern — see above)
 
-Candidate sub-pattern of #6 (architectural-discipline-as-asset).
-Mechanism: operator-discipline-eras bracket a crisis-period-of-
-discipline-loss, with subsequent operator-discipline-restoration
-preserving accumulated-forces. Distinct from continuous-discipline-
-pattern (Berkshire, Bloomberg, TSMC). Watch additional instances
-across Section E + F before formal designation.
+3 instances saturation reached at batch 6 (AIG + IBM + BlackBerry).
+Formally designated as sub-pattern of #6 (see above).
 
 ### Pre-emptive-strategic-architecture (currently 2 instances)
 - hims-hers G6 (April 2024 Novo Nordisk partnership pre-announcement
