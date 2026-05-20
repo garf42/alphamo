@@ -358,3 +358,206 @@ Formally designated as sub-pattern of #6 (see above).
 
 Anticipatory-strategic-positioning-as-discipline mechanism. Watch
 Section E + F for additional instances.
+
+### Sequential sub-pattern traversal observation (currently 1 instance)
+
+**BlackBerry** surfaced the first corpus instance of **sequential Sub-
+pattern traversal within a single corporate vehicle**:
+- Sub-pattern B execution (phone-architecture defunct-with-niche-
+  persistence post-iPhone) → Sub-pattern D execution (voluntary
+  transformation under Chen 2013+ from devices to enterprise-software-
+  +-QNX-licensing) → emerging Sub-pattern A-adjacent candidate (if
+  enterprise-software segment further divested)
+
+Distinct from:
+- **Architectural-perspective-dependent classification**: same event,
+  different classifications by sub-architecture (eBay/PayPal,
+  de-beers, AIG, nokia-phones-vs-Nokia-Corporation)
+- **Simultaneous Sub-pattern A+C classification**: same architecture
+  at single point classifies both A AND C at different segment-levels
+  (AIG)
+
+Sequential traversal is a third structural variant: **single
+architecture-subject moves through different Sub-pattern classifications
+across time**. The sub-pattern designation is a function of when the
+architecture is decomposed; full-history decomposition requires
+multiple-sub-pattern designations.
+
+Layer D synthesis note: proposer reasoning should recognize that
+Sub-pattern classifications are not necessarily terminal — an
+architecture in Sub-pattern B today may execute Sub-pattern D
+tomorrow under operator-discretion + accumulated-force-preservation.
+Distinct from architectures with no accumulated-force-preservation
+where Sub-pattern B is terminal.
+
+Single instance; watch Section E + F (and longitudinally) for
+additional cases. May warrant formal sub-classification if 3+
+instances emerge.
+
+### Architecture-of-architectures-enabler (currently 2 corpus + 2 candidate-analog instances)
+
+Pattern: architecture-as-substrate-enabling-other-architectures.
+Architecture's value-capture mechanism includes serving-as-input-
+substrate to downstream architectures that operate on top.
+
+**Confirmed corpus instances:**
+- **Stripe Atlas** (G4): Atlas-formed-businesses (~150K+) collectively
+  constitute substantial-architecture-source for downstream Stripe-
+  ecosystem growth (Stripe payments + Connect + Capital + Issuing).
+  Atlas value-capture extends beyond direct fee to ecosystem-feeder
+  role.
+- **Substack** (G7): Substack-as-substrate enabling individual-creator-
+  architectures + collective newsletter-business-architectures (~50K+
+  paid-creators). Architecture-of-architectures-enabler role
+  strengthening as platform grows.
+
+**Candidate-analog instances** (decomposed in Layer A but not under
+this lens):
+- **AWS**: architecture-as-substrate for tens-of-thousands of business-
+  architectures across SaaS + consumer-internet + AI + enterprise
+  categories. Existing Layer A entry classifies as multi-segment-
+  technology-platform; architecture-of-architectures-enabler is
+  additional structural-feature.
+- **Apple App Store**: architecture-as-substrate for app-architectures
+  (~2M+ apps). Existing apple-iphone Layer A entry references ecosystem
+  but does not specifically capture architecture-of-architectures-
+  enabler dimension.
+
+**Mechanism distinct from generic platform-with-developers**:
+architecture-of-architectures-enabler specifically captures the
+case where the enabled-downstream-architectures themselves rise to
+architectural-significance (business-architectures, not just feature-
+additions). Atlas-formed-businesses are businesses-in-their-own-right;
+Substack newsletters are media-businesses; AWS-built-businesses
+include companies like Netflix + Airbnb + Lyft.
+
+**Approaching saturation** at 2 confirmed + 2 candidate-analog
+instances. Watch for additional instances in:
+- Layer A remaining (Section E + F: limited candidates)
+- Salesforce-AppExchange + Shopify-merchants + WordPress-publishers
+  + YouTube-creators (cross-architecture analogs not yet decomposed
+  under this lens)
+- Microsoft-Azure marketplace + Google-Workspace-marketplace
+
+If 3+ confirmed corpus instances reach 5-instance threshold via
+re-decomposition of candidate-analogs, would promote to pattern #12.
+Below threshold for formal designation. Tracked.
+
+### Governance-form-as-architectural-asset (currently 3 candidate instances)
+
+Pattern: legal-corporate-form-itself acts as architectural-asset by
+providing mission-protection + governance-stability + talent-
+attraction-mechanism. Distinct from operator-discipline + founder-CEO-
+continuity in that governance-form provides structural-defense via
+legal-form rather than operator-attention.
+
+**Candidate instances:**
+- **Anthropic-claude PBC**: Public Benefit Corporation structure
+  providing legal-protection for mission-balanced-with-profit. Lower
+  governance-fragility than OpenAI Foundation-LP-for-profit-transition
+  exhibited in November 2023 governance crisis.
+- **OpenAI Foundation-LP**: capped-profit structure + Foundation-
+  controls-LP corporate-form. Documented governance-crisis November
+  2023 revealed structural-fragility of this form under commercial-
+  scaling-stress. Currently in transition toward more-conventional-
+  for-profit status (2025-2026).
+- **Rolex foundation-ownership** (Hans Wilsdorf Foundation): Rolex SA
+  100% foundation-owned; foundation-protected from acquisition + IPO-
+  pressure + family-succession-dilution. Multi-decade architectural-
+  discipline-preservation via legal-form.
+
+**Adjacent candidates** (Layer A entries with governance-form
+contributions but not primary mechanism):
+- Berkshire-Hathaway: corporate-vehicle-as-permanent-capital
+  architecture (G3) — adjacent but operates via Buffett-Munger-
+  discipline-substitution rather than legal-form-protection per se
+- Bloomberg-the-person ownership of Bloomberg LP: private-company-
+  structure-as-discipline-mechanism (closer to governance-form than
+  most)
+- Stripe private-company structure: similar to Bloomberg adjacent
+
+**Mechanism distinct from pattern #6 (architectural-discipline-as-
+asset)**: pattern #6 mechanism is operator-attention + cultural-
+continuity + founder-CEO-tenure. Governance-form mechanism is legal-
+structure-providing-defense-when-operator-attention-or-pressure-fails.
+Complementary rather than substitute mechanisms.
+
+**Status: 3 candidate instances approaching threshold**. Watch for
+additional governance-form-driven architectures in:
+- Mutual-form companies (Vanguard mutual-fund structure; State Farm;
+  USAA)
+- Cooperatives (REI; mutual-life-insurance organizations)
+- B-Corps + Public Benefit Corporations broadly (Patagonia structure
+  2022)
+- Trust-owned companies (Tata Group via Tata Trusts; Bosch via Robert
+  Bosch Stiftung)
+
+If 5-instance threshold reached (likely if any 2 of the adjacent-
+candidates reclassified or 2 new instances emerge), would promote to
+pattern #12 candidate. Below threshold for formal designation.
+Tracked.
+
+### Sub-pattern mechanism observations from Medvi entry
+
+The medvi rebuild (Section F batch 6 #6) surfaced two Sub-pattern
+mechanism observations worth documenting:
+
+**Observation 1: Earliest-stage Sub-pattern D candidate captured
+prospectively, not retrospectively.**
+
+All prior Sub-pattern D instances (Berkshire 1965+, Twitter/X 2022+,
+IBM 1993+, BlackBerry 2013+) are retrospective decompositions of
+architectures that already completed (or substantially completed) the
+voluntary-transformation. Medvi (20 months old, vertical-diversification
+in-active-execution Feb-Apr 2026) is captured **mid-trajectory at
+the voluntary-transformation inflection point**.
+
+Structurally novel: illustrates that **Sub-pattern D classification
+can be recognized prospectively, not just historically**. Implications:
+- Proposer can recognize voluntary-transformation-in-progress and
+  weight architectural-trajectory accordingly
+- Sub-pattern D-candidate designation is itself an architectural-
+  output, not only a historical-classification
+- Binary-trajectory analysis (D-execution vs B-execution) is a valid
+  Layer A output when architecture is at substrate-shift inflection
+
+Watch additional architectures-mid-transformation in Layer B current-
+developments substrate for further instances of prospective Sub-
+pattern D recognition.
+
+**Observation 2: Sub-pattern B potential novel-mechanism via
+regulatory-substrate-closure (vs technology-substrate-shift).**
+
+All canonical Sub-pattern B instances (Kodak film + Polaroid +
+Nokia-phones + Blockbuster + Yahoo) executed via **technology-
+substrate-shift**: digital photography replaces film, smartphones
+replace pre-iPhone-mobiles, streaming replaces brick-and-mortar
+rental, mobile-+-targeted-search replaces portal-+-display-ads.
+
+If Medvi executes Sub-pattern B (Branch B trajectory), the mechanism
+would be **regulatory-substrate-closure**: FDA 503B Bulks List
+finalization + DOJ enforcement + Novo+Lilly litigation closes the
+compounded-GLP-1 legal pathway. Underlying technology (compounded-
+GLP-1) does not become inferior; the regulatory permission to operate
+at scale closes.
+
+Single candidate instance currently (Medvi Branch B). May warrant
+future mechanism-variant note under Sub-pattern B if pattern recurs:
+- Telehealth-compounding architectures broadly during regulatory
+  transitions (Hims & Hers compounded-GLP-1 line + Ro + Henry Meds +
+  Trimi all face same regulatory-substrate-closure if 503B Bulks List
+  finalizes)
+- Crypto architectures under regulatory-substrate-closure (if/when
+  enforcement-discretion regimes close)
+- Cannabis-state-legal-federal-illegal architectures under federal-
+  regulatory-changes
+
+Distinct from technology-substrate-shift in that the substrate-
+attacker is regulatory-enforcement rather than technology-substitute.
+Comparator-survivor pattern may differ: technology-substrate-shift
+typically has named technology-substitute (digital, smartphones,
+streaming); regulatory-substrate-closure typically has named
+regulatory-action + branded-alternative.
+
+Below threshold for formal mechanism-variant designation. Document
+for future watchpoint.
