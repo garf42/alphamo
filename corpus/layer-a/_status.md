@@ -3,16 +3,17 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 53 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
+**Completed:** 62 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video, polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack) + 3 seed (bloomberg-terminal, visa-interchange, standard-oil)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
 **Schema version:** v1.5 (mid-Layer-A-build amendments, May 2026 — v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D)
 **Schema gaps:** 0 confirmed for v1.5 (v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D after 3-instance saturation via Berkshire + Twitter/X + IBM); 0 candidates currently tracked
-**Cross-architecture patterns surfaced:** 10 (see Cross-architecture patterns section below; #10 promoted to formal pattern in batch 5 with separate `corpus/patterns/_saturated.md` catalog)
+**Cross-architecture patterns surfaced:** 11 (#10 promoted batch 5; **#11 promoted batch 6 — failed-architecture-as-cultural-cautionary-asset**; #6 sub-pattern bracketed-discipline-eras designated batch 6; see Cross-architecture patterns section below + separate `corpus/patterns/_saturated.md` catalog)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
-**Batch 5 COMPLETE:** 10 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video); 2 threshold-surfacing events triggered + handled in-batch (#10 pattern saturation → pattern catalog promotion; Sub-pattern D → v1.5 schema amendment). 53 newly-built + 4 seed = 57 total Layer A entries. **Halting for chat review.**
-**Pending:** ~10 (Section E remainder + Section F entries)
+**Batch 5 COMPLETE:** 10 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video); 2 threshold-surfacing events triggered + handled in-batch (#10 pattern saturation → pattern catalog promotion; Sub-pattern D → v1.5 schema amendment). 53 newly-built + 4 seed = 57 total Layer A entries.
+**Batch 6 COMPLETE:** 10 of 10 entries built (polaroid, sears, yahoo, blackberry, nokia-phones, medvi-REBUILT, openai-chatgpt, anthropic-claude, stripe-atlas, substack); 1 threshold-surfacing event triggered + handled in-batch (#11 pattern saturation → pattern catalog promotion); #6 sub-pattern bracketed-discipline-eras designated. **62 newly-built + 3 seed = 65 total Layer A entries.** **Halting for chat review.**
+**Pending:** ~14 (Section E remainder: pets-com, webvan, moviepass, wework, theranos, ftx, enron, lehman-brothers, ltcm, quotron, telerate, drugstore-com, myspace, buzzfeed-news)
 
 ## Log
 
@@ -214,7 +215,99 @@ for chat review.
   - 9th instance of pattern #10 via missed-substrate-shift-response mechanism
   - **Canonical IBM/Blockbuster Sub-pattern D-vs-B illustration pair** — operator-discretion + substrate-behavior + accumulated-force-preservation identified as architectural-determinants for D vs B distinction
   - Novel accumulated-force-type surfaced: failed-architecture-as-cultural-cautionary-asset (G6 operating via failure-cultural-output rather than success-value-capture). Single instance; track in Section E (polaroid + sears + yahoo + nokia + blackberry).
-  - Category-extinction event observation: full-architectural-category-disappearance (Hollywood Video + Movie Gallery + Family Video + Blockbuster all defunct/near-defunct). Distinct from single-architecture defunct cases. Document as candidate observation.
+  - Category-extinction event observation: full-architectural-category-disappearance (Hollywood Video + Movie Gallery + Family Value + Blockbuster all defunct/near-defunct). Distinct from single-architecture defunct cases. Document as candidate observation.
+
+## Section E + Section F — Batch 6 (10 entries; threshold-surfacing 1 event)
+
+- [2026-05-20] polaroid: success — audit 50E/11I/7C/0U/68 — canonical Sub-pattern B pair with Kodak film
+  - 10th instance of pattern #10 (founder-departure-discipline-discontinuity + substrate-shift-response-failure + LBO-legacy-debt + multi-CEO mechanism)
+  - 2nd failed-architecture-as-cultural-cautionary-asset instance
+  - **Fujifilm-as-Sub-pattern-D-contrast observation** flagged for future review
+- [2026-05-20] sears: success — audit 51E/10I/7C/0U/68 — canonical Sub-pattern B + outcompeted-by-superior-composition
+  - 11th instance of pattern #10 via Lampert financial-engineering mechanism
+  - 3rd failed-architecture-as-cultural-cautionary-asset (approaching saturation)
+  - Outcompeted-by-superior-composition novel-sub-observation (multi-architecture-superior-composition-attack)
+  - 2nd category-extinction-candidate (mid-century-American-department-store)
+- [2026-05-20] yahoo: success — audit 51E/10I/7C/0U/68 — 5th Sub-pattern B + multi-substrate-shift-extended-decline sub-variant
+  - 12th instance of pattern #10 via serial-missed-opportunities + multi-CEO mechanism
+  - 4th failed-architecture-as-cultural-cautionary-asset (approaching saturation)
+  - 2nd category-extinction-candidate strengthening (1990s-2000s-internet-portal)
+- [2026-05-20] blackberry: success — audit 53E/8I/7C/0U/68 — 4th Sub-pattern D candidate
+  - NOVEL: sequential Sub-pattern B → Sub-pattern D → Sub-pattern A within same corporate vehicle
+  - 13th instance of pattern #10 via phone-era response-failure mechanism
+  - 3rd bracketed-discipline-eras sub-pattern instance (reaches 3-instance threshold)
+  - QNX-as-architecture-asset-bridging-substrate-shift observation
+- [2026-05-20] nokia-phones: success — audit 51E/10I/7C/0U/68 — **THRESHOLD-SURFACING TRIGGERED** (5th failed-architecture-as-cultural-cautionary-asset)
+  - 6th Sub-pattern B + multi-stage-successor-mechanism sub-variant
+  - 14th instance of pattern #10 via strategic-platform-strategy-failure mechanism
+  - 5th failed-architecture-as-cultural-cautionary-asset SATURATION → **pattern #11 promotion**
+  - 4th architectural-perspective-dependent classification instance (approaching saturation)
+  - 3rd category-extinction-candidate (pre-iPhone-era-mobile-OEM)
+  - **Threshold surface → chat decisions:** pattern #11 promoted + #6 sub-pattern bracketed-discipline-eras designated
+- [2026-05-20] medvi-REBUILT: success — audit 48E/13I/5C/2U/68 — **THE ARCHITECTURE THAT MOTIVATED ALPHAMO CORPUS** rebuilt to v1.5 schema
+  - Canonical thin-operator-AI-orchestrated DTC-telehealth architecture
+  - Pattern #6 NEW MECHANISM: AI-orchestration-discipline-as-architectural-asset (16th instance)
+  - Sub-pattern D candidate (if vertical diversification succeeds) + Sub-pattern B candidate (if regulatory closure + diversification fails); binary outcome
+  - Zero accumulated forces honestly documented (20-month architecture); F-forces-only currently with 3 of 5 closing
+- [2026-05-20] openai-chatgpt: success — audit 53E/9I/6C/0U/68 — canonical AI-substrate-era consumer architecture
+  - Pattern #3 9th instance emerging via AI-substrate civilization-stack-load-bearing
+  - Pattern #6 NEW NUANCE: documented-fragility-event-but-discipline-restored (Nov 2023 governance crisis)
+  - Pattern #1 9th instance with founding-doctrine-stress (capped-profit-to-for-profit-transition)
+  - Multi-architecture-OpenAI observation (consumer + API + Microsoft-partnership + corporate-structure architectures)
+- [2026-05-20] anthropic-claude: success — audit 52E/9I/7C/0U/68 — canonical AI-safety-focused frontier-LLM architecture + canonical OpenAI-comparator
+  - Pattern #1 10th instance + Pattern #3 10th instance emerging
+  - Pattern #6 18th instance NEW MECHANISM: safety-research-+-PBC-+-mission-clarity-as-discipline-mechanism
+  - Governance-form-as-architectural-asset observation (PBC vs Foundation-LP)
+  - Self-referential entry meta-observation captured
+- [2026-05-20] stripe-atlas: success — audit 47E/14I/7C/0U/68 — thin-wrapper-on-regulatory-infrastructure canonical
+  - Pattern #6 19th instance NEW MECHANISM: architectural-template-extension within same operator-architectural-discipline-corpus
+  - **Architecture-of-architectures-enabler new observation** (Atlas-formed-businesses as Stripe-ecosystem pipeline)
+- [2026-05-20] substack: success — audit 49E/12I/7C/0U/68 — canonical creator-economy infrastructure architecture
+  - Pattern #6 20th instance via Best-founder-CEO + creator-first-+-no-ads + commission-not-ads discipline
+  - Pattern #7 8th instance + pattern #1 11th instance
+  - **Architecture-of-architectures-enabler 2nd corroborating instance** (Substack-as-substrate; approaching pattern saturation)
+
+## Batch 6 summary
+
+10 newly-built entries: polaroid + sears + yahoo + blackberry + nokia-phones + medvi-REBUILT
++ openai-chatgpt + anthropic-claude + stripe-atlas + substack.
+
+Major events handled in-batch:
+1. **Cross-corpus pattern #11 saturated + formally designated** (nokia-phones as 5th instance
+   trigger). Pattern: failed-architecture-as-cultural-cautionary-asset. Catalog updated in
+   `corpus/patterns/_saturated.md`. Distinct from patterns #1-#10 in that it operates via
+   FAILURE rather than SUCCESS.
+2. **Pattern #6 sub-pattern bracketed-discipline-eras designated** (3 instances: AIG + IBM
+   + BlackBerry). Catalog updated with formal sub-pattern entry.
+3. **Medvi rebuilt** to v1.5 schema with full cross-corpus pattern integration. Surfaced
+   immediately per watchpoint #2.
+4. **Sub-pattern D 4th candidate** (BlackBerry) — sequential B → D → A within same
+   corporate vehicle (novel observation).
+
+Sub-pattern classification confirmations:
+- Sub-pattern B saturated at 6 instances (Kodak film + Polaroid + Blockbuster + Sears + Yahoo
+  + Nokia phones), multi-substrate-shift-extended-decline + multi-stage-successor-mechanism
+  sub-variants identified
+- Sub-pattern D at 4 candidate instances (Berkshire + Twitter/X + IBM + BlackBerry)
+
+Other notable cross-architecture observations:
+- Pattern #10 (discipline-LOSS-as-anti-asset): 14 instances now post-batch
+- Pattern #6 (architectural-discipline-as-asset): 20 instances + bracketed-discipline-eras
+  formal sub-pattern at 3
+- Pattern #3 (load-bearing-for-civilization-stack): 8 established + 2 emerging (OpenAI +
+  Anthropic AI-substrate)
+- Pattern #1 (founding-doctrine-as-asset): 11 instances
+- Architecture-of-architectures-enabler: 2 corroborating instances (Stripe Atlas + Substack)
+  + 2 candidate-analogs (AWS + Apple App Store)
+- Architectural-perspective-dependent classification: 4 instances (approaching 5-instance
+  saturation)
+- Category-extinction-event: 3 candidates (brick-and-mortar movie-rental + mid-century-
+  department-store + pre-iPhone-mobile-OEM)
+- Governance-form-as-architectural-asset (PBC vs Foundation-LP): single observation
+
+Cumulative cost estimate: well within $50 batch threshold. Architecture-list 62 of ~63
+entries complete (only Section E remainder pending). 14 entries remaining in Section E for
+batches 7+.
 
 ## Batch 5 summary
 
