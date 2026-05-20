@@ -3,12 +3,14 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 2 (kodak-film, tsmc) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
+**Completed:** 3 (kodak-film, tsmc, coca-cola) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
 **Schema gaps:** 1 (defunct-as-subject status-vocabulary; see kodak-film notes — chat reviewed, tracked for D+E retests, no v1.4 amendment)
-**Pending:** ~57
+**Cross-architecture patterns surfaced:** 4 (founding-doctrine-as-asset, time-to-accumulation distribution, load-bearing-for-civilization-stack, identity-as-non-zero-sum-position-occupation)
+**Section A complete:** 3 new + 2 seed = 5 entries (visa-interchange + standard-oil were seeded; kodak-film + tsmc + coca-cola built in direct-orchestration mode)
+**Pending:** ~56 (Sections B-F awaiting Section A authorization)
 
 ## Log
 
@@ -18,7 +20,21 @@
 - [2026-05-19] tsmc: success — audit 56E/9I/7C/0U/72 — no schema stress observed; schema handles capability-asymmetry-dominant architecture cleanly
   - Negative pairs: globalfoundries-2018-exit (capex+execution cliff), intel-IDM-leadership-loss (pure-play discipline as architectural invariant)
   - Notable structural pattern: F5 (pure-play discipline) → G2 (customer trust) promotion is analogous to bloomberg's emergence-era-strategic-moves → accumulated-forces pattern
-  - Next Section A entry: coca-cola (awaiting chat review of tsmc before dispatch)
+  - Chat review: validation pass, three cross-architecture patterns surfaced for later synthesis (founding-doctrine-as-asset, time-to-accumulation distribution, load-bearing-for-civilization-stack), no v1.4 amendments
+- [2026-05-19] coca-cola: success — audit 52E/12I/9C/0U/73 — no schema stress observed; schema handles identity/trust-asymmetry-dominant architecture cleanly across 134-year horizon
+  - Negative pairs: rc-cola (failed parallel architecture missing G1+G3+G6 marketing+identity+cultural-archetype accumulation), pepsi-as-comparator-survivor (different identity position in same architectural pattern, snack diversification hedge)
+  - Notable structural pattern: identity asymmetry is non-zero-sum (position-occupation game not position-competition game) — distinct from bloomberg-vs-refinitiv pattern where competitor attempted same position
+  - Final Section A entry. Awaiting chat review for Section B-F dispatch authorization.
+
+## Cross-architecture patterns surfaced during Section A
+
+1. **Founding-doctrine-as-asset.** Certain founding doctrines compound into structural assets that decade-shorter competitors cannot replicate. TSMC F5 pure-play → G2 customer trust. Bloomberg 1988-1990 strategic moves → G1+G3. Coca-Cola F3 1899 bottling franchise → G2 + F5 Woodruff 1923 doctrine → G3+G4. Pattern: emergence-era strategic moves can have decades-deferred accumulated-force effects.
+
+2. **Time-to-accumulation distribution.** Accumulated forces build on different timescales depending on the substrate. G7 TSMC AI-workload-dependency: ~3 years. Bloomberg G1 chat network: ~15 years. Coca-Cola G3 cultural archetype: ~25-30 years (1920s-1950s). The schema's `since` field captures this cleanly but pattern suggests substrate-shift events accelerate force-accumulation relative to organic competitive accumulation.
+
+3. **Load-bearing-for-civilization-stack.** TSMC G6 sovereign-strategic significance is simultaneously protective (governments invested in continuity) and target-attracting (critical infrastructure = target). The schema doesn't have explicit vocabulary for forces that are simultaneously protective and adversary-attractive; `[C]` contested tag on G6 status-now captures net-effect uncertainty. Potential v1.4 thought: load-bearing-for-civilization-stack as structural class.
+
+4. **Identity-as-non-zero-sum-position-occupation.** Coca-Cola/Pepsi negative-pair contrast reveals identity asymmetry is a position-occupation game (occupy a specific identity position with cumulative consistency) not a position-competition game (compete for the same position). Distinct from bloomberg-vs-refinitiv or TSMC-vs-Samsung where weaker competitor attempts same position. Worth tracking across other identity-dominant entries (LVMH, Hermès, Disney IP, Rolex, Ferrari in Section B; Apple iPhone identity vs Android etc).
 
 ## Schema gaps surfaced
 
