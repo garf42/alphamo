@@ -3,7 +3,7 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 52 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
+**Completed:** 53 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london, sp-global, nielsen, ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud, nvidia, asml, boeing-airbus-duopoly, ford-motor, tesla, general-electric, walmart, costco, amazon-retail, apple-iphone, lvmh, hermes, rolex, ferrari, de-beers, procter-gamble, paypal, netflix, spotify, ebay, intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
@@ -11,8 +11,8 @@
 **Schema gaps:** 0 confirmed for v1.5 (v1.4 absorbed Sub-patterns A/B/C; v1.5 absorbed Sub-pattern D after 3-instance saturation via Berkshire + Twitter/X + IBM); 0 candidates currently tracked
 **Cross-architecture patterns surfaced:** 10 (see Cross-architecture patterns section below; #10 promoted to formal pattern in batch 5 with separate `corpus/patterns/_saturated.md` catalog)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
-**Batch 5 in progress:** 9 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s); 2 threshold-surfacing events triggered + handled (#10 pattern saturation + Sub-pattern D v1.5 schema amendment); 1 remaining entry: blockbuster-video
-**Pending:** ~11 (blockbuster-video + Sections E-F)
+**Batch 5 COMPLETE:** 10 of 10 entries built (intel, hims-hers, refinitiv-eikon, walgreens-boots-alliance, twitter-x, att-pre-1984, microsoft-antitrust-era, aig-2008, ibm-1980s, blockbuster-video); 2 threshold-surfacing events triggered + handled in-batch (#10 pattern saturation → pattern catalog promotion; Sub-pattern D → v1.5 schema amendment). 53 newly-built + 4 seed = 57 total Layer A entries. **Halting for chat review.**
+**Pending:** ~10 (Section E remainder + Section F entries)
 
 ## Log
 
@@ -208,6 +208,55 @@ and accumulated-force description fields. Audit counts unchanged.
 Continue batch 5 with blockbuster-video (#53 + batch-end) under v1.5
 vocabulary natively. Halt at 10-entry checkpoint after blockbuster-video
 for chat review.
+
+- [2026-05-20] blockbuster-video: success — audit 51E/10I/7C/0U/68 — **FINAL OF BATCH 5** + canonical Sub-pattern B substrate-shift case per watchpoint #5
+  - 2nd canonical Sub-pattern B instance (joining Kodak film)
+  - 9th instance of pattern #10 via missed-substrate-shift-response mechanism
+  - **Canonical IBM/Blockbuster Sub-pattern D-vs-B illustration pair** — operator-discretion + substrate-behavior + accumulated-force-preservation identified as architectural-determinants for D vs B distinction
+  - Novel accumulated-force-type surfaced: failed-architecture-as-cultural-cautionary-asset (G6 operating via failure-cultural-output rather than success-value-capture). Single instance; track in Section E (polaroid + sears + yahoo + nokia + blackberry).
+  - Category-extinction event observation: full-architectural-category-disappearance (Hollywood Video + Movie Gallery + Family Video + Blockbuster all defunct/near-defunct). Distinct from single-architecture defunct cases. Document as candidate observation.
+
+## Batch 5 summary
+
+10 newly-built entries: intel + hims-hers + refinitiv-eikon + walgreens-boots-alliance +
+twitter-x + att-pre-1984 + microsoft-antitrust-era + aig-2008 + ibm-1980s + blockbuster-video.
+
+Major events handled in-batch:
+1. **Cross-corpus pattern #10 saturated + formally designated** (refinitiv-eikon as 5th
+   instance trigger). Pattern: architectural-discipline-LOSS-as-anti-asset. Catalog at
+   `corpus/patterns/_saturated.md`. Now at 9 instances post-batch (boeing + ford + GE +
+   intel + refinitiv-eikon + walgreens-boots-alliance + AIGFP + IBM 1985-1993 + blockbuster).
+2. **Schema v1.4 → v1.5 amendment** (ibm-1980s as 3rd Sub-pattern D instance trigger).
+   Sub-pattern D added: `architecture-voluntarily-transformed-by-operator`. Berkshire +
+   Twitter/X + IBM retroactively normalized.
+
+Sub-pattern classification confirmations:
+- Sub-pattern A forcible canonical pair: Standard Oil 1911 + AT&T 1984 (litigated-vs-
+  negotiated mechanism variation)
+- Sub-pattern C canonical instance: Microsoft 2001 (case-dropped + appellate-reversal-then-
+  settlement + consent-decree + market-pressure + federal-rescue mechanism-variants
+  taxonomy)
+- Sub-pattern A+C simultaneous: AIG 2008 first instance (segment-level-separability +
+  federal-rescue-as-novel-mechanism)
+- Sub-pattern D 3-instance saturation: Berkshire + Twitter/X + IBM
+
+Other notable cross-architecture observations:
+- Pattern #3 (load-bearing-for-civilization-stack): 8 instances now
+- Pattern #6 (architectural-discipline-as-asset): 15 instances + bracketed-discipline-eras
+  candidate sub-pattern at 2 instances (AIG + IBM)
+- Pattern #9 (architecture-survival-via-radical-restructuring): 6 instances saturation
+  candidate
+- Architectural-perspective-dependent classification: 3 instances now (eBay/PayPal + de-
+  beers + AIG)
+- Sub-pattern A voluntary sub-variants: 3 mechanism-variants (corporate-split GE +
+  partner-spinoff eBay + PE-intermediary WBA)
+- Failed-architecture-as-cultural-cautionary-asset: novel accumulated-force-type (single
+  instance at Blockbuster G6)
+- Category-extinction-event observation: brick-and-mortar movie-rental category fully
+  defunct/near-defunct
+
+Cumulative cost estimate: well within $50 batch threshold. Architecture-list 53 of ~63
+entries complete. Remaining: Section E + F (~10 entries).
 
 ## v1.4 schema amendment (May 2026 mid-build)
 
