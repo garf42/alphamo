@@ -3,14 +3,14 @@
 **Started:** 2026-05-19
 **Mode:** Direct in-session orchestration (Super dispatch flow modified per chat discussion)
 **Total entries planned:** ~63 (per architecture-list.md)
-**Completed:** 3 (kodak-film, tsmc, coca-cola) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
+**Completed:** 13 (kodak-film, tsmc, coca-cola, mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london) + 4 seed (medvi, bloomberg-terminal, visa-interchange, standard-oil from chat session)
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
-**Schema gaps:** 1 (defunct-as-subject status-vocabulary; see kodak-film notes — chat reviewed, tracked for D+E retests, no v1.4 amendment)
-**Cross-architecture patterns surfaced:** 4 (founding-doctrine-as-asset, time-to-accumulation distribution, load-bearing-for-civilization-stack, identity-as-non-zero-sum-position-occupation)
-**Section A complete:** 3 new + 2 seed = 5 entries (visa-interchange + standard-oil were seeded; kodak-film + tsmc + coca-cola built in direct-orchestration mode)
-**Pending:** ~56 (Sections B-F awaiting Section A authorization)
+**Schema gaps:** 1 confirmed (defunct-as-subject status-vocabulary; multiple instances now: kodak-film, nyse, lloyd's-of-london all required compound status values; convergence with redistributed pattern increasingly clear; AT&T pre-1984 + AIG-2008 + IBM-1980s in Section D are natural retests)
+**Cross-architecture patterns surfaced:** 9 (see Cross-architecture patterns section below)
+**Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
+**Pending:** ~46 (remaining Sections B-F entries; awaiting chat review of this batch)
 
 ## Log
 
@@ -24,17 +24,87 @@
 - [2026-05-19] coca-cola: success — audit 52E/12I/9C/0U/73 — no schema stress observed; schema handles identity/trust-asymmetry-dominant architecture cleanly across 134-year horizon
   - Negative pairs: rc-cola (failed parallel architecture missing G1+G3+G6 marketing+identity+cultural-archetype accumulation), pepsi-as-comparator-survivor (different identity position in same architectural pattern, snack diversification hedge)
   - Notable structural pattern: identity asymmetry is non-zero-sum (position-occupation game not position-competition game) — distinct from bloomberg-vs-refinitiv pattern where competitor attempted same position
-  - Final Section A entry. Awaiting chat review for Section B-F dispatch authorization.
+  - Final Section A entry. Chat reviewed, three patterns surfaced, no v1.4 amendment triggered.
 
-## Cross-architecture patterns surfaced during Section A
+## Section B finance/payments — Batch 1 (10 entries)
 
-1. **Founding-doctrine-as-asset.** Certain founding doctrines compound into structural assets that decade-shorter competitors cannot replicate. TSMC F5 pure-play → G2 customer trust. Bloomberg 1988-1990 strategic moves → G1+G3. Coca-Cola F3 1899 bottling franchise → G2 + F5 Woodruff 1923 doctrine → G3+G4. Pattern: emergence-era strategic moves can have decades-deferred accumulated-force effects.
+- [2026-05-19] mastercard: success — audit 48E/10I/7C/0U/65 — no schema stress; structural twin of visa
+  - Negative pairs: discover-card, amex-3-party
+  - Pattern #4 generalized to multi-architecture-coexistence (4-party vs 3-party)
+- [2026-05-19] swift-network: success — audit 47E/9I/11C/0U/67 — no schema stress; cooperative-governance + multipolar-fragmentation
+  - Negative pairs: marti-1973-attempt, cips-as-comparator
+  - New pattern #5: coalition-architecture-emerges-as-defensive-response-to-proprietary-network-threat-or-incumbent-politicization
+  - Second instance of load-bearing-for-civilization-stack pattern #3 (SWIFT G7)
+- [2026-05-19] stripe: success — audit 45E/14I/6C/0U/65 — no schema stress; thin-operator-on-rented-infrastructure-at-scale
+  - Negative pairs: paypal-as-comparator, braintree-paypal-acquired
+  - New pattern #6: architectural-discipline-as-asset (corporate-structure-as-discipline-mechanism)
+  - Pattern #4 confirmed at 4 instances now
+- [2026-05-19] nyse: success — audit 49E/12I/7C/0U/68 — minor schema stress (defunct-as-subject pattern recurrence, status compound value); third defunct/restructured profile added
+  - Negative pairs: amex-equity-exchange, nasdaq-as-comparator-survivor
+  - Pattern #4 confirmed at 5 instances
+  - Pattern #2 (time-to-accumulation) widened to century-scale
+- [2026-05-19] cme-group: success — audit 51E/10I/6C/0U/67 — no schema stress; derivatives-exchange-+-clearing-house-combined + systemically-important
+  - Negative pairs: cbot-pre-merger, liffe-pre-ICE-acquisition
+  - Third instance of load-bearing-for-civilization-stack pattern #3 (CME G4)
+  - M&A-defensive-consolidation added to founding-doctrine-as-asset pattern #1
+- [2026-05-19] moodys: success — audit 50E/10I/8C/0U/68 — no schema stress; regulatory-protected-information-asymmetry + government-sanctioned-oligopoly
+  - Negative pairs: dbrs-+-other-NRSROs, arthur-andersen
+  - Fourth instance of load-bearing-for-civilization-stack pattern #3 (Moody's G1)
+  - New pattern #7: two-segment-architecture (barrier-protected-core + adjacent-services-layer)
+  - Time-consistency-invariant nuance: regulatory-protection-coalition can prevent asymmetric-decay
+- [2026-05-19] berkshire-hathaway: success — audit 50E/12I/8C/0U/70 — no schema stress; capital-allocation-conglomerate-with-insurance-float + leadership-transition
+  - Negative pairs: ge-conglomerate-jack-welch-era, tiger-management-julian-robertson
+  - Pattern #6 (architectural-discipline-as-asset) at 3rd instance, broadened mechanisms
+  - Pattern #2 (time-to-accumulation) expanded with deliberate-optionality-positioning flavor
+  - First fundamentally-individual accumulated force (G1 buffett-munger judgment) — succession transmission question
+- [2026-05-19] goldman-sachs: success — audit 49E/11I/8C/0U/68 — no schema stress; elite-investment-bank + multi-position-occupation + systemic-rescue-coalition
+  - Negative pairs: lehman-brothers, bear-stearns
+  - Fifth instance of load-bearing-for-civilization-stack pattern #3 (Goldman + bank-holding coalition)
+  - Pattern #7 (two-segment) confirmed at 4 instances
+- [2026-05-19] jp-morgan: success — audit 50E/10I/7C/0U/67 — no schema stress; universal-bank-at-unprecedented-scale + crisis-acquirer-of-last-resort
+  - Negative pairs: citigroup-2008-+-2010s, bank-of-america-merrill-acquisition
+  - New pattern #8: crisis-acquirer-of-last-resort as accumulated force
+  - Pattern #6 (architectural-discipline-as-asset) at 5th instance (Dimon)
+- [2026-05-19] lloyds-of-london: success — audit 49E/11I/8C/0U/68 — minor schema stress (defunct-as-subject pattern recurrence in survived-restructured form); marketplace-+-cooperative-+-multi-capital
+  - Negative pairs: lloyd's-1988-1992-near-failure (own pre-R&R era), bermuda-reinsurance-market-comparator
+  - New pattern #9: architecture-survival-via-radical-restructuring as alternative to architectural failure
+  - Pattern #4 confirmed at 6th instance
 
-2. **Time-to-accumulation distribution.** Accumulated forces build on different timescales depending on the substrate. G7 TSMC AI-workload-dependency: ~3 years. Bloomberg G1 chat network: ~15 years. Coca-Cola G3 cultural archetype: ~25-30 years (1920s-1950s). The schema's `since` field captures this cleanly but pattern suggests substrate-shift events accelerate force-accumulation relative to organic competitive accumulation.
+Batch 1 of Section B finance/payments complete. Awaiting chat review.
 
-3. **Load-bearing-for-civilization-stack.** TSMC G6 sovereign-strategic significance is simultaneously protective (governments invested in continuity) and target-attracting (critical infrastructure = target). The schema doesn't have explicit vocabulary for forces that are simultaneously protective and adversary-attractive; `[C]` contested tag on G6 status-now captures net-effect uncertainty. Potential v1.4 thought: load-bearing-for-civilization-stack as structural class.
+## Cross-architecture patterns surfaced (9 total, post-Section-A + Section-B-batch-1)
 
-4. **Identity-as-non-zero-sum-position-occupation.** Coca-Cola/Pepsi negative-pair contrast reveals identity asymmetry is a position-occupation game (occupy a specific identity position with cumulative consistency) not a position-competition game (compete for the same position). Distinct from bloomberg-vs-refinitiv or TSMC-vs-Samsung where weaker competitor attempts same position. Worth tracking across other identity-dominant entries (LVMH, Hermès, Disney IP, Rolex, Ferrari in Section B; Apple iPhone identity vs Android etc).
+1. **Founding-doctrine-as-asset.** Certain founding doctrines compound into structural assets that decade-shorter competitors cannot replicate. Instances: TSMC F5 pure-play, Bloomberg 1988-1990 moves, Coca-Cola F3 1899 franchise + F5 Woodruff 1923 doctrine, Visa F4 1966 multi-bank licensing, Mastercard F1 1966 Interbank Card Association, SWIFT 1973 cooperative formation, CME 2007 CBOT defensive merger. Now includes M&A-defensive-consolidation flavor (CME).
+
+2. **Time-to-accumulation distribution.** Wide range across substrates: substrate-shift events (TSMC G7 AI ~3 years, Stripe G6 Bridge ~12 months), strategic M&A (CME mergers), deliberate optionality positioning (Berkshire G8 cash $397B in 24 months), organic accumulation (Bloomberg G1 ~15 years, Coca-Cola G3 ~25-30 years, NYSE G1 century-scale).
+
+3. **Load-bearing-for-civilization-stack.** Confirmed at 5 instances across multiple architectural domains: TSMC G6 silicon-shield, SWIFT G7 (G7+EU coalition), CME G4 (treasury clearing systemic), Moody's G1 (NRSRO regulatory protection), Goldman + bank-holding coalition (2008). All operate via simultaneous protective + adversary-attracting dynamic. Pattern is robust.
+
+4. **Identity-as-non-zero-sum-position-occupation.** Confirmed at 6 instances: coca-cola/pepsi, amex/mastercard, paypal/stripe, visa/mastercard, nyse/nasdaq, lloyd's/bermuda. Pattern is robust across consumer goods, payments, fintech, exchanges, insurance. Different architectural positions in same flow coexist non-zero-sum.
+
+5. **Coalition-architecture-emerges-as-defensive-response-to-proprietary-network-threat-or-incumbent-politicization.** Surfaced via SWIFT MARTI (1973) → SWIFT cooperative formation, SWIFT G7 weaponization → CIPS + mBridge. Also operates in Visa F4 1966 multi-bank licensing and Mastercard F1 1966 Interbank Card Association emergence. Cooperative + multi-party defensive architecture pattern.
+
+6. **Architectural-discipline-as-asset (with multiple mechanisms).** Confirmed at 5 instances: Stripe (private-company + tender-offer-IPO-substitute), TSMC (pure-play discipline), Coca-Cola (Woodruff doctrine), Berkshire (permanent-capital + no-dividend), JPM (Dimon long-tenure-CEO). Mechanisms include corporate structure, founding doctrine, cultural commitment, financing architecture. Counter-instances: Goldman 1999 IPO (partnership discipline abandoned for growth), Braintree-PayPal acquisition disrupting discipline.
+
+7. **Two-segment-architecture (barrier-protected-core + adjacent-services-layer).** Confirmed at 4 instances: Moody's MIS+MA, Mastercard core+VAS, Stripe payments+suite, Goldman GBM+AWM. Pattern: high-margin barrier-protected core extends into adjacent-services-layer for margin-defense + flow-diversification. JPM extends to 4-segment variant.
+
+8. **Crisis-acquirer-of-last-resort as accumulated force.** Surfaced in JPM G7 (Bear, WaMu, First Republic). Parallel to TSMC silicon-shield + SWIFT G7 + Goldman 2008 + Moody's G1 but operating via active acquisition opportunity vs passive protection. Self-reinforcing position-strengthening via each successful crisis acquisition.
+
+9. **Architecture-survival-via-radical-restructuring as alternative to architectural failure.** Surfaced via Lloyd's 1996 R&R + Equitas; also operates in NYSE 2006 demutualization + 2013 ICE acquisition, Berkshire textile-mill-to-capital-allocation transition. AT&T pre-1984 Kingsbury Commitment + Hims & Hers pre-emptive Novo Nordisk partnership 2026 are analogous. Pattern: preserve architectural identity + accumulated forces via radical restructuring of substrate that fails.
+
+## Schema stress accumulation (defunct-as-subject status-vocabulary)
+
+Three instances now of compound status values for architecture-defunct-but-entity-persistent or architecture-restructured-but-preserved profiles:
+- kodak-film: "defunct-as-mass-medium-architecture / persists-in-niche-enthusiast-form-via-successor-entity"
+- nyse: "operating-durable / forcibly-restructured-2006-via-demutualization / subsidiary-of-ICE-2013-onward / core-listings-position-eroding-to-nasdaq"
+- lloyds-of-london: "operating-durable / survived-1990s-asbestos-near-failure-via-equitas-radical-restructuring"
+- (Also Standard Oil precedent with "redistributed-1911" forces-accumulated.status-now)
+
+Convergence is clear but Section D (AT&T pre-1984, AIG-2008, IBM-1980s, Microsoft antitrust era) are the natural retests before any v1.4 amendment. Convergence also visible in Lloyd's of London cross-corpus pattern #9 (architecture-survival-via-radical-restructuring) which suggests the existing status enum may benefit from explicit "restructured-but-preserved" and "defunct-but-entity-persistent" values that distinguish from current single "restructured" and "defunct".
+
+## Cumulative cost estimate
+
+Per super-dispatch-protocol projection (~$0.50-1.00/entry): cumulative ~$5-10 for batch of 10 entries. Section A + B-batch-1 cumulative ~$6.5-13 total across 13 newly-built entries. Well within $50 batch cumulative threshold.
 
 ## Schema gaps surfaced
 
