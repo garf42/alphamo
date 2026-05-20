@@ -7,7 +7,7 @@
 **Failed validation:** 0
 **Declined Phase 1:** 0
 **Low evidence:** 0
-**Schema gaps:** 1 confirmed (defunct-as-subject status-vocabulary; multiple instances now: kodak-film, nyse, lloyd's-of-london all required compound status values; convergence with redistributed pattern increasingly clear; AT&T pre-1984 + AIG-2008 + IBM-1980s in Section D are natural retests)
+**Schema gaps:** 1 confirmed + THRESHOLD TRIGGERED for v1.4 review (defunct-as-subject status-vocabulary; 5 instances now: kodak-film, nyse, lloyd's-of-london, standard-oil, nielsen — all required compound status values; convergence with redistributed pattern + restructured-but-preserved pattern + substrate-shift-with-niche-persistence sub-patterns confirmed; threshold per chat adjustment rule reached at nielsen 2022 PE buyout fitting sub-pattern C)
 **Cross-architecture patterns surfaced:** 9 (see Cross-architecture patterns section below)
 **Section B batch 1 of finance/payments complete:** 10 entries (mastercard, swift-network, stripe, nyse, cme-group, moodys, berkshire-hathaway, goldman-sachs, jp-morgan, lloyds-of-london)
 **Pending:** ~46 (remaining Sections B-F entries; awaiting chat review of this batch)
@@ -71,6 +71,22 @@
   - Pattern #4 confirmed at 6th instance
 
 Batch 1 of Section B finance/payments complete. Awaiting chat review.
+
+## Section B finance/data/media — Batch 2 (in progress, halted at #2)
+
+- [2026-05-19] sp-global: success — audit 50E/11I/7C/0U/68 — no schema stress; dual-architecture (NRSRO + index-administration)
+  - Negative pairs: moody's-comparator-survivor, ihs-markit-pre-merger
+  - Pattern #4 extended to new variant (overlapping + additional distinct positions)
+  - Pattern #7 confirmed at 5th instance via M&A extension mechanism
+  - Quasi-regulatory positions as architectural assets pattern candidate surfaced
+- [2026-05-19] nielsen: success — audit 47E/13I/7C/0U/67 — **COMPOUND-STATUS THRESHOLD TRIGGERED** (5th case fitting sub-pattern C: architecture preserved via radical restructuring via Oct 2022 PE buyout)
+  - Negative pairs: nielsen-pre-2022-public-company-era (own pre-buyout), comscore-as-comparator
+  - Pattern #9 confirmed at 4th instance (Lloyd's R&R + NYSE demutualization + Berkshire 1965 + Nielsen 2022 PE)
+  - Pattern #6 confirmed at 6th instance with new PE-ownership flavor (temporary-private-via-PE vs permanent-public vs permanent-private)
+  - Pattern #4 confirmed at 7th instance
+  - Quasi-regulatory positions pattern confirmed (Nielsen MRC + JIC = third instance after S&P G2 + Moody's G1)
+
+**HALTING BATCH PER THRESHOLD RULE.** v1.4 amendment review requested. Pending: 8 remaining batch 2 entries (ims-health, disney-ip, microsoft-windows-office, azure, aws, oracle-database, salesforce, adobe-creative-cloud).
 
 ## Cross-architecture patterns surfaced (9 total, post-Section-A + Section-B-batch-1)
 
