@@ -58,8 +58,18 @@ def build_provider(name: str, **kw: Any) -> BaseProvider:
         api_key = os.environ.get("FIREWORKS_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "FIREWORKS_API_KEY is not set — load it via terminal before "
-                "starting a Fireworks-routed run"
+                "FIREWORKS_API_KEY is not set. The default run configuration "
+                "routes every LLM-calling component (proposer / stage1 / "
+                "stage2 / stage3 / curator) through Fireworks. Three fix "
+                "paths, pick one:\n"
+                "  1. (canonical) copy .env.example to .env, fill in your "
+                "key, re-run. The CLI auto-loads .env at startup.\n"
+                "  2. (shell) export FIREWORKS_API_KEY=<your-key> before "
+                "running.\n"
+                "  3. (HP override) route every component to anthropic via "
+                "Hyperparameters.provider_* and set ANTHROPIC_API_KEY instead.\n"
+                "Run `alphamo doctor` to verify the environment without "
+                "starting a run."
             )
         provider = FireworksProvider(api_key=api_key, max_retries=3)
     else:

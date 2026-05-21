@@ -1,6 +1,7 @@
 """AlphaMo CLI entry point.
 
 Subcommand surface:
+  doctor                    — pre-flight env / dep / writeability check
   init / show               — db setup and one-row inspection
   top                       — per-island top-k inspection (was 'query' before
                               run boundaries; renamed because 'query' now
@@ -16,16 +17,27 @@ exemplar library) is the first action of every run — there is no separate
 `seed` command. Other subcommands operate against an existing run, either
 the one passed via --run or the latest run in the DB; they error out when
 the DB has no runs yet.
+
+Sprint 16 (launch surface): `.env` is auto-loaded at CLI startup so
+operators don't have to remember to `source .env` before running. The
+loader walks up from CWD; existing process-env variables are NOT
+overridden, so CI / production deployments that set vars out-of-band
+keep working unchanged. Opt out with `--no-dotenv`. `alphamo doctor`
+reports which variables are set and from where.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import platform
+import sys
 from pathlib import Path
 from typing import Any
 
 import click
 
+from alphamo import __version__
 from alphamo.database import ProgramsDB
 from alphamo.schemas import Architecture, Scores
 
@@ -76,9 +88,195 @@ def _resolve_run_id(db: ProgramsDB, run_id: str | None) -> str:
     return latest
 
 
+# ----------------------------------------------------------------- .env autoload
+
+
+# Track where .env was loaded from so `alphamo doctor` can report it
+# accurately. Populated by `_autoload_dotenv` on the very first
+# invocation of any subcommand under the `cli` group.
+_DOTENV_LOADED_FROM: Path | None = None
+
+
+def _autoload_dotenv() -> None:
+    """Load `.env` from CWD or any ancestor directory, without overriding.
+
+    Sprint 16: the canonical launch path expects `.env` to live in the
+    repo root carrying `FIREWORKS_API_KEY` (and optionally
+    `ANTHROPIC_API_KEY`). Pre-Sprint-16 the operator had to `source .env`
+    manually before invoking the CLI — easy to forget, and the failure
+    surfaces deep inside `Orchestrator.__init__`. We now load it
+    automatically at CLI startup via python-dotenv with `override=False`
+    so process-env variables set out-of-band (CI / k8s / systemd) keep
+    precedence.
+    """
+    global _DOTENV_LOADED_FROM
+    try:
+        from dotenv import find_dotenv, load_dotenv
+    except ImportError:
+        # python-dotenv ships in the project's pyproject.toml dependencies;
+        # absence here means the install is incomplete. Don't crash the CLI
+        # (some subcommands need no env vars at all — `init`, `show`, etc.);
+        # `alphamo doctor` will flag the missing dep clearly.
+        return
+    dotenv_path = find_dotenv(usecwd=True)
+    if dotenv_path:
+        load_dotenv(dotenv_path, override=False)
+        _DOTENV_LOADED_FROM = Path(dotenv_path).resolve()
+
+
 @click.group()
-def cli() -> None:
-    """AlphaMo — interactive programs DB CLI."""
+@click.option(
+    "--no-dotenv",
+    "no_dotenv",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip the automatic `.env` autoload at CLI startup. Use in CI / "
+        "production where process-env variables are set out-of-band and "
+        "no `.env` file is expected. By default the CLI looks for `.env` "
+        "starting in CWD and walking up the directory tree; existing "
+        "environment variables take precedence over file values."
+    ),
+)
+def cli(no_dotenv: bool) -> None:
+    """AlphaMo — LLM-driven evolutionary search CLI.
+
+    Quickstart:
+      1. cp .env.example .env  &&  $EDITOR .env   # fill in FIREWORKS_API_KEY
+      2. alphamo doctor                            # verify environment
+      3. alphamo run --generations 30              # launch a production run
+
+    Run `alphamo doctor` if anything looks off — it reports env-var state,
+    Python version, dependency availability, and DB / audit path
+    writeability with concrete fix suggestions for each gap.
+    """
+    # Reset the per-invocation `.env` source tracker. The module-level
+    # global persists across CLI invocations within the same Python
+    # process (test runners, library usage, REPL); each CLI call must
+    # report ONLY what THIS invocation loaded, not state leftover from
+    # an earlier call.
+    global _DOTENV_LOADED_FROM
+    _DOTENV_LOADED_FROM = None
+    if not no_dotenv:
+        _autoload_dotenv()
+
+
+@cli.command()
+@_DB_OPTION
+@_AUDIT_OPTION
+def doctor(db_path: Path, audit_path: Path) -> None:
+    """Pre-flight environment check.
+
+    Reports Python version, dependency availability, env-var state, and
+    DB / audit path writeability. Exits 0 on green, 1 on any critical
+    issue (missing required key, unwriteable path, wrong Python version),
+    2 on warnings only (optional keys absent, etc.).
+
+    Run before `alphamo run` to fail fast at the CLI rather than inside
+    the orchestrator. Output is human-readable and stable enough to grep.
+    """
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    click.echo("alphamo doctor — pre-flight check\n")
+
+    # Python version
+    py_version = ".".join(str(v) for v in sys.version_info[:3])
+    py_ok = sys.version_info >= (3, 11)
+    click.echo(f"  Python:       {py_version} {'OK' if py_ok else 'FAIL — requires >=3.11'}")
+    if not py_ok:
+        issues.append("Python version is below the >=3.11 floor declared in pyproject.toml")
+
+    # Package version
+    click.echo(f"  alphamo:      installed {__version__}  ({platform.python_implementation()})")
+
+    # Required deps
+    for modname, pip_name in (
+        ("dotenv", "python-dotenv"),
+        ("sqlalchemy", "sqlalchemy"),
+        ("pydantic", "pydantic"),
+        ("click", "click"),
+        ("anthropic", "anthropic"),
+        ("openai", "openai"),
+    ):
+        try:
+            __import__(modname)
+            click.echo(f"  dep:          {pip_name:<20} importable  OK")
+        except ImportError:
+            click.echo(f"  dep:          {pip_name:<20} MISSING     FAIL")
+            issues.append(
+                f"dependency `{pip_name}` is not importable — run `pip install -e '.[dev]'`"
+            )
+
+    # .env source
+    if _DOTENV_LOADED_FROM is not None:
+        click.echo(f"  .env:         loaded from {_DOTENV_LOADED_FROM}")
+    else:
+        click.echo("  .env:         not found  (will fall back to process env)")
+
+    # Required env var — FIREWORKS_API_KEY (default Sprint-15 provider routing)
+    fireworks_key = os.environ.get("FIREWORKS_API_KEY")
+    if fireworks_key:
+        masked = fireworks_key[:4] + "…" + fireworks_key[-4:] if len(fireworks_key) > 8 else "<short>"
+        click.echo(f"  FIREWORKS_API_KEY: set ({masked})  OK")
+    else:
+        click.echo("  FIREWORKS_API_KEY: NOT SET  FAIL")
+        issues.append(
+            "FIREWORKS_API_KEY is required for the default Fireworks-routed "
+            "configuration. Copy .env.example to .env, fill in the key, then "
+            "re-run (or `export FIREWORKS_API_KEY=...`)."
+        )
+
+    # Optional env var — ANTHROPIC_API_KEY
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        masked = anthropic_key[:4] + "…" + anthropic_key[-4:] if len(anthropic_key) > 8 else "<short>"
+        click.echo(f"  ANTHROPIC_API_KEY: set ({masked})  OK (optional)")
+    else:
+        click.echo("  ANTHROPIC_API_KEY: not set  (only needed when HP routes a component to anthropic)")
+        warnings.append(
+            "ANTHROPIC_API_KEY is unset — fine if all components route via Fireworks (the default)"
+        )
+
+    # DB path writeability
+    db_parent = db_path.resolve().parent
+    if db_parent.exists() and os.access(db_parent, os.W_OK):
+        click.echo(f"  DB path:      {db_path}  (parent writeable)  OK")
+    else:
+        click.echo(f"  DB path:      {db_path}  parent missing or not writeable  FAIL")
+        issues.append(
+            f"DB path parent directory {db_parent!s} is not writeable — create it or pass --db <path>"
+        )
+
+    # Audit path writeability
+    audit_parent = audit_path.resolve().parent
+    if audit_parent.exists() and os.access(audit_parent, os.W_OK):
+        click.echo(f"  Audit path:   {audit_path}  (parent writeable)  OK")
+    elif not audit_parent.exists():
+        click.echo(f"  Audit path:   {audit_path}  parent will be auto-created  OK")
+    else:
+        click.echo(f"  Audit path:   {audit_path}  parent not writeable  FAIL")
+        issues.append(
+            f"Audit path parent directory {audit_parent!s} is not writeable — pass --audit <path>"
+        )
+
+    # Summary
+    click.echo("")
+    if issues:
+        click.echo(f"FAIL — {len(issues)} critical issue(s):")
+        for issue in issues:
+            click.echo(f"  - {issue}")
+        if warnings:
+            click.echo(f"\nAlso {len(warnings)} warning(s):")
+            for w in warnings:
+                click.echo(f"  - {w}")
+        sys.exit(1)
+    if warnings:
+        click.echo(f"OK with {len(warnings)} warning(s):")
+        for w in warnings:
+            click.echo(f"  - {w}")
+        sys.exit(2)
+    click.echo("OK — all checks passed. Ready to run.")
 
 
 @cli.command()

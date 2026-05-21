@@ -15,6 +15,7 @@ dependencies = [
     "click>=8",
     "anthropic>=0.92",
     "openai>=1.50,<2.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
