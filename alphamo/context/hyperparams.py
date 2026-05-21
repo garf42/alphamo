@@ -176,11 +176,16 @@ class Hyperparameters(BaseModel):
     #
     # `reasoning_effort` is only consumed by the Fireworks provider
     # (mapped to DeepSeek V4's Non-think / Think High / Think Max
-    # discrete modes — no budget_tokens equivalent). Sprint 14 default
-    # is "high"; "max" is reserved for empirical evidence that "high"
-    # isn't enough on a given component. Anthropic provider ignores
-    # this field — it consumes the legacy `thinking={enabled, budget}`
-    # config from the call site directly.
+    # discrete modes — no budget_tokens equivalent). Sprint 14 follow-
+    # up: defaults bumped "high" → "max" on the reasoning-heavy sites
+    # (proposer, Stage 3 adversarial framings, curator). "max" mode
+    # prepends a DeepSeek-side system prefix instructing thorough
+    # decomposition — specifically what Stage 3's adversarial framings
+    # benefit from. The "max" recommended minimum context window of
+    # 384K is comfortably above our worst-case prefix (~44K proposer /
+    # ~37K Stage 3). Anthropic provider ignores this field — it
+    # consumes the legacy `thinking={enabled, budget}` config from the
+    # call site directly.
 
     provider_proposer: str = Field(default="fireworks")
     provider_stage1: str = Field(default="fireworks")
@@ -194,6 +199,6 @@ class Hyperparameters(BaseModel):
     model_stage3: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
     model_curator: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
 
-    reasoning_effort_proposer: str = Field(default="high")
-    reasoning_effort_stage3: str = Field(default="high")
-    reasoning_effort_curator: str = Field(default="high")
+    reasoning_effort_proposer: str = Field(default="max")
+    reasoning_effort_stage3: str = Field(default="max")
+    reasoning_effort_curator: str = Field(default="max")

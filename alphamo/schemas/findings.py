@@ -105,6 +105,30 @@ class RawFindingsBatch(BaseModel):
             "it when an honest pass surfaces nothing material."
         ),
     )
+    # Sprint 14 follow-up: when `findings == []`, the model is instructed
+    # to explain why the architecture has no identifiable vulnerability
+    # on this framing's dimension. The text lands in `Stage4Finding.
+    # reasoning` so the closed-RL-loop has a positive signal alongside
+    # the negative-signal concern list. Optional and default None for
+    # back-compat with persisted-JSON shapes from before this field
+    # existed; the prompt asks for it but a model that ignores the ask
+    # still produces valid output.
+    #
+    # Why a field rather than a LOW-severity finding with a
+    # `no_vulnerability` tag: a clean assessment is metadata about
+    # the framing's evaluation, not a concern. Synthesising it as a
+    # LOW finding would either contaminate `compute_robustness`
+    # (severity weight 0.03 silently reduces robustness for a clean
+    # result — wrong incentive) or require filtering logic of the
+    # same complexity as this field.
+    assessment: str | None = Field(
+        default=None,
+        description=(
+            "When findings is empty, briefly explain why the architecture "
+            "has no identifiable vulnerability on this framing's dimension. "
+            "Optional and ignored when findings is non-empty."
+        ),
+    )
 
 
 class MetaFinding(BaseModel):

@@ -405,6 +405,19 @@ architecture if it materialized — calibrated against the parent goal \
 (see "Severity calibration" below).
 5. Do NOT emit a robustness score. The stage computes that deterministically \
 from the aggregate severity of concerns across all framings.
+6. CITATION DISCIPLINE. Only cite a specific statute, regulation, or case \
+by section number (e.g., 17 U.S.C. § 203, 12 C.F.R. § 1002.4) if you are \
+certain it exists. If you cannot identify the exact section or case citation, \
+describe the legal principle, regulatory mechanism, or enforcement pattern \
+without naming a specific statute. It is better to reference "federal consumer \
+protection authority" than to cite a statute you are not certain about.
+7. EXPLICIT ASSESSMENT WHEN CLEAN. If no structural concerns exist for this \
+framing, state explicitly that the architecture has no identifiable \
+vulnerability on this dimension and briefly explain why — populate the \
+`assessment` field on the response with this short justification. An \
+explicit "no concerns" assessment is more valuable than silence. The \
+`assessment` field is ignored when `findings` is non-empty; populate it \
+only on clean passes.
 
 Severity calibration:
 

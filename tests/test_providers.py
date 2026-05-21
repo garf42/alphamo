@@ -169,7 +169,37 @@ def test_fireworks_provider_passes_reasoning_effort_via_extra_body():
         reasoning_effort="high",
     )
     kwargs = mock_client.chat.completions.create.call_args[1]
-    assert kwargs["extra_body"] == {"reasoning_effort": "high"}
+    # Sprint 14 follow-up: thinking is passed explicitly alongside
+    # reasoning_effort (DeepSeek V4 defaults to enabled, but we don't
+    # want the request shape to depend on a server-side default).
+    assert kwargs["extra_body"] == {
+        "reasoning_effort": "high",
+        "thinking": {"type": "enabled"},
+    }
+
+
+def test_fireworks_provider_passes_thinking_enabled_with_max_reasoning_effort():
+    """Sprint 14 follow-up: reasoning_effort='max' also pairs with the
+    explicit thinking={'type': 'enabled'} field. DeepSeek V4's "max"
+    mode prepends a server-side prefix instructing thorough
+    decomposition — specifically what Stage 3 framings benefit from."""
+    provider, mock_client = _fireworks_with_mock_create(
+        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+    )
+    provider.parse(
+        error_cls=Stage1OutputError,
+        model=FIREWORKS_DEFAULT_MODEL,
+        max_tokens=2048,
+        system="sys",
+        messages=[{"role": "user", "content": "hi"}],
+        output_format=Stage1Finding,
+        reasoning_effort="max",
+    )
+    kwargs = mock_client.chat.completions.create.call_args[1]
+    assert kwargs["extra_body"] == {
+        "reasoning_effort": "max",
+        "thinking": {"type": "enabled"},
+    }
 
 
 def test_fireworks_provider_omits_extra_body_when_no_reasoning_effort():
@@ -208,10 +238,14 @@ def test_fireworks_provider_sets_response_format_json_schema():
     assert rf["json_schema"]["schema"] == Stage1Finding.model_json_schema()
 
 
-def test_fireworks_provider_silently_drops_thinking_field():
-    """The legacy Anthropic `thinking={...}` field arrives at the
-    Fireworks provider when both forms are passed at the call site.
-    Provider must accept and ignore it (not forward to the OpenAI SDK)."""
+def test_fireworks_provider_silently_drops_top_level_anthropic_thinking_field():
+    """The legacy Anthropic `thinking={'type':'enabled','budget_tokens':N}`
+    field arrives at the Fireworks provider when both forms are passed
+    at the call site. Provider must NOT forward it as a top-level field
+    (would error in the OpenAI SDK validator). The Fireworks-shaped
+    `thinking={'type': 'enabled'}` lives in extra_body alongside
+    reasoning_effort and is set by the provider itself, not the call
+    site's Anthropic-shape thinking kwarg."""
     provider, mock_client = _fireworks_with_mock_create(
         _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
     )
@@ -226,9 +260,14 @@ def test_fireworks_provider_silently_drops_thinking_field():
         reasoning_effort="high",
     )
     kwargs = mock_client.chat.completions.create.call_args[1]
+    # The Anthropic-shape top-level `thinking` must not survive.
     assert "thinking" not in kwargs
-    # Reasoning still passes through via extra_body.
-    assert kwargs["extra_body"] == {"reasoning_effort": "high"}
+    # The Fireworks-shape thinking + reasoning_effort live inside
+    # extra_body, set by the provider when reasoning_effort is supplied.
+    assert kwargs["extra_body"] == {
+        "reasoning_effort": "high",
+        "thinking": {"type": "enabled"},
+    }
 
 
 # --------------------------------------------------------------------- FireworksProvider response handling
@@ -539,13 +578,17 @@ def test_hyperparameters_default_model_is_deepseek_v4_flash():
     assert hp.model_curator == FIREWORKS_DEFAULT_MODEL
 
 
-def test_hyperparameters_default_reasoning_effort_is_high_not_max():
-    """Sprint 14 audit decision C: default to 'high', not 'max', until
-    empirical evidence justifies higher cost."""
+def test_hyperparameters_default_reasoning_effort_is_max():
+    """Sprint 14 follow-up: bumped 'high' → 'max' on the reasoning-
+    heavy sites. DeepSeek V4's 'max' mode prepends a server-side
+    prefix instructing thorough decomposition — specifically what
+    Stage 3 adversarial framings + the proposer's structural-
+    component synthesis benefit from. Stage 1 / Stage 2 remain at
+    no-reasoning since they're structured-classification tasks."""
     hp = Hyperparameters()
-    assert hp.reasoning_effort_proposer == "high"
-    assert hp.reasoning_effort_stage3 == "high"
-    assert hp.reasoning_effort_curator == "high"
+    assert hp.reasoning_effort_proposer == "max"
+    assert hp.reasoning_effort_stage3 == "max"
+    assert hp.reasoning_effort_curator == "max"
 
 
 def test_hyperparameters_silently_ignores_pre_sprint14_routing_fields():
@@ -673,3 +716,170 @@ def test_anthropic_provider_omits_thinking_when_not_supplied():
     )
     kwargs = client.messages.parse.call_args[1]
     assert "thinking" not in kwargs
+
+
+# --------------------------------------------------------------------- Sprint 14 follow-up: prompt + schema + aggregator
+
+
+def test_raw_findings_batch_assessment_field_is_optional():
+    """Sprint 14 follow-up: RawFindingsBatch gained an optional
+    `assessment` field for clean-pass explanations. Old persisted
+    JSON (no assessment key) must still validate."""
+    batch = RawFindingsBatch(findings=[])
+    assert batch.assessment is None
+    # Explicit value also valid.
+    batch = RawFindingsBatch(
+        findings=[],
+        assessment="no regulatory exposure: architecture is operator-licensed throughout",
+    )
+    assert batch.assessment.startswith("no regulatory exposure")
+
+
+def test_stage4_prompts_include_citation_discipline_instruction():
+    """The per-framing system prompt must instruct the model to avoid
+    fabricated statute citations — describe principles rather than
+    cite section numbers it isn't certain about."""
+    from alphamo.prompts.stage4_prompts import (
+        DEFAULT_FRAMINGS,
+        stage4_system,
+    )
+
+    for framing in DEFAULT_FRAMINGS:
+        prompt = stage4_system(framing)
+        assert "CITATION DISCIPLINE" in prompt
+        assert "certain it exists" in prompt
+        # Reference to the alternative pattern the discipline allows.
+        assert (
+            "federal consumer protection authority" in prompt
+            or "describe the legal principle" in prompt
+        )
+
+
+def test_stage4_prompts_include_explicit_assessment_instruction():
+    """Every framing's system prompt must instruct the model to
+    populate the `assessment` field on clean passes — explicit 'no
+    concerns' is more valuable than silence for the closed-RL-loop."""
+    from alphamo.prompts.stage4_prompts import (
+        DEFAULT_FRAMINGS,
+        stage4_system,
+    )
+
+    for framing in DEFAULT_FRAMINGS:
+        prompt = stage4_system(framing)
+        assert "EXPLICIT ASSESSMENT" in prompt
+        assert "`assessment`" in prompt
+        assert "no identifiable vulnerability" in prompt
+
+
+def test_stage4_aggregator_surfaces_clean_framing_assessments_in_reasoning():
+    """When some framings return clean with an assessment, the
+    aggregator's reasoning string must include 'Clean-framing
+    assessments —' followed by per-framing text. This is the
+    closed-RL-loop signal that the framing actively evaluated and
+    found nothing, rather than being silent."""
+    from alphamo.evaluator.stage4_adversarial import stage4_adversarial
+    from alphamo.prompts.stage4_prompts import DEFAULT_FRAMINGS
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
+    # Build a client whose framings return clean (empty findings) WITH
+    # assessment text. All 9 framings clean → no concerns generated.
+    assessment_template = (
+        "the architecture's mechanism is structurally sound under "
+        "this framing because X, Y, Z"
+    )
+
+    def parse_side_effect(**kwargs):
+        return FakeParsedMessage(
+            RawFindingsBatch(findings=[], assessment=assessment_template),
+            stop_reason="end_turn",
+        )
+
+    client = MagicMock()
+    client.messages.parse.side_effect = parse_side_effect
+
+    result = stage4_adversarial(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framings=DEFAULT_FRAMINGS,
+    )
+
+    assert "Clean-framing assessments —" in result.reasoning
+    # Every clean framing's assessment text appears in the reasoning.
+    for framing in DEFAULT_FRAMINGS:
+        assert framing in result.reasoning
+
+
+def test_stage4_aggregator_skips_assessment_section_when_no_assessments():
+    """If no clean framing populated `assessment`, the reasoning
+    string must NOT include the 'Clean-framing assessments' header.
+    Avoids dangling empty section text in the audit log when the
+    model ignores the new instruction (old DB rows / pre-prompt
+    bump / models that don't honor the field)."""
+    from alphamo.evaluator.stage4_adversarial import stage4_adversarial
+    from alphamo.prompts.stage4_prompts import DEFAULT_FRAMINGS
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
+    def parse_side_effect(**kwargs):
+        # All clean, but NO assessment field populated — simulates
+        # a model that didn't honor the new instruction.
+        return FakeParsedMessage(
+            RawFindingsBatch(findings=[]), stop_reason="end_turn"
+        )
+
+    client = MagicMock()
+    client.messages.parse.side_effect = parse_side_effect
+
+    result = stage4_adversarial(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framings=DEFAULT_FRAMINGS,
+    )
+    assert "Clean-framing assessments" not in result.reasoning
+
+
+def test_run_framing_returns_concerns_and_assessment_tuple():
+    """Sprint 14 follow-up: _run_framing now returns (concerns,
+    assessment). The aggregator depends on this tuple shape."""
+    from alphamo.evaluator.stage4_adversarial import _run_framing
+    from alphamo.schemas.findings import RawFinding, Severity
+    from tests.fixtures.parsed_message import FakeParsedMessage
+
+    def parse_side_effect(**kwargs):
+        return FakeParsedMessage(
+            RawFindingsBatch(
+                findings=[
+                    RawFinding(
+                        claim="c", evidence="e",
+                        falsification_condition="if X",
+                        severity=Severity.MEDIUM,
+                    )
+                ],
+                assessment=None,
+            ),
+            stop_reason="end_turn",
+        )
+
+    client = MagicMock()
+    client.messages.parse.side_effect = parse_side_effect
+
+    result = _run_framing(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framing="regulatory",
+        model=FIREWORKS_DEFAULT_MODEL,
+    )
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    concerns, assessment = result
+    assert len(concerns) == 1
+    assert concerns[0].framing == "regulatory"
+    assert assessment is None

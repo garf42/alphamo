@@ -173,7 +173,7 @@ def _run_framing(
     model: str,
     telemetry: TelemetryContext | None = None,
     reasoning_effort: str | None = "high",
-) -> list[StructuralConcern]:
+) -> tuple[list[StructuralConcern], str | None]:
     """Single call for one framing; tag returned concerns with the framing.
 
     Sprint 14: routed through `BaseProvider.parse(...)`. The thinking
@@ -183,10 +183,12 @@ def _run_framing(
     underlying provider's `_parse_impl` reads what it needs and ignores
     the rest.
 
-    The Sprint 11 rationale stands: bounded thinking gives a
-    deterministic ceiling across 1800+ framing calls per 200-gen run.
-    On Fireworks/DeepSeek V4, the equivalent of the Sprint 11 bounded
-    budget is `reasoning_effort="high"` (one of Non-think / High / Max).
+    Sprint 14 follow-up: returns `(concerns, assessment)` so the
+    aggregator can surface the model's "no vulnerability on this
+    dimension and here's why" explanation when a framing comes back
+    clean. `assessment` is None when the model didn't populate it
+    (e.g., when findings are non-empty, or when the model ignored
+    the new instruction).
     """
     provider = ensure_provider(client)
     batch: RawFindingsBatch = provider.parse(
@@ -212,7 +214,7 @@ def _run_framing(
         messages=[{"role": "user", "content": render_candidate(architecture)}],
         output_format=RawFindingsBatch,
     )
-    return [
+    concerns = [
         StructuralConcern(
             framing=framing,
             claim=raw.claim,
@@ -222,6 +224,11 @@ def _run_framing(
         )
         for raw in batch.findings
     ]
+    # `assessment` is meaningful only on clean passes — the prompt
+    # tells the model to populate it then, and to leave it None when
+    # findings is non-empty. We forward the model's value as-is rather
+    # than second-guessing whether the model followed the rule.
+    return concerns, batch.assessment
 
 
 def _failed_framings_sentinel(failed_framings: list[str]) -> StructuralConcern:
@@ -285,12 +292,19 @@ def stage4_adversarial(
     succeeded_framings: list[str] = []
     failed_framings: list[str] = []
     all_concerns: list[StructuralConcern] = []
+    # Sprint 14 follow-up: per-framing assessment text from clean
+    # passes. Stored framing→text so the reasoning summary can surface
+    # WHY each clean framing came back clean (closed-RL-loop signal).
+    framing_assessments: dict[str, str] = {}
     for framing, result in zip(framings, raw_results):
         if isinstance(result, Exception):
             failed_framings.append(framing)
         else:
             succeeded_framings.append(framing)
-            all_concerns.extend(result)
+            concerns, assessment = result
+            all_concerns.extend(concerns)
+            if assessment:
+                framing_assessments[framing] = assessment
 
     if len(succeeded_framings) < STAGE3_MIN_SUCCESSFUL_FRAMINGS:
         # Catastrophic Stage 3 failure: signal is too degraded to score
@@ -323,6 +337,25 @@ def stage4_adversarial(
             f"All {len(succeeded_framings)} succeeded framings returned clean "
             "— no structural concerns surfaced."
         )
+
+    # Surface the model's per-framing "no vulnerability" explanations
+    # when supplied. Filtered to only framings that came back clean —
+    # framings with concerns don't get an assessment entry (the prompt
+    # instructs the model to leave `assessment` None when findings is
+    # non-empty; this filter is belt-and-suspenders in case it didn't).
+    # Each assessment is line-clipped to keep the reasoning string at
+    # an audit-log-readable length even when all 9 framings produce one.
+    clean_assessments = {
+        f: framing_assessments[f]
+        for f in framings_clean
+        if f in framing_assessments
+    }
+    if clean_assessments:
+        per_framing = " | ".join(
+            f"{f}: {clean_assessments[f][:200]}"
+            for f in sorted(clean_assessments)
+        )
+        reasoning += f" Clean-framing assessments — {per_framing}"
 
     if failed_framings:
         reasoning += (

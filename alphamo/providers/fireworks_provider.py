@@ -158,14 +158,20 @@ class FireworksProvider(BaseProvider):
             },
         )
         # `extra_body` is the OpenAI-SDK escape hatch for provider-
-        # specific fields. Fireworks consumes `reasoning_effort` here.
-        # `thinking` (Anthropic shape) is silently ignored on Fireworks —
-        # the call site is responsible for translating to
-        # reasoning_effort before calling parse(), but if the legacy
-        # field arrives we don't error.
+        # specific fields. Fireworks consumes both `reasoning_effort`
+        # and `thinking` here. DeepSeek V4 defaults `thinking` to
+        # enabled, but we pass it explicitly so the request shape is
+        # self-documenting and won't break if the default flips.
+        # `thinking` is gated by reasoning_effort being set — Stage 1
+        # and Stage 2 pass neither.
+        # The legacy Anthropic `thinking={...}` field arrives unused
+        # at this provider; silently ignored (the call site is
+        # responsible for ALSO setting reasoning_effort when both
+        # forms are passed).
         extra_body: dict[str, Any] = {}
         if reasoning_effort is not None:
             extra_body["reasoning_effort"] = reasoning_effort
+            extra_body["thinking"] = {"type": "enabled"}
         if extra_body:
             request_kwargs["extra_body"] = extra_body
 
