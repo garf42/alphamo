@@ -350,3 +350,132 @@ def test_clustering_falls_back_to_other_clusters_when_chosen_too_small(db, defau
     names = {s.architecture.name for s in seeds}
     assert "solo_A" in names  # the chosen cluster's lone candidate
     assert sum(1 for n in names if n.startswith("B")) >= 2  # fallback fills the rest
+
+
+# ----------------------------------------------------------------- Sprint 15 (Q7) within-cluster Boltzmann
+
+
+class _FitnessRow:
+    """Minimal stand-in for a Candidate row — _draw_from_cluster reads
+    only `.id` and `.fitness`."""
+
+    def __init__(self, id_: int, fitness: float) -> None:
+        self.id = id_
+        self.fitness = fitness
+
+
+def _bare_sampler(temperature: float, seed: int = 0) -> Sampler:
+    """Build a Sampler with a seeded RNG and no DB access — _draw_from_
+    cluster doesn't touch self.db, so we can pass None."""
+    return Sampler(
+        db=None,  # type: ignore[arg-type]
+        temperature=temperature,
+        rng=random.Random(seed),
+    )
+
+
+def test_within_cluster_boltzmann_prefers_higher_fitness_at_low_temperature():
+    """Sprint 15 (Q7): at T=0.1 the within-cluster draw should
+    selection-pressure toward higher-fitness rows.
+
+    Over many independent draws of k=1 from a fixed cluster of four
+    rows with fitnesses {0.4, 0.5, 0.6, 0.7}, the empirical pick
+    frequencies must match the Boltzmann normalization within
+    sampling tolerance. With weights w_i = exp(f_i / 0.1), the
+    normalized probabilities are:
+
+        0.4 → ~0.0321  (exp(4)  ≈    54.6)
+        0.5 → ~0.0871  (exp(5)  ≈   148.4)
+        0.6 → ~0.2369  (exp(6)  ≈   403.4)
+        0.7 → ~0.6439  (exp(7)  ≈  1096.6)
+
+    Expected counts at N=4000 with binomial stddev ≈ √(N·p·(1-p)):
+        0.4: 128 ± 35
+        0.5: 348 ± 56
+        0.6: 948 ± 85
+        0.7: 2576 ± 96
+    Tolerance bands at ±3σ.
+    """
+    rows = [
+        _FitnessRow(1, 0.4),
+        _FitnessRow(2, 0.5),
+        _FitnessRow(3, 0.6),
+        _FitnessRow(4, 0.7),
+    ]
+    sampler = _bare_sampler(temperature=0.1, seed=42)
+    counts = {1: 0, 2: 0, 3: 0, 4: 0}
+    N = 4000
+    for _ in range(N):
+        picked = sampler._draw_from_cluster(rows, k=1)
+        counts[picked[0].id] += 1
+    # Ordering invariant: higher fitness picked more than lower fitness.
+    assert counts[4] > counts[3] > counts[2] > counts[1]
+    # Numerical bands matching the Boltzmann normalization at ±3σ.
+    assert abs(counts[1] - 128) < 105
+    assert abs(counts[2] - 348) < 168
+    assert abs(counts[3] - 948) < 255
+    assert abs(counts[4] - 2576) < 288
+
+
+def test_within_cluster_boltzmann_approaches_uniform_at_high_temperature():
+    """Backward-compat invariant: at very high T (here T=1000), the
+    Boltzmann weights flatten and the within-cluster draw approaches
+    uniform. Across N=4000 draws of k=1 from 4 rows, each row should
+    land roughly N/4 = 1000 ± sampling noise. With seed-fixed RNG we
+    pin tight enough bounds (±150 = ~15% slack) that a regression to
+    deterministic argmax would clearly fail this test."""
+    rows = [
+        _FitnessRow(1, 0.4),
+        _FitnessRow(2, 0.5),
+        _FitnessRow(3, 0.6),
+        _FitnessRow(4, 0.7),
+    ]
+    sampler = _bare_sampler(temperature=1000.0, seed=42)
+    counts = {1: 0, 2: 0, 3: 0, 4: 0}
+    N = 4000
+    for _ in range(N):
+        picked = sampler._draw_from_cluster(rows, k=1)
+        counts[picked[0].id] += 1
+    expected = N // 4
+    for cid in (1, 2, 3, 4):
+        assert abs(counts[cid] - expected) < 150, (
+            f"row {cid} picked {counts[cid]} times; expected ~{expected} "
+            "under near-uniform high-temperature Boltzmann"
+        )
+
+
+def test_within_cluster_boltzmann_handles_tied_fitness_uniformly():
+    """When all rows have equal fitness, the Boltzmann weights are
+    all equal (= exp(0) after the max-shift). The draw must reduce
+    to uniform without crashing."""
+    rows = [_FitnessRow(i, 0.5) for i in range(1, 5)]
+    sampler = _bare_sampler(temperature=0.1, seed=7)
+    counts = {1: 0, 2: 0, 3: 0, 4: 0}
+    N = 2000
+    for _ in range(N):
+        picked = sampler._draw_from_cluster(rows, k=1)
+        counts[picked[0].id] += 1
+    expected = N // 4
+    for cid in (1, 2, 3, 4):
+        assert abs(counts[cid] - expected) < 120
+
+
+def test_within_cluster_boltzmann_returns_all_rows_when_cluster_smaller_than_k():
+    """If the cluster contains fewer rows than k, return all of them.
+    Preserves the upper-level Sampler.draw fallback semantics at
+    sampler.py:219-224."""
+    rows = [_FitnessRow(1, 0.5), _FitnessRow(2, 0.7)]
+    sampler = _bare_sampler(temperature=0.1)
+    picked = sampler._draw_from_cluster(rows, k=5)
+    assert {r.id for r in picked} == {1, 2}
+
+
+def test_within_cluster_boltzmann_no_duplicates_without_replacement():
+    """k draws from a cluster must return k DISTINCT rows. The sequential
+    weighted draw with explicit remove() must not return the same row
+    twice."""
+    rows = [_FitnessRow(i, 0.1 * i) for i in range(1, 6)]
+    sampler = _bare_sampler(temperature=0.05, seed=1)
+    picked = sampler._draw_from_cluster(rows, k=3)
+    assert len(picked) == 3
+    assert len({r.id for r in picked}) == 3

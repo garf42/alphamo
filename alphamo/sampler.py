@@ -235,7 +235,43 @@ class Sampler:
     # ------------------------------------------------------------------ helpers
 
     def _draw_from_cluster(self, cluster_rows: list, k: int) -> list:
-        """Uniform sample without replacement from a cluster."""
+        """Boltzmann sample without replacement from a cluster, weighted by fitness.
+
+        Sprint 15 (Q7): pre-Sprint-15 this was a uniform `rng.sample(...)`
+        ignoring `self.temperature`. The temperature parameter was a
+        dead config knob — plumbed end-to-end but never read. This
+        wires it back in as a Boltzmann sampler over row fitness:
+
+            w_i = exp((fitness_i - max_fitness) / T)
+
+        The max-shift keeps the exponent ≤ 0 so weights stay numerically
+        finite even at very small T. At very high T the (normalized)
+        weights flatten toward uniform; at very small T the weights
+        collapse onto the single max-fitness row (or rows tied for it).
+
+        Sequential weighted draw without replacement: pick one row at
+        a time using `rng.choices(... weights=...)` over the remaining
+        pool. This shape is correct under ties (equal-fitness rows get
+        equal selection probability) and degenerate fits (single-row
+        pool returns trivially).
+        """
         if len(cluster_rows) <= k:
             return list(cluster_rows)
-        return self.rng.sample(cluster_rows, k)
+
+        remaining = list(cluster_rows)
+        chosen: list = []
+        for _ in range(k):
+            if not remaining:
+                break
+            fitnesses = [r.fitness for r in remaining]
+            max_fit = max(fitnesses)
+            weights = [math.exp((f - max_fit) / self.temperature) for f in fitnesses]
+            # All-zero weights is impossible (the max-shifted entry is
+            # always exp(0)=1), but guard the divide-by-zero implicit in
+            # rng.choices if numerical underflow ever zeroes everything.
+            if sum(weights) == 0.0:
+                weights = [1.0] * len(remaining)
+            pick = self.rng.choices(remaining, weights=weights, k=1)[0]
+            chosen.append(pick)
+            remaining.remove(pick)
+        return chosen

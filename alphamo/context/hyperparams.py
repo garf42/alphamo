@@ -56,7 +56,16 @@ class Hyperparameters(BaseModel):
 
     pool_size: int = Field(default=8, ge=1)
     k_seeds: int = Field(default=2, ge=1)
-    sampling_temperature: float = Field(default=0.8, gt=0.0)
+    # Sprint 15 (Q7): default lowered 0.8 → 0.1 alongside wiring this
+    # field into the within-cluster Boltzmann draw at Sampler._draw_
+    # from_cluster. Pre-Sprint-15 the field was stored on the sampler
+    # but never read — the within-cluster draw was uniform regardless
+    # of value. The new default 0.1 matches `cluster_temperature_t0`'s
+    # exploitative shape (sharp preference for higher-fitness rows
+    # within the chosen cluster) and is consistent with FunSearch's
+    # within-cluster temperature being on the more-exploitative side
+    # than the cluster-level temperature.
+    sampling_temperature: float = Field(default=0.1, gt=0.0)
 
     # FunSearch §A.1 Methods: within-island cluster sampling via Boltzmann
     # selection over cluster aggregate fitness. T_cluster decays as
