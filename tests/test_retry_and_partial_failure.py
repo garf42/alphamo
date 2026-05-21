@@ -71,18 +71,21 @@ def test_all_production_anthropic_clients_pass_max_retries():
     )
 
 
-def test_pydantic_validation_error_is_not_retried_by_parse_or_raise():
-    """parse_or_raise wraps pydantic.ValidationError into LLMOutputError
+def test_pydantic_validation_error_is_not_retried_by_provider():
+    """AnthropicProvider wraps pydantic.ValidationError into LLMOutputError
     without retry — schema mismatches don't benefit from retry.
 
-    The SDK's built-in retry layer only retries API-side errors. Schema
-    failures raised by pydantic.ValidationError inside parse() must
-    surface immediately so the orchestrator's consecutive_failures gate
-    catches them.
+    Sprint 14: this test moved from `parse_or_raise` to
+    `AnthropicProvider.parse` after the provider abstraction landed.
+    The Anthropic SDK's built-in retry layer only retries API-side
+    errors; schema failures raised by pydantic.ValidationError inside
+    `client.messages.parse(...)` must surface immediately so the
+    orchestrator's consecutive_failures gate catches them.
     """
     import pydantic
 
-    from alphamo.errors import LLMOutputError, parse_or_raise
+    from alphamo.errors import LLMOutputError
+    from alphamo.providers import AnthropicProvider
 
     class _Schema(pydantic.BaseModel):
         x: int
@@ -90,13 +93,21 @@ def test_pydantic_validation_error_is_not_retried_by_parse_or_raise():
     client = MagicMock()
     # First call raises ValidationError; if there were a retry layer
     # under our control, a second call would be made. We verify
-    # parse_or_raise calls parse() exactly once.
+    # provider.parse() calls parse() exactly once.
     client.messages.parse.side_effect = pydantic.ValidationError.from_exception_data(
         title="ValidationError", line_errors=[]
     )
 
+    provider = AnthropicProvider(client)
     with pytest.raises(LLMOutputError):
-        parse_or_raise(client, LLMOutputError, output_format=_Schema)
+        provider.parse(
+            error_cls=LLMOutputError,
+            model="claude-haiku-4-5",
+            max_tokens=128,
+            system=[],
+            messages=[{"role": "user", "content": "hi"}],
+            output_format=_Schema,
+        )
     assert client.messages.parse.call_count == 1
 
 

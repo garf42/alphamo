@@ -46,8 +46,6 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-import anthropic
-
 from alphamo.context.hyperparams import Hyperparameters
 from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
@@ -71,8 +69,40 @@ from alphamo.meta.curator import Curator
 # research_prompts module.
 MILESTONE_CANDIDATE_TRIGGER = "milestone_candidate"
 from alphamo.proposer import Proposer
+from alphamo.providers.base import BaseProvider, ensure_provider
+from alphamo.providers.factory import build_provider
 from alphamo.sampler import Sampler
 from alphamo.schemas import Architecture
+
+
+def _build_component_providers(
+    client: Any,
+    hp: Hyperparameters,
+) -> tuple[BaseProvider, BaseProvider, BaseProvider, BaseProvider, BaseProvider]:
+    """Resolve one provider per LLM-calling component.
+
+    Two paths:
+      1. `client` is non-None (legacy / test path) — auto-wrap into an
+         AnthropicProvider and share across all five components. The
+         per-HP routing fields are bypassed so MagicMock-driven tests
+         keep working unchanged.
+      2. `client` is None (production CLI path) — build one provider
+         per component from `hp.provider_*` via the factory. Identical
+         provider names share an underlying SDK client via the
+         factory's per-process cache.
+
+    Returns (proposer, stage1, stage2, stage3, curator) in that order.
+    """
+    if client is not None:
+        shared = ensure_provider(client)
+        return shared, shared, shared, shared, shared
+    return (
+        build_provider(hp.provider_proposer),
+        build_provider(hp.provider_stage1),
+        build_provider(hp.provider_stage2),
+        build_provider(hp.provider_stage3),
+        build_provider(hp.provider_curator),
+    )
 from alphamo.schemas.findings import (
     CuratorAction,
     CuratorDecision,
@@ -284,7 +314,7 @@ class Orchestrator:
     def __init__(
         self,
         db: ProgramsDB,
-        client: anthropic.Anthropic,
+        client: Any,
         audit_log: AuditLog,
         run_id: str,
         hp: Hyperparameters | None = None,
@@ -317,14 +347,41 @@ class Orchestrator:
             cluster_temperature_period=self.hp.cluster_temperature_period,
             cluster_signature_resolution=self.hp.cluster_signature_resolution,
         )
-        self.proposer = Proposer(client)
+
+        # Sprint 14: build one provider per component from Hyperparameters.
+        # When `client` is provided directly (legacy path, including tests
+        # passing a MagicMock), every component shares the auto-wrapped
+        # provider — the per-HP routing fields are bypassed for that path
+        # so existing tests stay byte-stable. The production CLI path
+        # passes `client=None` and lets each component route from HP.
+        proposer_provider, stage1_provider, stage2_provider, \
+            stage3_provider, curator_provider = _build_component_providers(
+                client, self.hp
+            )
+        self.proposer = Proposer(
+            proposer_provider,
+            model=self.hp.model_proposer,
+            reasoning_effort=self.hp.reasoning_effort_proposer,
+        )
         self.cascade = EvaluatorCascade(
-            client,
+            stage1_provider=stage1_provider,
+            stage2_provider=stage2_provider,
+            stage3_provider=stage3_provider,
+            stage1_model=self.hp.model_stage1,
+            stage2_model=self.hp.model_stage2,
+            stage3_model=self.hp.model_stage3,
+            stage3_reasoning_effort=self.hp.reasoning_effort_stage3,
             stage1_threshold=self.hp.stage1_threshold,
             stage2_threshold=self.hp.stage2_threshold,
             stage4_decay_k=self.hp.stage4_decay_k,
         )
-        self.curator = Curator(client, audit_log, run_id=run_id)
+        self.curator = Curator(
+            curator_provider,
+            audit_log,
+            run_id=run_id,
+            model=self.hp.model_curator,
+            reasoning_effort=self.hp.reasoning_effort_curator,
+        )
 
     # ------------------------------------------------------------------ factories
 
@@ -332,7 +389,7 @@ class Orchestrator:
     def for_new_run(
         cls,
         db: ProgramsDB,
-        client: anthropic.Anthropic,
+        client: Any,
         audit_log: AuditLog,
         hp: Hyperparameters | None = None,
         rng: random.Random | None = None,
@@ -352,7 +409,7 @@ class Orchestrator:
     def resume_run(
         cls,
         db: ProgramsDB,
-        client: anthropic.Anthropic,
+        client: Any,
         audit_log: AuditLog,
         run_id: str,
         rng: random.Random | None = None,

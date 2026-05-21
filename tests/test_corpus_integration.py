@@ -283,11 +283,12 @@ def test_stage3_per_framing_uses_layered_cached_blocks():
 # ----------------------------------------------------------------- version + removal
 
 
-def test_proposer_version_advanced_to_v7():
-    """Sprint 12 bumped PROPOSER_VERSION v6 → v7 because the proposer
-    sees materially different input (corpus injected before
-    PROPOSER_SYSTEM)."""
-    assert PROPOSER_VERSION == "v7"
+def test_proposer_version_advanced_to_v8():
+    """Sprint 12 bumped v6 → v7 (corpus integration). Sprint 14 bumped
+    v7 → v8 for the provider migration (Anthropic Sonnet → Fireworks
+    DeepSeek V4 Flash). v8 trajectories must be distinguishable from
+    v7 in the persisted run metadata."""
+    assert PROPOSER_VERSION == "v8"
 
 
 def test_research_module_is_removed():

@@ -163,3 +163,37 @@ class Hyperparameters(BaseModel):
             "Guards against burning the API budget on broken outputs."
         ),
     )
+
+    # Sprint 14: per-component provider + model + reasoning-effort routing.
+    # Defaults to Fireworks-hosted DeepSeek V4 Flash everywhere (~20×
+    # cheaper than Sonnet); per-site overrides supported so a single
+    # component can be flipped to Anthropic without a code change if
+    # Flash quality is insufficient.
+    #
+    # Provider names: "anthropic" | "fireworks". Anything else raises
+    # at provider-factory build time — silent fallback would hide
+    # config typos in persisted hyperparameters JSON.
+    #
+    # `reasoning_effort` is only consumed by the Fireworks provider
+    # (mapped to DeepSeek V4's Non-think / Think High / Think Max
+    # discrete modes — no budget_tokens equivalent). Sprint 14 default
+    # is "high"; "max" is reserved for empirical evidence that "high"
+    # isn't enough on a given component. Anthropic provider ignores
+    # this field — it consumes the legacy `thinking={enabled, budget}`
+    # config from the call site directly.
+
+    provider_proposer: str = Field(default="fireworks")
+    provider_stage1: str = Field(default="fireworks")
+    provider_stage2: str = Field(default="fireworks")
+    provider_stage3: str = Field(default="fireworks")
+    provider_curator: str = Field(default="fireworks")
+
+    model_proposer: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
+    model_stage1: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
+    model_stage2: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
+    model_stage3: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
+    model_curator: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
+
+    reasoning_effort_proposer: str = Field(default="high")
+    reasoning_effort_stage3: str = Field(default="high")
+    reasoning_effort_curator: str = Field(default="high")

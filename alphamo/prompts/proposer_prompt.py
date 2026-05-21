@@ -84,7 +84,17 @@ from alphamo.schemas.findings import Severity, StructuralConcern
 # and v7 (corpus-grounded) trajectories must be distinguishable.
 # The corpus has its own CORPUS_VERSION (see alphamo/corpus/loader.py);
 # corpus revisions ALSO invalidate v7 trajectories in a meaningful way.
-PROPOSER_VERSION = "v7"
+# v7 → v8 (Sprint 14): provider migration to Fireworks/DeepSeek V4
+# Flash with `reasoning_effort="high"`. PROPOSER_SYSTEM text itself
+# unchanged; the execution shape changes materially — different model
+# (Sonnet 4.6 → DeepSeek V4 Flash, distinct training distribution),
+# different reasoning discipline (bounded `budget_tokens=6000` →
+# discrete `reasoning_effort` modes, no client-driven ceiling), and
+# the cache layer is now Fireworks-automatic-prefix rather than
+# Anthropic-ephemeral-marker. v7 (Anthropic Sonnet) and v8 (Fireworks
+# DeepSeek V4 Flash) trajectories must be distinguishable in any
+# post-run comparison.
+PROPOSER_VERSION = "v8"
 
 # Sprint 6: per-candidate budget for the concerns section in the
 # proposer's user message. Concerns are truncated by severity (all

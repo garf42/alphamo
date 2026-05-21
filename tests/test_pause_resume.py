@@ -412,6 +412,22 @@ def _stub_anthropic(monkeypatch):
             self.messages = client.messages
 
     monkeypatch.setattr("anthropic.Anthropic", _StubClient)
+    # Sprint 14: CLI no longer constructs `anthropic.Anthropic()`
+    # directly — `client=None` is passed to the orchestrator, which
+    # builds providers via the factory. Bridge the legacy stub: when
+    # the orchestrator asks the factory for any provider, return an
+    # AnthropicProvider wrapping a fresh `anthropic.Anthropic()` —
+    # which the line above just stubbed to `_StubClient`. Net effect:
+    # `provider.parse(...)` ends up calling `_StubClient().messages.parse(...)`,
+    # exactly as before the migration.
+    from alphamo import orchestrator as _orch_mod
+    from alphamo.providers import AnthropicProvider
+    import anthropic as _anthropic
+    monkeypatch.setattr(
+        _orch_mod,
+        "build_provider",
+        lambda name, **kw: AnthropicProvider(_anthropic.Anthropic()),
+    )
 
 
 def test_cli_target_generation_requires_resume(tmp_path):

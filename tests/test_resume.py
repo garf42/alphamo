@@ -102,6 +102,27 @@ def _stub_client() -> MagicMock:
     return client
 
 
+def _bridge_provider_factory_to_anthropic_stub(monkeypatch):
+    """Sprint 14 bridge: after `monkeypatch.setattr('anthropic.Anthropic', _StubClient)`,
+    also rebind the orchestrator's `build_provider` so the new
+    factory-driven CLI path lands on the same stub.
+
+    The CLI was changed in Sprint 14 to pass `client=None` to the
+    orchestrator, which then calls `build_provider(hp.provider_*)` per
+    component. Without this bridge, the factory tries to read
+    FIREWORKS_API_KEY and bails before any stubbed call lands.
+    """
+    from alphamo import orchestrator as _orch_mod
+    from alphamo.providers import AnthropicProvider
+    import anthropic as _anthropic
+
+    monkeypatch.setattr(
+        _orch_mod,
+        "build_provider",
+        lambda name, **kw: AnthropicProvider(_anthropic.Anthropic()),
+    )
+
+
 def _hp(**kwargs) -> Hyperparameters:
     defaults = dict(
         num_islands=2,
@@ -496,6 +517,7 @@ def test_cli_run_detects_in_progress_run_and_prompts(tmp_path, monkeypatch):
             self.messages.parse.side_effect = _stub_client().messages.parse.side_effect
 
     monkeypatch.setattr("anthropic.Anthropic", _StubClient)
+    _bridge_provider_factory_to_anthropic_stub(monkeypatch)
 
     # Run with no flags; respond 'n' to the prompt → fresh start.
     result = _runner_invoke(
@@ -535,6 +557,7 @@ def test_cli_run_explicit_no_resume_flag_skips_prompt(tmp_path, monkeypatch):
             self.messages.parse.side_effect = _stub_client().messages.parse.side_effect
 
     monkeypatch.setattr("anthropic.Anthropic", _StubClient)
+    _bridge_provider_factory_to_anthropic_stub(monkeypatch)
 
     result = _runner_invoke(
         [
@@ -582,6 +605,7 @@ def test_cli_run_resume_flag_skips_prompt_when_compatible(tmp_path, monkeypatch)
             self.messages.parse.side_effect = _stub_client().messages.parse.side_effect
 
     monkeypatch.setattr("anthropic.Anthropic", _StubClient)
+    _bridge_provider_factory_to_anthropic_stub(monkeypatch)
 
     result = _runner_invoke(
         [
@@ -618,6 +642,7 @@ def test_cli_run_resume_surfaces_incompatibility_error_clearly(tmp_path, monkeyp
             self.messages = MagicMock()
 
     monkeypatch.setattr("anthropic.Anthropic", _StubClient)
+    _bridge_provider_factory_to_anthropic_stub(monkeypatch)
 
     result = _runner_invoke(
         [

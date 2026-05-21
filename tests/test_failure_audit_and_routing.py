@@ -390,11 +390,12 @@ def test_stage3_adversarial_default_model_is_sonnet():
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v7():
-    """Sprint 12 bumped PROPOSER_VERSION v6 → v7. v6 was Sonnet 4.6
-    + bounded thinking with no corpus context. v7 keeps the v6 model
-    + thinking but injects the corpus subset as a stable cached
-    prefix before PROPOSER_SYSTEM. v6 (no corpus) and v7
-    (corpus-grounded) trajectories must be distinguishable in the
-    DB because the proposer sees materially different input."""
-    assert PROPOSER_VERSION == "v7"
+def test_proposer_version_advanced_to_v8():
+    """Sprint 14 bumped PROPOSER_VERSION v7 → v8 for the provider
+    migration (Anthropic Sonnet → Fireworks DeepSeek V4 Flash). The
+    execution shape — model class, reasoning discipline (bounded
+    budget_tokens → discrete reasoning_effort modes), and cache layer
+    (Anthropic ephemeral markers → Fireworks automatic-prefix) — all
+    change materially, so v7 and v8 trajectories must be
+    distinguishable in any post-run comparison."""
+    assert PROPOSER_VERSION == "v8"

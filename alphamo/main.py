@@ -268,19 +268,16 @@ def generate(
     island_id: int, k_seeds: int, generation: int, run_id: str | None, db_path: Path
 ) -> None:
     """Draw seeds from an island, propose a new candidate, evaluate, and insert."""
-    import anthropic
-
     from alphamo.evaluator import EvaluatorCascade
     from alphamo.proposer import Proposer
+    from alphamo.providers.factory import build_provider
     from alphamo.sampler import Sampler
 
     db = ProgramsDB(_db_url(db_path))
-    # max_retries=3: the Anthropic SDK retries 408/409/429/500+ and
-    # connection/timeout errors with exponential backoff and Retry-After
-    # honoring. See Sprint 4 commit for the rationale and per-call
-    # failure-rate math (~84% chance of ≥1 failure per 25-gen run
-    # without retry).
-    client = anthropic.Anthropic(max_retries=3)
+    # Sprint 14: routed through the provider factory. Default is the
+    # Fireworks provider (requires FIREWORKS_API_KEY); change here if a
+    # one-off `generate` invocation should use a different provider.
+    provider = build_provider("fireworks")
     resolved_run_id = _resolve_run_id(db, run_id)
 
     seeds = Sampler(db, run_id=resolved_run_id).draw(island_id=island_id, k=k_seeds)
@@ -290,10 +287,10 @@ def generate(
         )
 
     click.echo(f"seeds: {[s.architecture.name for s in seeds]}")
-    architecture = Proposer(client).propose(seeds)
+    architecture = Proposer(provider).propose(seeds)
     click.echo(f"proposed: {architecture.name}")
 
-    result = EvaluatorCascade(client).evaluate(architecture)
+    result = EvaluatorCascade(provider).evaluate(architecture)
     new_id = db.insert(
         architecture,
         result.scores,
@@ -412,8 +409,6 @@ def run(
     audit_path: Path,
 ) -> None:
     """Run a production loop end-to-end with islands, red-team, and curator."""
-    import anthropic
-
     from alphamo.context.hyperparams import Hyperparameters
     from alphamo.meta.audit_log import AuditLog
     from alphamo.orchestrator import (
@@ -438,10 +433,11 @@ def run(
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
-    # max_retries=3 — see Sprint 4 commit for the per-call-failure-rate
-    # rationale. The SDK absorbs transient 408/409/429/500+ and
-    # connection/timeout errors so a single API blip doesn't kill a run.
-    client = anthropic.Anthropic(max_retries=3)
+    # Sprint 14: pass `client=None` so the orchestrator builds per-component
+    # providers from Hyperparameters via the provider factory. Default
+    # routing is Fireworks/DeepSeek V4 Flash everywhere; flip individual
+    # components via the persisted HP JSON without a code change.
+    client = None
 
     # Sprint 4 + 5: auto-detect-resumable-run prompt path. Skipped when the
     # user passed --resume or --no-resume explicitly. Considers both
@@ -567,18 +563,18 @@ def harvest(
     audit_path: Path,
 ) -> None:
     """Build the handoff document for a finished run."""
-    import anthropic
-
     from alphamo.evaluator import EvaluatorCascade
     from alphamo.handoff import build_handoff
     from alphamo.meta.audit_log import AuditLog
+    from alphamo.providers.factory import build_provider
 
     db = ProgramsDB(_db_url(db_path))
     audit = AuditLog(audit_path)
-    # max_retries=3 — see Sprint 4 commit. Harvest does one re-cascade
-    # call on the top discovery; transient API failures shouldn't drop
-    # an otherwise-complete handoff.
-    cascade = EvaluatorCascade(anthropic.Anthropic(max_retries=3))
+    # Sprint 14: harvest re-cascade routes through the provider factory.
+    # Default is Fireworks; the harvest output is one re-cascade call on
+    # the top discovery, so cost is negligible and quality matches the
+    # production run's routing.
+    cascade = EvaluatorCascade(build_provider("fireworks"))
 
     resolved_run_id = run_id or db.latest_run_id()
     if resolved_run_id is None:

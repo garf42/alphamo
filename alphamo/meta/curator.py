@@ -17,9 +17,10 @@ from typing import Any
 
 from alphamo._concurrent import run_parallel
 from alphamo.context.parent_goal import PARENT_GOAL
-from alphamo.errors import CuratorOutputError, TelemetryContext, parse_or_raise
+from alphamo.errors import CuratorOutputError, TelemetryContext
 from alphamo.evaluator._common import MAX_TOKENS_LONG, SONNET_MODEL, cached_system
 from alphamo.meta.audit_log import AuditEvent, AuditLog
+from alphamo.providers.base import ensure_provider
 from alphamo.schemas.findings import (
     Classification,
     ClassificationVerdict,
@@ -79,36 +80,37 @@ class Curator:
         client: Any,
         audit_log: AuditLog,
         run_id: str,
-        # Sprint 7: default moved Opus → Sonnet. The curator's task is
-        # structured classification (STRUCTURAL vs COSMETIC verdict on
-        # a Stage 3 concern under the curator's classification rubric)
-        # where Sonnet's reasoning is sufficient and the cost savings
-        # accumulate across milestone candidates. Stage 3 adversarial
-        # stays on Opus because the cascade's CRITIQUE generation
-        # depends on Opus-class reasoning; the curator only judges
-        # critiques that Opus already produced.
         model: str = SONNET_MODEL,
+        reasoning_effort: str | None = "high",
     ) -> None:
+        # Sprint 14: routed through `BaseProvider.parse(...)`. Production
+        # default is Fireworks/DeepSeek V4 Flash; the auto-wrap below
+        # preserves the Sprint 7+ Anthropic-mock test pattern. Sprint
+        # 14 maps the prior `thinking={"type": "adaptive"}` config to
+        # `reasoning_effort="high"` on Fireworks — the curator does
+        # structured STRUCTURAL-vs-COSMETIC classification where the
+        # discrete Fireworks mode is sufficient.
         if not run_id:
             raise ValueError("run_id is required for Curator")
-        self.client = client
+        self.provider = ensure_provider(client)
         self.audit_log = audit_log
         self.run_id = run_id
         self.model = model
+        self.reasoning_effort = reasoning_effort
 
     def classify(
         self,
         finding: MetaFinding,
         telemetry: TelemetryContext | None = None,
     ) -> ClassificationVerdict:
-        return parse_or_raise(
-            self.client,
-            CuratorOutputError,
+        return self.provider.parse(
+            error_cls=CuratorOutputError,
             component="curator",
             telemetry=telemetry,
             model=self.model,
             max_tokens=MAX_TOKENS_LONG,
             thinking={"type": "adaptive"},
+            reasoning_effort=self.reasoning_effort,
             system=cached_system(CURATOR_SYSTEM),
             messages=[
                 {

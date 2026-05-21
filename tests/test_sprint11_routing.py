@@ -60,26 +60,21 @@ def test_stage1_default_model_stays_haiku_under_sprint11():
     """Sprint 11 audit recommendation: Stage 1 stays on Haiku.
     The cheap-fast-filter task doesn't benefit from a model promotion;
     moving to Sonnet would 3× the cost of an already-trivial line item
-    ($0 of the $0.47 stages-1+2+curator total in run_80ae6e59)."""
+    ($0 of the $0.47 stages-1+2+curator total in run_80ae6e59).
+
+    Sprint 14: the stage functions gained a `model=` kwarg so the
+    cascade can pass per-stage HP routing through. The Sprint-11
+    invariant is now pinned via the default-parameter value, not the
+    inlined kwarg in the parse() call.
+    """
     sig = inspect.signature(s1_mod.stage1_feasibility)
-    # Stage 1 doesn't have a model kwarg — it's hardcoded via the
-    # parse_or_raise call. Verify the constant import is Haiku.
-    src = inspect.getsource(s1_mod)
-    assert "HAIKU_MODEL" in src
-    assert "model=HAIKU_MODEL" in src
-    # No accidental swap to Sonnet/Opus.
-    assert "model=SONNET_MODEL" not in src
-    assert "model=OPUS_MODEL" not in src
+    assert sig.parameters["model"].default == HAIKU_MODEL
 
 
 def test_stage2_default_model_stays_sonnet_under_sprint11():
     """Sprint 11: Stage 2 routing unchanged at Sonnet."""
-    src = inspect.getsource(s2_mod)
-    assert "SONNET_MODEL" in src
-    assert "model=SONNET_MODEL" in src
-    # No accidental promotion to Opus or demotion to Haiku.
-    assert "model=OPUS_MODEL" not in src
-    assert "model=HAIKU_MODEL" not in src
+    sig = inspect.signature(s2_mod.stage2_structured)
+    assert sig.parameters["model"].default == SONNET_MODEL
 
 
 def test_curator_default_model_stays_sonnet_under_sprint11(tmp_path):

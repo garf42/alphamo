@@ -61,17 +61,17 @@ it gets here is a genuinely persistent failure — not a transient blip.
 from __future__ import annotations
 
 import math
-
-import anthropic
+from typing import Any
 
 from alphamo._concurrent import run_parallel_collect_results
 from alphamo.corpus import load_stage3_subset
-from alphamo.errors import Stage4OutputError, TelemetryContext, parse_or_raise
+from alphamo.errors import Stage4OutputError, TelemetryContext
 from alphamo.evaluator._common import (
     MAX_TOKENS_LONG,
     SONNET_MODEL,
     prepare_cached_blocks,
 )
+from alphamo.providers.base import ensure_provider
 from alphamo.prompts.stage4_prompts import (
     DEFAULT_FRAMINGS,
     render_candidate,
@@ -168,43 +168,44 @@ def _enforce_falsification(
 
 def _run_framing(
     architecture: Architecture,
-    client: anthropic.Anthropic,
+    client: Any,
     framing: str,
     model: str,
     telemetry: TelemetryContext | None = None,
+    reasoning_effort: str | None = "high",
 ) -> list[StructuralConcern]:
-    """Single Sonnet call for one framing; tag returned concerns with the framing.
+    """Single call for one framing; tag returned concerns with the framing.
 
-    Sprint 11: bounded thinking on Sonnet for predictable cost across
-    1800+ framing calls per 200-gen run. Adaptive thinking worked on
-    Opus 4.7 (Sprint 4 through Sprint 10), but Sonnet has no empirical
-    precedent for Stage 3 — adaptive could spike thinking budget on
-    harder candidates, and even a 1% per-framing failure rate produces
-    ~18 partial-failure events across a 200-gen run (5-of-9 success
-    threshold from Sprint 4 cascades into iteration failures).
-    Bounded thinking gives a deterministic ceiling.
+    Sprint 14: routed through `BaseProvider.parse(...)`. The thinking
+    config is provider-specific — Anthropic consumes
+    `thinking={enabled, budget_tokens}`, Fireworks consumes
+    `reasoning_effort` (mapped from "high"/"max"). Both are passed; the
+    underlying provider's `_parse_impl` reads what it needs and ignores
+    the rest.
+
+    The Sprint 11 rationale stands: bounded thinking gives a
+    deterministic ceiling across 1800+ framing calls per 200-gen run.
+    On Fireworks/DeepSeek V4, the equivalent of the Sprint 11 bounded
+    budget is `reasoning_effort="high"` (one of Non-think / High / Max).
     """
-    batch: RawFindingsBatch = parse_or_raise(
-        client,
-        Stage4OutputError,
+    provider = ensure_provider(client)
+    batch: RawFindingsBatch = provider.parse(
+        error_cls=Stage4OutputError,
         detail=f"framing={framing!r}",
         component=f"stage3_{framing}",
         telemetry=telemetry,
         model=model,
         max_tokens=MAX_TOKENS_LONG,
-        # Sprint 11: bounded thinking on Sonnet. 4000 thinking + ~4000
-        # output within the 8192 cap; concerns JSON is typically
-        # 500-1500 tokens so the budget is comfortable. Sonnet 4.6
-        # accepts the `enabled` shape (the Opus 4.7 rejection that
-        # forced Sprint 10's adaptive revert doesn't apply here).
         thinking={
             "type": "enabled",
             "budget_tokens": STAGE3_THINKING_BUDGET_TOKENS,
         },
+        reasoning_effort=reasoning_effort,
         # Sprint 12: layered cached system prompt — corpus subset
-        # (evaluative substrate, ~37K tokens, byte-stable across all
-        # 9 framings → one cache write, 8 reads per candidate after
-        # the first framing) before the per-framing system block.
+        # (evaluative substrate, byte-stable across all 9 framings)
+        # before the per-framing system block. Anthropic emits two
+        # ephemeral cache markers; Fireworks concatenates the texts
+        # and lets its automatic-prefix matcher do the work.
         system=prepare_cached_blocks(
             [load_stage3_subset(), stage4_system(framing)]
         ),
@@ -241,11 +242,12 @@ def _failed_framings_sentinel(failed_framings: list[str]) -> StructuralConcern:
 
 def stage4_adversarial(
     architecture: Architecture,
-    client: anthropic.Anthropic,
+    client: Any,
     framings: list[str] | None = None,
     model: str = SONNET_MODEL,
     decay_k: float = DEFAULT_DECAY_K,
     telemetry: TelemetryContext | None = None,
+    reasoning_effort: str | None = "high",
 ) -> Stage4Finding:
     """Run all framings concurrently with tiered partial-failure handling.
 
@@ -268,7 +270,12 @@ def stage4_adversarial(
         [
             (
                 lambda f=f: _run_framing(
-                    architecture, client, f, model, telemetry=telemetry
+                    architecture,
+                    client,
+                    f,
+                    model,
+                    telemetry=telemetry,
+                    reasoning_effort=reasoning_effort,
                 )
             )
             for f in framings
