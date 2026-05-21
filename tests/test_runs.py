@@ -217,9 +217,6 @@ def test_two_orchestrator_runs_against_same_db_are_isolated(db, tmp_path, monkey
     """Run loop A then run loop B against the same DB; they don't share candidates."""
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     orch_a = Orchestrator.for_new_run(db, _stub_client("a"), audit, hp=_hp())
@@ -244,9 +241,6 @@ def test_resume_run_marks_resumed_at_without_reseeding(db, tmp_path, monkeypatch
     """Resume an existing run — alive candidates stay; resumed timestamp is set."""
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch_a = Orchestrator.for_new_run(db, _stub_client("a"), audit, hp=_hp())
     orch_a.run(max_generations=2)
@@ -283,9 +277,6 @@ def test_resume_missing_run_raises(db, tmp_path):
 def test_orchestrator_completion_stamps_stopped_reason(db, tmp_path, monkeypatch):
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp())
     orch.run(max_generations=2)
@@ -323,8 +314,6 @@ def test_new_run_only_inspects_its_own_candidates(db, tmp_path, monkeypatch):
     """A new run created against a non-empty DB doesn't see other runs' candidates."""
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     other = db.create_run(hyperparameters={}, parent_goal_version="v1", verifier_version="v1")
@@ -427,8 +416,6 @@ def test_fresh_run_creates_exactly_one_run_with_bootstrap_and_generated(
 
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     hp = _hp(num_islands=4)
@@ -471,9 +458,6 @@ def test_new_run_does_not_see_prior_runs_candidates(db, tmp_path, monkeypatch):
     """
     _stub_cascade(monkeypatch)
     import alphamo.orchestrator as orch_mod
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     prior_run_id = db.create_run(
         hyperparameters={"legacy": True},
         parent_goal_version="v0",

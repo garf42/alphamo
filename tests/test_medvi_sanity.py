@@ -156,7 +156,9 @@ def _legal_exposure_client() -> MagicMock:
     client = MagicMock()
 
     def parse_side_effect(**kwargs):
-        system_text = kwargs["system"][0]["text"]
+        # Sprint 12: system is now a list of cached blocks; concat all
+        # text fields so framing-prefix matching still works.
+        system_text = " ".join(b["text"] for b in kwargs["system"])
         if FRAMINGS["legal_exposure"][:60] in system_text:
             return FakeParsedMessage(LEGAL_EXPOSURE_FINDINGS)
         return FakeParsedMessage(RawFindingsBatch(findings=[]))

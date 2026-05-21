@@ -97,7 +97,6 @@ def _hp(**kwargs) -> Hyperparameters:
 
 
 def _bootstrap_orch(db, monkeypatch, tmp_path, hp=None):
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     # Stub Stage 1 / Stage 2 / Stage 3 so bootstrap succeeds; individual
     # tests override one of these to simulate the failure under test.
     monkeypatch.setattr(
@@ -372,16 +371,6 @@ def test_curator_default_model_is_sonnet(tmp_path):
     assert curator.model == SONNET_MODEL
 
 
-def test_research_default_model_is_sonnet():
-    """Sprint 7 Fix C: research moved Opus → Sonnet. The default
-    parameter on `run_research` should be SONNET_MODEL."""
-    import inspect
-    from alphamo.meta.research import run_research
-
-    sig = inspect.signature(run_research)
-    assert sig.parameters["model"].default == SONNET_MODEL
-
-
 def test_stage3_adversarial_default_model_is_sonnet():
     """Sprint 11: Stage 3 adversarial scrutiny moves Opus → Sonnet
     as part of the full Opus removal. Stage 3 was the dominant cost
@@ -401,11 +390,11 @@ def test_stage3_adversarial_default_model_is_sonnet():
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v6():
-    """Sprint 11 bumped PROPOSER_VERSION v5 → v6. v5 was Opus 4.7 +
-    adaptive thinking; v6 is Sonnet 4.6 + bounded thinking
-    (`{"type": "enabled", "budget_tokens": 6000}`). v5 (Opus,
-    adaptive) and v6 (Sonnet, bounded) trajectories must be
-    distinguishable in the DB so cost/quality analyses across the
-    Opus → Sonnet transition aren't conflated."""
-    assert PROPOSER_VERSION == "v6"
+def test_proposer_version_advanced_to_v7():
+    """Sprint 12 bumped PROPOSER_VERSION v6 → v7. v6 was Sonnet 4.6
+    + bounded thinking with no corpus context. v7 keeps the v6 model
+    + thinking but injects the corpus subset as a stable cached
+    prefix before PROPOSER_SYSTEM. v6 (no corpus) and v7
+    (corpus-grounded) trajectories must be distinguishable in the
+    DB because the proposer sees materially different input."""
+    assert PROPOSER_VERSION == "v7"

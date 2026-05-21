@@ -49,7 +49,7 @@ def _proposer_with_fake_output() -> tuple[Proposer, MagicMock]:
 def _proposer_payload(client: MagicMock) -> str:
     """Concatenate everything the proposer client saw into one string for marker scanning."""
     kwargs = client.messages.parse.call_args[1]
-    parts = [kwargs["system"][0]["text"]]
+    parts = [b["text"] for b in kwargs["system"]]
     for msg in kwargs["messages"]:
         content = msg["content"]
         if isinstance(content, str):

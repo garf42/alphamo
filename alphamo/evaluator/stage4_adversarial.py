@@ -65,8 +65,13 @@ import math
 import anthropic
 
 from alphamo._concurrent import run_parallel_collect_results
+from alphamo.corpus import load_stage3_subset
 from alphamo.errors import Stage4OutputError, TelemetryContext, parse_or_raise
-from alphamo.evaluator._common import MAX_TOKENS_LONG, SONNET_MODEL, cached_system
+from alphamo.evaluator._common import (
+    MAX_TOKENS_LONG,
+    SONNET_MODEL,
+    prepare_cached_blocks,
+)
 from alphamo.prompts.stage4_prompts import (
     DEFAULT_FRAMINGS,
     render_candidate,
@@ -196,7 +201,13 @@ def _run_framing(
             "type": "enabled",
             "budget_tokens": STAGE3_THINKING_BUDGET_TOKENS,
         },
-        system=cached_system(stage4_system(framing)),
+        # Sprint 12: layered cached system prompt — corpus subset
+        # (evaluative substrate, ~37K tokens, byte-stable across all
+        # 9 framings → one cache write, 8 reads per candidate after
+        # the first framing) before the per-framing system block.
+        system=prepare_cached_blocks(
+            [load_stage3_subset(), stage4_system(framing)]
+        ),
         messages=[{"role": "user", "content": render_candidate(architecture)}],
         output_format=RawFindingsBatch,
     )

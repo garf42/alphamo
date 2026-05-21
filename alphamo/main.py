@@ -372,7 +372,6 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     show_default=True,
     help="Red-team trigger requires fitness > seed_baseline_fitness + this.",
 )
-@click.option("--research-every", "research_every", type=int, default=50, show_default=True)
 @click.option(
     "--resume",
     "resume_id",
@@ -406,7 +405,6 @@ def run(
     num_islands: int,
     milestone_min_generation: int,
     milestone_fitness_delta: float,
-    research_every: int,
     resume_id: str | None,
     no_resume: bool,
     force_resume: bool,
@@ -515,7 +513,6 @@ def run(
             num_islands=num_islands,
             milestone_min_generation=milestone_min_generation,
             milestone_fitness_delta=milestone_fitness_delta,
-            research_every_generations=research_every,
         )
         orchestrator = Orchestrator.for_new_run(db, client, audit, hp=hp)
         click.echo(f"started run {orchestrator.run_id}")

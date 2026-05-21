@@ -182,7 +182,9 @@ def _make_framing_client(failed_framings: set[str]) -> MagicMock:
     client = MagicMock()
 
     def parse_side_effect(**kwargs):
-        system_text = kwargs["system"][0]["text"]
+        # Sprint 12: system is now a list of cached blocks; concat all
+        # text fields so framing-prefix matching still works.
+        system_text = " ".join(b["text"] for b in kwargs["system"])
         for framing, prose in FRAMINGS.items():
             if prose[:60] in system_text:
                 if framing in failed_framings:
@@ -293,8 +295,6 @@ def test_orchestrator_emits_partial_failure_audit_event_when_stage3_partial(
     from alphamo.meta.audit_log import AuditLog
     from alphamo.orchestrator import Orchestrator
     from alphamo.schemas.findings import Stage1Finding, Stage2Finding
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
         lambda a, c, **kw: Stage1Finding(
@@ -377,8 +377,6 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
     from alphamo.meta.audit_log import AuditLog
     from alphamo.orchestrator import Orchestrator
     from alphamo.schemas.findings import Stage1Finding, Stage2Finding
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
         lambda a, c, **kw: Stage1Finding(

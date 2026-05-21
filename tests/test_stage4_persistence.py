@@ -160,7 +160,6 @@ def test_orchestrator_persists_stage4_findings_on_stage4_reaching_candidate(
     db, monkeypatch, tmp_path
 ):
     """Bug 2: Stage 4 concerns must be on the candidate row, not just the audit log."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     concerns = [
         StructuralConcern(
             framing="economic", claim="margin compression",
@@ -201,9 +200,6 @@ def test_orchestrator_leaves_stage4_findings_null_on_early_exit(
     whose stage4_findings we assert on.
     """
     from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     def stage1_branched(arch, c, **kw):
         if arch.name == TRIVIAL_SEED.name:
             return Stage1Finding(
@@ -241,7 +237,6 @@ def test_orchestrator_persists_empty_concerns_as_empty_list_not_null(
     db, monkeypatch, tmp_path
 ):
     """Stage 4 that runs and finds nothing: stage4_findings=[], distinguishable from NULL."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     _stub_full_cascade_with_concerns(monkeypatch, stage4_concerns=[])
 
     audit = AuditLog(tmp_path / "audit.jsonl")

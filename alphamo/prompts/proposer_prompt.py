@@ -74,9 +74,17 @@ from alphamo.schemas.findings import Severity, StructuralConcern
 # "budget_tokens": 6000}` (the Sprint 9 design intent, now valid
 # because Sonnet 4.6 accepts this shape). Stage 3 also moved to
 # Sonnet with bounded thinking (4000 budget) in the same sprint.
-# v5 (Opus, adaptive) and v6 (Sonnet, bounded) trajectories are
-# distinguishable in the DB.
-PROPOSER_VERSION = "v6"
+# v6 → v7 (Sprint 12): corpus integration. The proposer's system
+# prompt now has TWO cached blocks: the corpus subset
+# (compositional substrate — Layer A fingerprint index + Layer B
+# proposer-routed sections + Layer C invariants + Layer D
+# survivor-signatures + positive insights, ~44K tokens) BEFORE
+# PROPOSER_SYSTEM. PROPOSER_SYSTEM text itself unchanged in v7,
+# but the input the model sees materially changes — v6 (no corpus)
+# and v7 (corpus-grounded) trajectories must be distinguishable.
+# The corpus has its own CORPUS_VERSION (see alphamo/corpus/loader.py);
+# corpus revisions ALSO invalidate v7 trajectories in a meaningful way.
+PROPOSER_VERSION = "v7"
 
 # Sprint 6: per-candidate budget for the concerns section in the
 # proposer's user message. Concerns are truncated by severity (all

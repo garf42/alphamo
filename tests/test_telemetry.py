@@ -34,7 +34,6 @@ from alphamo.evaluator.stage2_structured import stage2_structured
 from alphamo.evaluator.stage4_adversarial import stage4_adversarial
 from alphamo.meta.audit_log import AuditLog
 from alphamo.meta.curator import Curator
-from alphamo.meta.research import run_research
 from alphamo.orchestrator import Orchestrator
 from alphamo.prompts.stage4_prompts import DEFAULT_FRAMINGS
 from alphamo.proposer import Proposer
@@ -231,17 +230,11 @@ def test_curator_emits_llm_usage_event_with_component_curator(tmp_path):
     assert usage_events[0].payload["component"] == "curator"
 
 
-def test_research_emits_llm_usage_event_with_component_research(tmp_path):
-    audit = AuditLog(tmp_path / "audit.jsonl")
-    client = _client_for(
-        RawFindingsBatch(findings=[]),
-        usage=_FakeUsage(input_tokens=600, output_tokens=2000),
-    )
-    run_research("scheduled_interval", client, telemetry=_telemetry(audit))
-
-    usage_events = [e for e in audit.read_all() if e.trigger == LLM_USAGE_TRIGGER]
-    assert len(usage_events) == 1
-    assert usage_events[0].payload["component"] == "research"
+# Sprint 12: research module deleted. The pre-deletion test
+# `test_research_emits_llm_usage_event_with_component_research` is
+# removed because there's no `run_research` function to invoke. The
+# `component="research"` label is no longer emitted by any code path
+# — leaving the test would assert against a permanent absence.
 
 
 # ---------------------------------------------------------------- generation / island attribution
@@ -253,8 +246,6 @@ def test_llm_usage_event_carries_generation_and_island_id_from_step(
     """End-to-end: an orchestrator step() invocation threads generation
     and island_id through the TelemetryContext to every llm_usage event
     emitted during that step."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     def stage1_with_usage(arch, c, **kw):
         # Have to capture telemetry from kwargs and forward to a fake
         # usage event manually since we're mocking out the parse call.
@@ -335,8 +326,6 @@ def test_bootstrap_emits_llm_usage_with_generation_zero(
 ):
     """Bootstrap-side llm_usage events carry generation=0 and
     island_id=None per the orchestrator's bootstrap_telemetry."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     # Wire a real cascade so the bootstrap path runs through the real
     # parse_or_raise that emits the events.
     def parse_side_effect(**kwargs):
@@ -462,8 +451,6 @@ def test_existing_stage4_routine_audit_still_fires_with_telemetry_enabled(
     existing stage4_routine audit event still fires on every Stage 3
     candidate. New llm_usage events are ADDITIONAL, not replacement."""
     from alphamo.orchestrator import STAGE4_AUDIT_TRIGGER
-
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
         lambda a, c, **kw: _stage1_finding(),

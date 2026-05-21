@@ -139,20 +139,34 @@ class Hyperparameters(BaseModel):
         ),
     )
 
-    research_every_generations: int = Field(
-        default=50,
-        ge=1,
-        description="Scheduled research-agent invocation interval.",
-    )
+    # Sprint 12: `research_every_generations` removed alongside the
+    # research module. Layer B's per-run-start refresh provides
+    # current-developments grounding so the scheduled-research
+    # invocation isn't needed.
+    #
+    # `stall_window` and `stall_epsilon` are RETAINED as orphan
+    # configuration. detect_stall() previously fired only via the
+    # removed `_maybe_research` path; the method body still exists
+    # in case future work wants stall-only audit logging without
+    # triggering research. Flagged in Sprint 12 commit message;
+    # decision to drop or repurpose deferred.
     stall_window: int = Field(
         default=15,
         ge=2,
-        description="Generation window over which to detect a fitness stall.",
+        description=(
+            "Generation window over which to detect a fitness stall. "
+            "Sprint 12: orphan config — was consumed only by the "
+            "removed research-trigger path. Retained pending decision "
+            "on stall-only audit logging."
+        ),
     )
     stall_epsilon: float = Field(
         default=0.01,
         ge=0.0,
-        description="Min fitness improvement over the stall window to NOT be stalled.",
+        description=(
+            "Min fitness improvement over the stall window to NOT be "
+            "stalled. Sprint 12: orphan (see stall_window note)."
+        ),
     )
 
     max_consecutive_failures: int = Field(

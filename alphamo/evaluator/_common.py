@@ -33,3 +33,41 @@ def cached_system(text: str) -> list[dict[str, Any]]:
     request.
     """
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+
+def prepare_cached_blocks(texts: list[str]) -> list[dict[str, Any]]:
+    """Render multiple text blocks as a layered cached system prompt.
+
+    Each non-empty text becomes its own system text block with an
+    `ephemeral` cache_control marker, producing one cache breakpoint
+    per block. Anthropic caches up to 4 breakpoints per request;
+    Sprint 12's two-block design (corpus + existing system) uses 2 of
+    those 4 slots with comfortable headroom.
+
+    Why layered rather than concatenated:
+      - Corpus revisions invalidate only the corpus block's cache,
+        not the existing PROPOSER_SYSTEM cache (and vice versa).
+        Important during development when one layer iterates faster
+        than the other.
+      - Stage 3's 9 framings share the SAME corpus block bytes (one
+        cache write, 9 reads) but each has its OWN per-framing
+        system block. Two independent cache layers per framing.
+
+    Empty strings are filtered out — passing an empty corpus subset
+    (e.g., when the corpus directory is missing in a test sandbox)
+    degrades gracefully to a single-block prompt rather than failing.
+
+    Sprint 12: model-agnostic by design. The `cache_control` shape
+    is Anthropic-specific; if a future model migration requires a
+    different cache mechanism, this is the only file that needs
+    updating.
+    """
+    return [
+        {
+            "type": "text",
+            "text": text,
+            "cache_control": {"type": "ephemeral"},
+        }
+        for text in texts
+        if text
+    ]

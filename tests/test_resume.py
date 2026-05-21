@@ -115,7 +115,6 @@ def _hp(**kwargs) -> Hyperparameters:
 
 def _make_orchestrator(db, monkeypatch, tmp_path, hp=None):
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     return Orchestrator.for_new_run(db, _stub_client(), audit, hp=hp or _hp())
 
@@ -490,8 +489,6 @@ def test_cli_run_detects_in_progress_run_and_prompts(tmp_path, monkeypatch):
 
     # Also stub the cascade + research so the run loop doesn't make API calls.
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     # Mock the anthropic client construction to return a stub.
     class _StubClient:
         def __init__(self, *a, **kw):
@@ -532,8 +529,6 @@ def test_cli_run_explicit_no_resume_flag_skips_prompt(tmp_path, monkeypatch):
     )
 
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     class _StubClient:
         def __init__(self, *a, **kw):
             self.messages = MagicMock()
@@ -581,8 +576,6 @@ def test_cli_run_resume_flag_skips_prompt_when_compatible(tmp_path, monkeypatch)
         )
 
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     class _StubClient:
         def __init__(self, *a, **kw):
             self.messages = MagicMock()
@@ -620,8 +613,6 @@ def test_cli_run_resume_surfaces_incompatibility_error_clearly(tmp_path, monkeyp
     )
 
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     class _StubClient:
         def __init__(self, *a, **kw):
             self.messages = MagicMock()

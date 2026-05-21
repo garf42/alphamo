@@ -169,7 +169,6 @@ def _milestone_hp() -> Hyperparameters:
 
 def test_milestone_with_cosmetic_only_concerns_does_not_pause(db, monkeypatch, tmp_path):
     """Cosmetic-only adversarial findings on a milestone do not trigger pause."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     _stub_full_cascade(
         monkeypatch,
         stage4_concerns=[
@@ -193,7 +192,6 @@ def test_milestone_with_cosmetic_only_concerns_does_not_pause(db, monkeypatch, t
 
 def test_milestone_with_structural_concerns_pauses(db, monkeypatch, tmp_path):
     """At least one structural adversarial finding → curator pauses."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     _stub_full_cascade(
         monkeypatch,
         stage4_concerns=[
@@ -216,7 +214,6 @@ def test_milestone_with_structural_concerns_pauses(db, monkeypatch, tmp_path):
 
 def test_routine_adversarial_firing_writes_audit_entry(db, monkeypatch, tmp_path):
     """Every adversarial firing logs a routine audit entry, milestone or not."""
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     _stub_full_cascade(
         monkeypatch,
         stage4_concerns=[

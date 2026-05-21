@@ -181,7 +181,6 @@ def test_resume_run_extends_max_generations_completed_run(
     resume_run clears the completion markers so the next run() call can
     re-stamp them on the new termination."""
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     make_client = _make_stub_client_factory()
 
@@ -215,7 +214,6 @@ def test_multiple_pause_resume_cycles_preserve_state(db, monkeypatch, tmp_path):
     """Three cycles: run to 3, extend to 6, extend to 9. Each cycle
     picks up at last_completed+1 and stops cleanly at its target."""
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     make_client = _make_stub_client_factory()
 
@@ -246,7 +244,6 @@ def test_reset_cadence_correct_across_pause_boundaries(db, monkeypatch, tmp_path
     at gen 5), then resumes to gen 12 (one more reset at gen 10).
     """
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     make_client = _make_stub_client_factory()
     hp = _hp(num_islands=2, reset_every_generations=5)
@@ -387,8 +384,6 @@ def _runner_invoke(args: list[str], input_text: str | None = None):
 
 def _stub_anthropic(monkeypatch):
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
-
     class _StubClient:
         def __init__(self, *a, **kw):
             client = MagicMock()

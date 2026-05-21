@@ -365,7 +365,9 @@ def _client_with_framing_responses(
     client = MagicMock()
 
     def parse_side_effect(**kwargs):
-        system_text = kwargs["system"][0]["text"]
+        # Sprint 12: system is now a list of cached blocks; concat all
+        # text fields so framing-prefix matching still works.
+        system_text = " ".join(b["text"] for b in kwargs["system"])
         for framing, batch in per_framing.items():
             framing_text = FRAMINGS[framing]
             # Use a distinct slice of the framing description to disambiguate.

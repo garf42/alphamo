@@ -35,7 +35,6 @@ from alphamo.evaluator.stage4_adversarial import (
 )
 from alphamo.meta.audit_log import AuditLog
 from alphamo.meta.curator import Curator
-from alphamo.meta.research import run_research
 from alphamo.prompts.proposer_prompt import PROPOSER_VERSION
 from alphamo.proposer import Proposer, PROPOSER_THINKING_BUDGET_TOKENS
 
@@ -90,12 +89,6 @@ def test_curator_default_model_stays_sonnet_under_sprint11(tmp_path):
     assert curator.model == SONNET_MODEL
 
 
-def test_research_default_model_stays_sonnet_under_sprint11():
-    """Sprint 7 routing for research unchanged at Sonnet."""
-    sig = inspect.signature(run_research)
-    assert sig.parameters["model"].default == SONNET_MODEL
-
-
 def test_no_opus_references_in_routing_defaults(tmp_path):
     """Structural guard: with Sprint 11's full Opus removal, no
     component should default to OPUS_MODEL. This catches a future
@@ -103,15 +96,15 @@ def test_no_opus_references_in_routing_defaults(tmp_path):
 
     Per-call `model=` overrides are still legal (tests / ad-hoc
     research can pass OPUS_MODEL explicitly) — this test only pins
-    the *defaults*."""
+    the *defaults*.
+
+    Sprint 12: research module deleted, so it's no longer one of the
+    components under check. Curator, proposer, and Stage 3 remain."""
     proposer = Proposer(MagicMock())
     assert proposer.model != OPUS_MODEL
 
     s3_sig = inspect.signature(stage4_adversarial)
     assert s3_sig.parameters["model"].default != OPUS_MODEL
-
-    research_sig = inspect.signature(run_research)
-    assert research_sig.parameters["model"].default != OPUS_MODEL
 
     audit = AuditLog(tmp_path / "audit.jsonl")
     curator = Curator(MagicMock(), audit, run_id="t")
@@ -249,8 +242,9 @@ def test_reset_cadence_description_mentions_sprint11_rationale():
 # ---------------------------------------------------------------- PROPOSER_VERSION
 
 
-def test_proposer_version_advanced_to_v6_under_sprint11():
-    """Sprint 11 bumped PROPOSER_VERSION v5 → v6. v5 was Opus 4.7
-    with adaptive thinking; v6 is Sonnet 4.6 with bounded thinking.
-    The model identity changed, so the version must too."""
-    assert PROPOSER_VERSION == "v6"
+def test_proposer_version_at_least_v6_under_sprint11():
+    """Sprint 11 bumped PROPOSER_VERSION v5 → v6. Sprint 12 bumped
+    again to v7 (corpus integration). This regression guard accepts
+    v6 or later — the Sprint 11 invariant (must have advanced past
+    v5) is preserved across Sprint 12's further bump."""
+    assert PROPOSER_VERSION not in ("v1", "v2", "v3", "v4", "v5")

@@ -21,8 +21,10 @@ One Orchestrator drives a run. Lifecycle:
     7. Apply the islands manager's reset cadence — when fired, the
        FunSearch per-weak-island independent draw reseeds the bottom-
        half islands.
-    8. On scheduled intervals (or stall detection), fire the research
-       agent and pass findings to the curator.
+    (Sprint 12 removed the scheduled-research / stall-triggered
+    research meta-path. Layer B's per-run-start refresh now provides
+    current-developments grounding; the curator fires on milestone
+    candidates only.)
 
 Termination: max_generations reached, OR curator returns PAUSE_FOR_HUMAN
 on a structural finding, OR `max_consecutive_failures` LLM output failures.
@@ -63,8 +65,11 @@ from alphamo.evaluator.stage4_adversarial import FAILED_FRAMINGS_SENTINEL
 from alphamo.islands import IslandsManager, ResetEvent
 from alphamo.meta.audit_log import AuditEvent, AuditLog
 from alphamo.meta.curator import Curator
-from alphamo.meta.research import run_research
-from alphamo.prompts.research_prompts import Trigger
+# Sprint 12: research module removed. The MILESTONE_CANDIDATE trigger
+# label survived (curator path needs it for milestone-candidate audit
+# events); now defined locally rather than imported from the deleted
+# research_prompts module.
+MILESTONE_CANDIDATE_TRIGGER = "milestone_candidate"
 from alphamo.proposer import Proposer
 from alphamo.sampler import Sampler
 from alphamo.schemas import Architecture
@@ -763,28 +768,10 @@ class Orchestrator:
         meta_findings = _stage4_concerns_as_meta_findings(stage4.concerns)
         decision = self.curator.curate(
             meta_findings,
-            trigger=Trigger.MILESTONE_CANDIDATE,
+            trigger=MILESTONE_CANDIDATE_TRIGGER,
             telemetry=telemetry,
         )
-        return Trigger.MILESTONE_CANDIDATE, decision
-
-    def _maybe_research(
-        self,
-        generation: int,
-        telemetry: TelemetryContext | None = None,
-    ) -> tuple[str, CuratorDecision] | None:
-        trigger: str | None = None
-        if generation % self.hp.research_every_generations == 0:
-            trigger = Trigger.SCHEDULED_INTERVAL
-        elif self.detect_stall():
-            trigger = Trigger.PROGRESS_STALL
-        if trigger is None:
-            return None
-        findings = run_research(trigger, self.client, telemetry=telemetry)
-        decision = self.curator.curate(
-            findings, trigger=trigger, telemetry=telemetry
-        )
-        return trigger, decision
+        return MILESTONE_CANDIDATE_TRIGGER, decision
 
     def step(self, generation: int) -> IterationEvent:
         """Run one inner-loop generation. Returns an audit record.
@@ -910,12 +897,10 @@ class Orchestrator:
             )
             if milestone_outcome is not None:
                 meta_trigger, meta_decision = milestone_outcome
-            else:
-                research_outcome = self._maybe_research(
-                    generation, telemetry=telemetry
-                )
-                if research_outcome is not None:
-                    meta_trigger, meta_decision = research_outcome
+            # Sprint 12: the second meta-path (scheduled/stall-triggered
+            # research → curator) is removed. Layer B's per-run-start
+            # refresh now provides current-developments grounding;
+            # curator firing is gated on milestone candidates only.
         except LLMOutputError as exc:
             meta_failure = str(exc)
 

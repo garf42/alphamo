@@ -130,7 +130,6 @@ def _make_orchestrator(
     itself or of the `run()` lifecycle end-to-end).
     """
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = client or _stub_client()
     orch = Orchestrator.for_new_run(db, client, audit, hp=hp or _hp())
@@ -155,7 +154,6 @@ def test_bootstrap_inserts_trivial_seed_into_every_island_at_gen_zero(
     from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
 
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit, hp=_hp(num_islands=4)
@@ -176,7 +174,6 @@ def test_bootstrap_inserts_trivial_seed_into_every_island_at_gen_zero(
 def test_bootstrap_writes_audit_event(db, monkeypatch, tmp_path):
     """Bootstrap step emits a single audit-log event for traceability."""
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit_path = tmp_path / "audit.jsonl"
     audit = AuditLog(audit_path)
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=4))
@@ -193,7 +190,6 @@ def test_bootstrap_is_idempotent_no_op_on_resume(db, monkeypatch, tmp_path):
     """Calling `_bootstrap_islands()` twice (e.g., resume of an already-bootstrapped
     run) is a no-op on the second call."""
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(db, _stub_client(), audit, hp=_hp(num_islands=2))
 
@@ -233,7 +229,6 @@ def test_milestone_does_not_fire_below_absolute_fitness_threshold(db, monkeypatc
         robustness=0.95,  # high robustness, but low fitness
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -257,7 +252,6 @@ def test_milestone_does_not_fire_below_absolute_robustness_threshold(db, monkeyp
         robustness=0.40,  # below floor
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -280,7 +274,6 @@ def test_milestone_does_not_fire_before_min_generation(db, monkeypatch, tmp_path
         robustness=0.99,
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -305,7 +298,6 @@ def test_milestone_does_not_fire_when_adversarial_clean(db, monkeypatch, tmp_pat
         robustness=0.99,
         stage4_concerns=[],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -329,7 +321,6 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_fitness(db, monkeypa
         robustness=0.85,
         stage4_concerns=[_concern(framing="legal_exposure", severity=Severity.HIGH)],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -353,7 +344,6 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monke
         robustness=0.75,  # just above floor of 0.70
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -372,7 +362,6 @@ def test_milestone_does_not_fire_when_robustness_is_none(db, monkeypatch, tmp_pa
     """An early-exit candidate (robustness=None) can never be a milestone."""
     # Force early exit at stage 1.
     _stub_cascade(monkeypatch, feasibility=0.2, structural=0.9, robustness=0.95)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
@@ -390,21 +379,24 @@ def test_milestone_does_not_fire_when_robustness_is_none(db, monkeypatch, tmp_pa
 # ----------------------------------------------------------------- research + stall
 
 
-def test_step_invokes_research_on_scheduled_interval(db, monkeypatch, tmp_path):
-    calls = []
-    monkeypatch.setattr(
-        orch_mod, "run_research", lambda trigger, *a, **k: calls.append(trigger) or []
-    )
+def test_step_does_not_fire_research_meta_path_under_sprint12(
+    db, monkeypatch, tmp_path
+):
+    """Sprint 12 removed the scheduled-research / stall-triggered
+    research meta-path. Only the milestone-curate meta path remains.
+    A step that previously would have triggered scheduled research
+    now produces an event with meta_trigger=None."""
     _stub_cascade(monkeypatch, feasibility=0.5, structural=0.6)
     audit = AuditLog(tmp_path / "audit.jsonl")
     orch = Orchestrator.for_new_run(
         db, _stub_client(), audit,
-        hp=_hp(research_every_generations=5),
+        # Even at the old research-trigger boundary (gen 5, divisible by
+        # legacy research_every_generations=5), no meta path fires.
+        hp=_hp(),
     )
     orch._bootstrap_islands()
     event = orch.step(generation=5)
-    assert calls == ["scheduled_interval"]
-    assert event.meta_trigger == "scheduled_interval"
+    assert event.meta_trigger is None
 
 
 def test_run_returns_after_max_generations(db, monkeypatch, tmp_path):
@@ -423,7 +415,6 @@ def test_run_emits_island_reset_audit_event_at_cadence(db, monkeypatch, tmp_path
     """When run() crosses a reset cadence boundary, an island_reset audit
     event must be emitted with weak/source/seed-program payload."""
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit_path = tmp_path / "audit.jsonl"
     audit = AuditLog(audit_path)
     # Cadence 2 so reset fires within a short test run; 4 islands so we
@@ -467,7 +458,6 @@ def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
             )
         ],
     )
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _stub_client(classification=Classification.STRUCTURAL)
     orch = Orchestrator.for_new_run(
@@ -548,7 +538,6 @@ def _client_that_raises_proposer_error_then_succeeds(failures: int) -> MagicMock
 
 def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_that_raises_proposer_error_then_succeeds(failures=1)
     orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(max_consecutive_failures=5))
@@ -566,7 +555,6 @@ def test_single_proposer_failure_does_not_halt_run(db, monkeypatch, tmp_path):
 
 def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_that_raises_proposer_error_then_succeeds(failures=100)
     orch = Orchestrator.for_new_run(db, client, audit, hp=_hp(max_consecutive_failures=3))
@@ -582,7 +570,6 @@ def test_consecutive_proposer_failures_halt_run(db, monkeypatch, tmp_path):
 
 def test_consecutive_counter_resets_on_successful_insert(db, monkeypatch, tmp_path):
     _stub_cascade(monkeypatch)
-    monkeypatch.setattr(orch_mod, "run_research", lambda *a, **k: [])
     audit = AuditLog(tmp_path / "audit.jsonl")
 
     from tests.fixtures.parsed_message import FakeParsedMessage

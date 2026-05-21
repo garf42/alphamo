@@ -42,6 +42,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from alphamo.corpus import load_proposer_subset
 from alphamo.errors import (
     ProposerOutputError,
     TelemetryContext,
@@ -50,7 +51,7 @@ from alphamo.errors import (
 from alphamo.evaluator._common import (
     MAX_TOKENS_XLONG,
     SONNET_MODEL,
-    cached_system,
+    prepare_cached_blocks,
 )
 from alphamo.prompts.proposer_prompt import (
     PROPOSER_SYSTEM,
@@ -120,7 +121,16 @@ class Proposer:
                 "type": "enabled",
                 "budget_tokens": PROPOSER_THINKING_BUDGET_TOKENS,
             },
-            system=cached_system(PROPOSER_SYSTEM),
+            # Sprint 12: layered cached system prompt — corpus subset
+            # (compositional substrate, ~44K tokens) before the
+            # existing PROPOSER_SYSTEM block. Two cache breakpoints;
+            # corpus block is byte-stable across the run, PROPOSER_
+            # SYSTEM is byte-stable within a PROPOSER_VERSION epoch,
+            # so each layer caches independently and revisions to
+            # either layer don't invalidate the other.
+            system=prepare_cached_blocks(
+                [load_proposer_subset(), PROPOSER_SYSTEM]
+            ),
             messages=[{"role": "user", "content": user_content}],
             output_format=Architecture,
         )

@@ -132,10 +132,6 @@ class CuratorOutputError(LLMOutputError):
     COMPONENT = "curator"
 
 
-class ResearchOutputError(LLMOutputError):
-    COMPONENT = "research"
-
-
 class Stage1OutputError(LLMOutputError):
     COMPONENT = "stage1_feasibility"
 
