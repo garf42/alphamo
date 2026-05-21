@@ -141,7 +141,8 @@ LEGAL_EXPOSURE_FINDINGS = RawFindingsBatch(
             ),
             severity=Severity.MEDIUM,
         ),
-    ]
+    ],
+    assessment=None,
 )
 
 
@@ -161,7 +162,7 @@ def _legal_exposure_client() -> MagicMock:
         system_text = " ".join(b["text"] for b in kwargs["system"])
         if FRAMINGS["legal_exposure"][:60] in system_text:
             return FakeParsedMessage(LEGAL_EXPOSURE_FINDINGS)
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client.messages.parse.side_effect = parse_side_effect
     return client

@@ -204,9 +204,9 @@ def _make_framing_client(failed_framings: set[str]) -> MagicMock:
                     # Exception here because the inner _run_framing wraps
                     # whatever parse() raises into Stage4OutputError.
                     raise RuntimeError(f"framing {framing!r} failed")
-                return FakeParsedMessage(RawFindingsBatch(findings=[]))
+                return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
         # No framing matched — return clean (shouldn't happen in our tests).
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client.messages.parse.side_effect = parse_side_effect
     return client

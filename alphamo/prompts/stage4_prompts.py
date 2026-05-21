@@ -415,9 +415,11 @@ protection authority" than to cite a statute you are not certain about.
 framing, state explicitly that the architecture has no identifiable \
 vulnerability on this dimension and briefly explain why — populate the \
 `assessment` field on the response with this short justification. An \
-explicit "no concerns" assessment is more valuable than silence. The \
-`assessment` field is ignored when `findings` is non-empty; populate it \
-only on clean passes.
+explicit "no concerns" assessment is more valuable than silence. Always \
+populate the assessment field: when you have findings, set assessment to \
+null; when you have no findings, write a brief explanation of why the \
+architecture has no vulnerability on this dimension. The field is required \
+on every response.
 
 Severity calibration:
 

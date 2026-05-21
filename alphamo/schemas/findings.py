@@ -105,14 +105,18 @@ class RawFindingsBatch(BaseModel):
             "it when an honest pass surfaces nothing material."
         ),
     )
-    # Sprint 14 follow-up: when `findings == []`, the model is instructed
-    # to explain why the architecture has no identifiable vulnerability
-    # on this framing's dimension. The text lands in `Stage4Finding.
-    # reasoning` so the closed-RL-loop has a positive signal alongside
-    # the negative-signal concern list. Optional and default None for
-    # back-compat with persisted-JSON shapes from before this field
-    # existed; the prompt asks for it but a model that ignores the ask
-    # still produces valid output.
+    # Sprint 14 follow-up v2: `assessment` is REQUIRED (no default).
+    # The model MUST emit the field on every call — string when
+    # findings is empty, explicit null when findings is non-empty.
+    # Making it required pushes the field into the JSON-schema's
+    # `required` array sent to Fireworks, so the model can't structurally
+    # opt out by omission (which the optional+default-null v1 shape
+    # allowed — empirically, the model honored the opt-out and skipped
+    # the field on every clean pass). The aggregator's existing falsy
+    # filter (`if assessment:`) handles both cases correctly: explicit
+    # null is still falsy, so framings with concerns don't pollute the
+    # clean-assessments surface; real explanation strings on clean
+    # framings get surfaced into `Stage4Finding.reasoning`.
     #
     # Why a field rather than a LOW-severity finding with a
     # `no_vulnerability` tag: a clean assessment is metadata about
@@ -122,11 +126,14 @@ class RawFindingsBatch(BaseModel):
     # result — wrong incentive) or require filtering logic of the
     # same complexity as this field.
     assessment: str | None = Field(
-        default=None,
+        ...,
         description=(
-            "When findings is empty, briefly explain why the architecture "
-            "has no identifiable vulnerability on this framing's dimension. "
-            "Optional and ignored when findings is non-empty."
+            "Required on every call. Write a brief explanation of why "
+            "the architecture has no identifiable vulnerability on this "
+            "framing's dimension when findings is empty; write null when "
+            "findings is non-empty. The aggregator surfaces non-null "
+            "assessments on clean framings into Stage 4 reasoning so the "
+            "closed-RL-loop gets positive signal alongside concerns."
         ),
     )
 

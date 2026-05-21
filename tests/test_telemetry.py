@@ -167,7 +167,7 @@ def test_stage3_emits_llm_usage_event_per_framing_with_component_stage3_framing(
     Stage 3 invocation."""
     audit = AuditLog(tmp_path / "audit.jsonl")
     client = _client_for(
-        RawFindingsBatch(findings=[]),
+        RawFindingsBatch(findings=[], assessment=None),
         usage=_FakeUsage(
             input_tokens=1500, output_tokens=200,
             cache_read_input_tokens=1350,  # post-warm-up cache hit

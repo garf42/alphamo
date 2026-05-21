@@ -252,7 +252,7 @@ def test_stage3_per_framing_uses_layered_cached_blocks():
 
     def record(**kwargs):
         captured.append(kwargs)
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client = MagicMock()
     client.messages.parse.side_effect = record

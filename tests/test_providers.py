@@ -715,18 +715,49 @@ def test_anthropic_provider_omits_thinking_when_not_supplied():
 # --------------------------------------------------------------------- Sprint 14 follow-up: prompt + schema + aggregator
 
 
-def test_raw_findings_batch_assessment_field_is_optional():
-    """Sprint 14 follow-up: RawFindingsBatch gained an optional
-    `assessment` field for clean-pass explanations. Old persisted
-    JSON (no assessment key) must still validate."""
-    batch = RawFindingsBatch(findings=[])
+def test_raw_findings_batch_assessment_field_is_required():
+    """Sprint 14 follow-up v2: `assessment` was promoted from optional
+    (default None) to required (Field(...)). The model MUST emit the
+    field on every call — explicit null when findings is non-empty,
+    a string when findings is empty. Making the field required puts
+    it in the JSON-schema `required` array, blocking the model from
+    structurally opting out by omission (which the v1 default-null
+    shape allowed, and which the model honored on every clean pass)."""
+    # Required: omission raises.
+    with pytest.raises(pydantic.ValidationError):
+        RawFindingsBatch(findings=[])  # type: ignore[call-arg]
+    # Explicit null when findings is non-empty — valid.
+    from alphamo.schemas.findings import RawFinding, Severity
+
+    batch = RawFindingsBatch(
+        findings=[
+            RawFinding(
+                claim="c", evidence="e",
+                falsification_condition="if X",
+                severity=Severity.LOW,
+            )
+        ],
+        assessment=None,
+    )
     assert batch.assessment is None
-    # Explicit value also valid.
+    # Explicit string when findings is empty — valid.
     batch = RawFindingsBatch(
         findings=[],
         assessment="no regulatory exposure: architecture is operator-licensed throughout",
     )
     assert batch.assessment.startswith("no regulatory exposure")
+
+
+def test_raw_findings_batch_schema_marks_assessment_as_required():
+    """Regression guard for the v2 shape — the schema emitted to
+    Fireworks must list `assessment` in `required`. The optional shape
+    (where assessment was absent from required) is what let the model
+    skip the field structurally. If a future Pydantic upgrade or
+    field-default refactor silently demotes this back to optional,
+    the audit-log assessments stop appearing again with no error."""
+    schema = RawFindingsBatch.model_json_schema()
+    assert "assessment" in schema["required"]
+    assert "findings" in schema["required"]
 
 
 def test_stage4_prompts_include_citation_discipline_instruction():
@@ -817,10 +848,13 @@ def test_stage4_aggregator_skips_assessment_section_when_no_assessments():
     from tests.fixtures.parsed_message import FakeParsedMessage
 
     def parse_side_effect(**kwargs):
-        # All clean, but NO assessment field populated — simulates
-        # a model that didn't honor the new instruction.
+        # All clean, with explicit null assessments — under the
+        # required-field schema (v2), null is the model's way of
+        # saying "no useful explanation to surface". The aggregator
+        # must skip these (None is falsy) and NOT emit the
+        # "Clean-framing assessments —" header.
         return FakeParsedMessage(
-            RawFindingsBatch(findings=[]), stop_reason="end_turn"
+            RawFindingsBatch(findings=[], assessment=None), stop_reason="end_turn"
         )
 
     client = MagicMock()

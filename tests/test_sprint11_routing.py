@@ -136,7 +136,7 @@ def _stage3_capture_kwargs():
 
     def _record(**kwargs):
         captured.append(kwargs)
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client = MagicMock()
     client.messages.parse.side_effect = _record

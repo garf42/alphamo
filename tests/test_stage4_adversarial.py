@@ -373,7 +373,7 @@ def _client_with_framing_responses(
             # Use a distinct slice of the framing description to disambiguate.
             if framing_text[:60] in system_text:
                 return FakeParsedMessage(batch)
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client.messages.parse.side_effect = parse_side_effect
     return client
@@ -406,7 +406,8 @@ def test_stage4_aggregates_concerns_across_framings():
                     falsification_condition="if licensure clear",
                     severity=Severity.HIGH,
                 )
-            ]
+            ],
+            assessment=None,
         ),
         "legal_exposure": RawFindingsBatch(
             findings=[
@@ -416,7 +417,8 @@ def test_stage4_aggregates_concerns_across_framings():
                     falsification_condition="if scope narrow",
                     severity=Severity.MEDIUM,
                 )
-            ]
+            ],
+            assessment=None,
         ),
     }
     client = _client_with_framing_responses(batches)
@@ -443,7 +445,8 @@ def test_stage4_robustness_score_in_zero_one_range():
                     falsification_condition="if x",
                     severity=Severity.HIGH,
                 )
-            ] * 3
+            ] * 3,
+            assessment=None,
         )
         for framing in DEFAULT_FRAMINGS
     }
@@ -473,7 +476,8 @@ def test_stage4_drops_falsification_less_concerns():
                     falsification_condition="   ",  # blank
                     severity=Severity.HIGH,
                 ),
-            ]
+            ],
+            assessment=None,
         )
     }
     client = _client_with_framing_responses(batches)
@@ -494,7 +498,7 @@ def test_stage4_runs_framings_in_parallel():
 
     def slow_parse(**kwargs):
         time.sleep(0.1)
-        return FakeParsedMessage(RawFindingsBatch(findings=[]))
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
 
     client.messages.parse.side_effect = slow_parse
 
@@ -524,7 +528,8 @@ def test_stage4_concerns_carry_framing_tag():
                     falsification_condition="if AUM stays below 100M",
                     severity=Severity.HIGH,
                 )
-            ]
+            ],
+            assessment=None,
         )
     }
     client = _client_with_framing_responses(batches)
@@ -542,7 +547,8 @@ def test_stage4_reasoning_lists_framings_with_concerns_and_clean_framings():
                     claim="c", evidence="e",
                     falsification_condition="f", severity=Severity.LOW,
                 )
-            ]
+            ],
+            assessment=None,
         )
     }
     client = _client_with_framing_responses(batches)
