@@ -95,6 +95,16 @@ class Candidate(Base):
     stage4_findings: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSON, nullable=True
     )
+    # Sprint 15 (Q2): per-framing "no identifiable vulnerability"
+    # explanation text from clean framings on this candidate.
+    # `{framing_name: assessment_text, ...}` — empty dict (or NULL on
+    # legacy rows) when no framing came back clean or when Stage 3 didn't
+    # run. The closed-RL-loop signal complement to stage4_findings:
+    # findings carry concerns the cascade raised, assessments carry
+    # the reasoning behind framings that found nothing.
+    stage4_assessments: Mapped[dict[str, str] | None] = mapped_column(
+        JSON, nullable=True
+    )
     fitness: Mapped[float] = mapped_column(Float, nullable=False)
     island_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     generation: Mapped[int | None] = mapped_column(Integer, nullable=True)

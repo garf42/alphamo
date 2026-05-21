@@ -372,4 +372,11 @@ def stage4_adversarial(
         robustness=compute_robustness(all_concerns, decay_k=decay_k),
         concerns=all_concerns,
         reasoning=reasoning,
+        # Sprint 15 (Q2): pass the per-framing clean-pass assessments
+        # through to the persisted Stage4Finding so the orchestrator
+        # can write them to the new stage4_assessments column. Only
+        # assessments from framings that came back clean — entries
+        # for framings-with-concerns are excluded by the clean_
+        # assessments comprehension above.
+        framing_assessments=clean_assessments,
     )

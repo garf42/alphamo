@@ -195,6 +195,22 @@ class Stage4Finding(BaseModel):
             "concerns and which came back clean."
         ),
     )
+    # Sprint 15 (Q2): structured per-framing "no vulnerability" text
+    # from clean passes. Mirrors the dict already aggregated inside
+    # stage4_adversarial. Persisted to the new stage4_assessments JSON
+    # column on the candidate row so the closed-RL-loop has positive
+    # signal alongside the negative-signal concern list. Defaults to
+    # an empty dict so previously-serialised Stage4Finding instances
+    # deserialise cleanly (backward-compat).
+    framing_assessments: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-framing 'no identifiable vulnerability' explanation text "
+            "from clean framings on this candidate. Empty dict when no "
+            "framing came back clean OR when this is a legacy Stage4Finding "
+            "predating Sprint 15."
+        ),
+    )
 
 
 class Classification(str, Enum):

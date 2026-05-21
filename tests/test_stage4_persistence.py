@@ -46,6 +46,62 @@ def test_schema_creates_stage4_findings_column_on_fresh_db(tmp_path):
     assert "stage4_findings" in cols
 
 
+def test_schema_creates_stage4_assessments_column_on_fresh_db(tmp_path):
+    """Sprint 15 (Q2): fresh DB carries the new stage4_assessments column."""
+    url = f"sqlite:///{tmp_path / 'fresh.db'}"
+    ProgramsDB(url)
+    engine = create_engine(url, future=True)
+    with engine.connect() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(candidates)"))}
+    assert "stage4_assessments" in cols
+
+
+def test_migration_adds_stage4_assessments_to_pre_sprint15_db(tmp_path):
+    """Sprint 15 (Q2): a DB built before Sprint 15 (no stage4_assessments
+    column) must auto-migrate when re-opened via ProgramsDB. Existing
+    candidate rows are preserved and the new column backfills to NULL."""
+    url = f"sqlite:///{tmp_path / 'pre_sprint15.db'}"
+
+    # Build a candidates table WITHOUT stage4_assessments (carrying the
+    # Sprint 14 column set — stage4_findings is present, parent_ids is
+    # present).
+    engine = create_engine(url, future=True)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE candidates ("
+                "id INTEGER PRIMARY KEY,"
+                "run_id TEXT,"
+                "architecture_spec JSON NOT NULL,"
+                "scores JSON NOT NULL,"
+                "stage4_findings JSON,"
+                "fitness REAL NOT NULL,"
+                "island_id INTEGER,"
+                "generation INTEGER,"
+                "parent_ids JSON,"
+                "status TEXT,"
+                "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            )
+        )
+        # Seed one legacy row to confirm data preservation.
+        conn.execute(
+            text(
+                "INSERT INTO candidates "
+                "(architecture_spec, scores, fitness, status) "
+                "VALUES ('{}', '{}', 0.5, 'alive')"
+            )
+        )
+
+    # Open via ProgramsDB — should add the column without dropping the row.
+    ProgramsDB(url)
+    with engine.connect() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(candidates)"))}
+        rowcount = conn.execute(text("SELECT COUNT(*) FROM candidates")).scalar()
+    assert "stage4_assessments" in cols
+    assert rowcount == 1
+
+
 def test_migration_adds_stage4_findings_to_pre_sprint1_db(tmp_path):
     """A DB created before Sprint 1 (no stage4_findings column) must auto-migrate."""
     url = f"sqlite:///{tmp_path / 'pre_sprint1.db'}"
@@ -154,6 +210,58 @@ def _disable_milestone_hp() -> Hyperparameters:
         research_every_generations=1000,
         milestone_min_generation=10_000,
     )
+
+
+def test_orchestrator_persists_stage4_assessments_on_clean_framing_candidate(
+    db, monkeypatch, tmp_path
+):
+    """Sprint 15 (Q2): when at least one Stage 3 framing returns clean
+    with an assessment, the orchestrator must persist the per-framing
+    assessment dict to the new stage4_assessments column. Pre-Sprint-15,
+    the dict was collapsed into a clipped substring of the
+    Stage4Finding.reasoning text and was lost beyond a forensic
+    audit-log substring; the closed-RL-loop signal was destroyed at
+    the DB boundary."""
+    stub_assessments = {
+        "regulatory": "operator-licensed throughout; no regulatory exposure surfaced",
+        "operational": "single-person constraint cleanly satisfied",
+    }
+    monkeypatch.setattr(
+        cascade_mod,
+        "stage1_feasibility",
+        lambda a, c, **kw: Stage1Finding(
+            feasibility=0.9, middle_class_accessible=True, reasoning="ok"
+        ),
+    )
+    monkeypatch.setattr(
+        cascade_mod,
+        "stage2_structured",
+        lambda a, c, **kw: Stage2Finding(
+            one_person_threshold=0.9, billion_dollar_potential=0.9,
+            labor_separation=0.9, structural=0.9, reasoning="ok",
+        ),
+    )
+    monkeypatch.setattr(
+        cascade_mod,
+        "stage4_adversarial",
+        lambda a, c, **kw: Stage4Finding(
+            robustness=0.95,
+            concerns=[],
+            reasoning="all 9 framings clean",
+            framing_assessments=stub_assessments,
+        ),
+    )
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    orch = Orchestrator.for_new_run(
+        db, _stub_client(), audit, hp=_disable_milestone_hp()
+    )
+    result = orch.run(max_generations=1)
+    candidate_event = next(e for e in result.events if e.candidate_id is not None)
+    row = db.get(candidate_event.candidate_id)
+
+    assert row.stage4_assessments is not None
+    assert row.stage4_assessments == stub_assessments
 
 
 def test_orchestrator_persists_stage4_findings_on_stage4_reaching_candidate(

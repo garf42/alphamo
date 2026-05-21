@@ -112,6 +112,15 @@ class ProgramsDB:
                 conn.execute(
                     text("ALTER TABLE candidates ADD COLUMN stage4_findings JSON")
                 )
+        # Sprint 15 (Q2): stage4_assessments column added in this sprint.
+        # Idempotent ALTER — existing rows backfill to NULL, the new
+        # insert path populates fresh rows from the Stage4Finding's
+        # framing_assessments dict.
+        if "stage4_assessments" not in column_names:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE candidates ADD COLUMN stage4_assessments JSON")
+                )
 
         with self._session() as session:
             null_count = session.scalar(
@@ -400,6 +409,7 @@ class ProgramsDB:
         parent_ids: list[int] | None = None,
         status: str = "alive",
         stage4_findings: list[dict[str, Any]] | None = None,
+        stage4_assessments: dict[str, str] | None = None,
     ) -> int:
         """Insert one candidate. Returns the new row id. `run_id` is required.
 
@@ -407,6 +417,13 @@ class ProgramsDB:
         Pydantic model_dump form). Pass it when Stage 4 ran on this candidate
         and produced concerns; leave None for short-circuit-exit candidates
         or for ad-hoc inserts that bypass the cascade.
+
+        Sprint 15 (Q2): `stage4_assessments` is an optional dict mapping
+        framing name → "no identifiable vulnerability" explanation text
+        from clean framings on this candidate. Pass it when Stage 3 ran
+        and at least one framing came back clean; leave None for
+        short-circuit-exit candidates or candidates where every framing
+        produced concerns.
         """
         if not run_id:
             raise ValueError("run_id is required on insert")
@@ -415,6 +432,7 @@ class ProgramsDB:
             architecture_spec=architecture.model_dump(),
             scores=scores.model_dump(),
             stage4_findings=stage4_findings,
+            stage4_assessments=stage4_assessments,
             fitness=aggregate_fitness(scores),
             island_id=island_id,
             generation=generation,

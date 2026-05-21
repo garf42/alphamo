@@ -929,6 +929,15 @@ class Orchestrator:
             if result.stage3 is not None
             else None
         )
+        # Sprint 15 (Q2): per-framing clean-pass assessments persisted
+        # to the new stage4_assessments column. None when Stage 3 didn't
+        # run OR when every framing produced concerns / no clean framing
+        # populated its assessment field.
+        stage4_assessments_payload = (
+            (result.stage3.framing_assessments or None)
+            if result.stage3 is not None
+            else None
+        )
         # Sprint 15 (Q3): propagate seed candidate ids as parent_ids so
         # lineage is queryable. Seeds whose `.id` is None (legacy / ad-
         # hoc constructions) are filtered out; an all-None list collapses
@@ -942,6 +951,7 @@ class Orchestrator:
             generation=generation,
             parent_ids=parent_ids_payload,
             stage4_findings=stage4_findings_payload,
+            stage4_assessments=stage4_assessments_payload,
         )
         row = self.db.get(candidate_id)
 
