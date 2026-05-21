@@ -169,20 +169,18 @@ def test_fireworks_provider_passes_reasoning_effort_via_extra_body():
         reasoning_effort="high",
     )
     kwargs = mock_client.chat.completions.create.call_args[1]
-    # Sprint 14 follow-up: thinking is passed explicitly alongside
-    # reasoning_effort (DeepSeek V4 defaults to enabled, but we don't
-    # want the request shape to depend on a server-side default).
-    assert kwargs["extra_body"] == {
-        "reasoning_effort": "high",
-        "thinking": {"type": "enabled"},
-    }
+    # Sprint 14 hotfix: extra_body carries `reasoning_effort` ONLY.
+    # Fireworks rejects requests that set both `thinking` and
+    # `reasoning_effort` (HTTP 400 under reasoning_effort="max").
+    # reasoning_effort alone controls DeepSeek V4's thinking mode.
+    assert kwargs["extra_body"] == {"reasoning_effort": "high"}
 
 
-def test_fireworks_provider_passes_thinking_enabled_with_max_reasoning_effort():
-    """Sprint 14 follow-up: reasoning_effort='max' also pairs with the
-    explicit thinking={'type': 'enabled'} field. DeepSeek V4's "max"
-    mode prepends a server-side prefix instructing thorough
-    decomposition — specifically what Stage 3 framings benefit from."""
+def test_fireworks_provider_passes_reasoning_effort_max_without_thinking_field():
+    """Sprint 14 hotfix regression guard: reasoning_effort='max' must
+    NOT pair with an explicit thinking field — Fireworks rejects the
+    combination with HTTP 400 ("cannot specify both 'thinking' and
+    'reasoning_effort'"). reasoning_effort alone controls mode."""
     provider, mock_client = _fireworks_with_mock_create(
         _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
     )
@@ -196,10 +194,8 @@ def test_fireworks_provider_passes_thinking_enabled_with_max_reasoning_effort():
         reasoning_effort="max",
     )
     kwargs = mock_client.chat.completions.create.call_args[1]
-    assert kwargs["extra_body"] == {
-        "reasoning_effort": "max",
-        "thinking": {"type": "enabled"},
-    }
+    assert kwargs["extra_body"] == {"reasoning_effort": "max"}
+    assert "thinking" not in kwargs["extra_body"]
 
 
 def test_fireworks_provider_omits_extra_body_when_no_reasoning_effort():
@@ -242,10 +238,10 @@ def test_fireworks_provider_silently_drops_top_level_anthropic_thinking_field():
     """The legacy Anthropic `thinking={'type':'enabled','budget_tokens':N}`
     field arrives at the Fireworks provider when both forms are passed
     at the call site. Provider must NOT forward it as a top-level field
-    (would error in the OpenAI SDK validator). The Fireworks-shaped
-    `thinking={'type': 'enabled'}` lives in extra_body alongside
-    reasoning_effort and is set by the provider itself, not the call
-    site's Anthropic-shape thinking kwarg."""
+    (would error in the OpenAI SDK validator) AND must NOT echo it into
+    extra_body (Fireworks rejects requests with both `thinking` and
+    `reasoning_effort` set — Sprint 14 hotfix). Only reasoning_effort
+    survives in extra_body."""
     provider, mock_client = _fireworks_with_mock_create(
         _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
     )
@@ -262,12 +258,9 @@ def test_fireworks_provider_silently_drops_top_level_anthropic_thinking_field():
     kwargs = mock_client.chat.completions.create.call_args[1]
     # The Anthropic-shape top-level `thinking` must not survive.
     assert "thinking" not in kwargs
-    # The Fireworks-shape thinking + reasoning_effort live inside
-    # extra_body, set by the provider when reasoning_effort is supplied.
-    assert kwargs["extra_body"] == {
-        "reasoning_effort": "high",
-        "thinking": {"type": "enabled"},
-    }
+    # extra_body carries reasoning_effort only — no thinking field.
+    assert kwargs["extra_body"] == {"reasoning_effort": "high"}
+    assert "thinking" not in kwargs["extra_body"]
 
 
 # --------------------------------------------------------------------- FireworksProvider response handling

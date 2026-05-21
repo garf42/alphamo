@@ -158,20 +158,22 @@ class FireworksProvider(BaseProvider):
             },
         )
         # `extra_body` is the OpenAI-SDK escape hatch for provider-
-        # specific fields. Fireworks consumes both `reasoning_effort`
-        # and `thinking` here. DeepSeek V4 defaults `thinking` to
-        # enabled, but we pass it explicitly so the request shape is
-        # self-documenting and won't break if the default flips.
-        # `thinking` is gated by reasoning_effort being set — Stage 1
-        # and Stage 2 pass neither.
+        # specific fields. Fireworks consumes `reasoning_effort` here;
+        # it controls thinking mode by itself (Non-think / High / Max).
         # The legacy Anthropic `thinking={...}` field arrives unused
-        # at this provider; silently ignored (the call site is
-        # responsible for ALSO setting reasoning_effort when both
-        # forms are passed).
+        # at this provider; silently ignored.
+        #
+        # Sprint 14 hotfix: we previously also sent
+        # `extra_body["thinking"] = {"type": "enabled"}` for
+        # explicitness, but Fireworks rejects requests that set both
+        # `thinking` and `reasoning_effort` (HTTP 400: "cannot specify
+        # both 'thinking' and 'reasoning_effort'"). The error was
+        # tolerated at `reasoning_effort="high"` but enforced strictly
+        # at `"max"`. `reasoning_effort` alone is sufficient; thinking
+        # mode is implied.
         extra_body: dict[str, Any] = {}
         if reasoning_effort is not None:
             extra_body["reasoning_effort"] = reasoning_effort
-            extra_body["thinking"] = {"type": "enabled"}
         if extra_body:
             request_kwargs["extra_body"] = extra_body
 
