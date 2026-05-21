@@ -474,32 +474,12 @@ def test_run_stops_on_structural_curator_decision(db, monkeypatch, tmp_path):
     assert 1 <= len(result.events) < 10
 
 
-def test_detect_stall_returns_false_with_short_history(db, monkeypatch, tmp_path):
-    orch = _make_orchestrator(db, monkeypatch, tmp_path, hp=_hp(stall_window=10))
-    assert orch.detect_stall() is False
-
-
-def test_detect_stall_returns_true_when_window_is_flat(db, monkeypatch, tmp_path):
-    from alphamo.schemas import Scores
-
-    orch = _make_orchestrator(
-        db, monkeypatch, tmp_path, hp=_hp(stall_window=5, stall_epsilon=0.001)
-    )
-    # Flat fitness across many generations.
-    for g in range(1, 6):
-        db.insert(
-            Architecture(
-                name=f"n{g}", summary="s", value_chain="vc",
-                capture_mechanism="cm", entry_resources="er",
-            ),
-            Scores(
-                feasibility=0.5, structural=0.5,
-                middle_class_accessible=True,
-            ),
-            run_id=orch.run_id,
-            generation=g,
-        )
-    assert orch.detect_stall() is True
+# Sprint 13: detect_stall() removed. The pre-Sprint-13 tests
+# `test_detect_stall_returns_false_with_short_history` and
+# `test_detect_stall_returns_true_when_window_is_flat` are deleted
+# alongside the method they exercised. If a future sprint
+# purpose-builds a stall-detection mechanism, it gets its own tests
+# then.
 
 
 # ----------------------------------------------------------------- failure handling

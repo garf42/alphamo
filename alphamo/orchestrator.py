@@ -499,12 +499,13 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ loop
 
-    def detect_stall(self) -> bool:
-        """True if max fitness has barely moved over the last `stall_window` generations."""
-        history = self.db.fitness_history(self.hp.stall_window, run_id=self.run_id)
-        if len(history) < self.hp.stall_window:
-            return False
-        return max(history) - min(history) < self.hp.stall_epsilon
+    # Sprint 13: detect_stall() removed. The method had no callers after
+    # Sprint 12's research-removal sweep deleted `_maybe_research`. The
+    # Sprint 12 commit flagged the orphan status; the decision was to
+    # delete cleanly rather than maintain unused code. If stall-triggered
+    # intervention is wanted in the future, it gets purpose-built then
+    # rather than resurrected from this orphan. `stall_window` and
+    # `stall_epsilon` Hyperparameters fields removed alongside.
 
     def _is_milestone(
         self, generation: int, fitness: float, robustness: float | None

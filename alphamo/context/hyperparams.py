@@ -144,30 +144,15 @@ class Hyperparameters(BaseModel):
     # current-developments grounding so the scheduled-research
     # invocation isn't needed.
     #
-    # `stall_window` and `stall_epsilon` are RETAINED as orphan
-    # configuration. detect_stall() previously fired only via the
-    # removed `_maybe_research` path; the method body still exists
-    # in case future work wants stall-only audit logging without
-    # triggering research. Flagged in Sprint 12 commit message;
-    # decision to drop or repurpose deferred.
-    stall_window: int = Field(
-        default=15,
-        ge=2,
-        description=(
-            "Generation window over which to detect a fitness stall. "
-            "Sprint 12: orphan config — was consumed only by the "
-            "removed research-trigger path. Retained pending decision "
-            "on stall-only audit logging."
-        ),
-    )
-    stall_epsilon: float = Field(
-        default=0.01,
-        ge=0.0,
-        description=(
-            "Min fitness improvement over the stall window to NOT be "
-            "stalled. Sprint 12: orphan (see stall_window note)."
-        ),
-    )
+    # Sprint 13: `stall_window` and `stall_epsilon` removed. Sprint
+    # 12 retained them as orphan config (the only consumer,
+    # `detect_stall()`, was a dead-code path post-research-removal);
+    # Sprint 13 deletes the method and both fields cleanly. If
+    # stall-triggered intervention is wanted in the future, it gets
+    # purpose-built rather than maintained as unused configuration.
+    # The pydantic `extra="ignore"` setting at the top of this
+    # model lets old DB rows that persisted stall_window /
+    # stall_epsilon load silently — the unknown keys drop.
 
     max_consecutive_failures: int = Field(
         default=5,
