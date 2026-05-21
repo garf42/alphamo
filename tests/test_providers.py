@@ -571,17 +571,18 @@ def test_hyperparameters_default_model_is_deepseek_v4_flash():
     assert hp.model_curator == FIREWORKS_DEFAULT_MODEL
 
 
-def test_hyperparameters_default_reasoning_effort_is_max():
-    """Sprint 14 follow-up: bumped 'high' → 'max' on the reasoning-
-    heavy sites. DeepSeek V4's 'max' mode prepends a server-side
-    prefix instructing thorough decomposition — specifically what
-    Stage 3 adversarial framings + the proposer's structural-
-    component synthesis benefit from. Stage 1 / Stage 2 remain at
-    no-reasoning since they're structured-classification tasks."""
+def test_hyperparameters_default_reasoning_effort_is_high():
+    """Sprint 14 default is "high". The follow-up "max" bump was
+    reverted after Super's smoke caught a 60% candidate-failure
+    rate (3-of-9 to 4-of-9 Stage 3 framings succeeding under
+    "max"; concurrent-load pressure exhausted the OpenAI SDK's
+    retry budget). "high" ran 5/5 clean on the same setup. "max"
+    remains overridable per-HP if a future sprint addresses the
+    concurrency mitigation; default-on caused too many failures."""
     hp = Hyperparameters()
-    assert hp.reasoning_effort_proposer == "max"
-    assert hp.reasoning_effort_stage3 == "max"
-    assert hp.reasoning_effort_curator == "max"
+    assert hp.reasoning_effort_proposer == "high"
+    assert hp.reasoning_effort_stage3 == "high"
+    assert hp.reasoning_effort_curator == "high"
 
 
 def test_hyperparameters_silently_ignores_pre_sprint14_routing_fields():

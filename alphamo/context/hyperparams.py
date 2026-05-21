@@ -176,16 +176,20 @@ class Hyperparameters(BaseModel):
     #
     # `reasoning_effort` is only consumed by the Fireworks provider
     # (mapped to DeepSeek V4's Non-think / Think High / Think Max
-    # discrete modes — no budget_tokens equivalent). Sprint 14 follow-
-    # up: defaults bumped "high" → "max" on the reasoning-heavy sites
-    # (proposer, Stage 3 adversarial framings, curator). "max" mode
-    # prepends a DeepSeek-side system prefix instructing thorough
-    # decomposition — specifically what Stage 3's adversarial framings
-    # benefit from. The "max" recommended minimum context window of
-    # 384K is comfortably above our worst-case prefix (~44K proposer /
-    # ~37K Stage 3). Anthropic provider ignores this field — it
-    # consumes the legacy `thinking={enabled, budget}` config from the
-    # call site directly.
+    # discrete modes — no budget_tokens equivalent). Sprint 14 default
+    # is "high". The follow-up bump to "max" was reverted after Super's
+    # smoke test observed a 60% candidate-failure rate (3 of 5 gens
+    # had catastrophic Stage 3 failure: 3-of-9, 3-of-9, 4-of-9
+    # framings succeeded). "high" reasoning ran 5/5 clean on the same
+    # setup. Root cause is concurrent-load pressure under "max" —
+    # heavier per-call output tokens (~6-8K vs ~4-5K under "high")
+    # combined with max_workers=4 saturated Fireworks's serverless
+    # tier and exhausted the OpenAI SDK's max_retries=3 budget on a
+    # subset of framings per candidate. "max" remains available via
+    # per-HP override if a future sprint addresses the concurrency
+    # mitigation; default-on caused too many run failures to justify.
+    # Anthropic provider ignores this field — it consumes the legacy
+    # `thinking={enabled, budget}` config from the call site directly.
 
     provider_proposer: str = Field(default="fireworks")
     provider_stage1: str = Field(default="fireworks")
@@ -199,6 +203,6 @@ class Hyperparameters(BaseModel):
     model_stage3: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
     model_curator: str = Field(default="accounts/fireworks/models/deepseek-v4-flash")
 
-    reasoning_effort_proposer: str = Field(default="max")
-    reasoning_effort_stage3: str = Field(default="max")
-    reasoning_effort_curator: str = Field(default="max")
+    reasoning_effort_proposer: str = Field(default="high")
+    reasoning_effort_stage3: str = Field(default="high")
+    reasoning_effort_curator: str = Field(default="high")
