@@ -466,3 +466,244 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
     payload = catastrophic_events[0].payload
     assert payload["island_id"] is not None
     assert "architecture" in payload
+
+
+# --------------------------------------------------------------- Sprint 15 (Q4) per-framing audit
+
+
+def test_stage3_emits_one_framing_call_audit_per_failure(tmp_path):
+    """Sprint 15 (Q4): one structured audit event per FAILED framing
+    call, with status drawn from the controlled vocabulary
+    {parse_failure, api_error, empty_content, other_failure}. Additive
+    to the existing partial / catastrophic triggers.
+
+    Construct a client where one framing raises `Stage4OutputError`
+    with `stop_reason="parse_error"` (the parse-failure shape the
+    provider layer produces from a pydantic.ValidationError). Verify
+    exactly one stage3_framing_call event is emitted with
+    status='parse_failure' and the right framing name."""
+    from alphamo.errors import Stage4OutputError, TelemetryContext
+    from alphamo.evaluator.stage4_adversarial import stage4_adversarial
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import STAGE3_FRAMING_CALL
+    from alphamo.schemas import Architecture
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    telemetry = TelemetryContext(
+        audit_log=audit, run_id="r", generation=1, island_id=0
+    )
+
+    client = MagicMock()
+
+    def parse_side_effect(**kwargs):
+        # One framing — regulatory — raises parse_error; others succeed
+        # cleanly so the gate passes and the only events emitted are
+        # the per-framing failure for regulatory.
+        system_text = " ".join(b["text"] for b in kwargs["system"])
+        if FRAMINGS["regulatory"][:60] in system_text:
+            raise Stage4OutputError(
+                stop_reason="parse_error",
+                content_block_types=[],
+                detail="simulated truncation",
+            )
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
+
+    client.messages.parse.side_effect = parse_side_effect
+
+    stage4_adversarial(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framings=DEFAULT_FRAMINGS,
+        telemetry=telemetry,
+    )
+
+    framing_call_events = [
+        e for e in audit.read_all() if e.trigger == STAGE3_FRAMING_CALL
+    ]
+    assert len(framing_call_events) == 1
+    payload = framing_call_events[0].payload
+    assert payload["framing"] == "regulatory"
+    assert payload["status"] == "parse_failure"
+    assert payload["exception_type"] == "Stage4OutputError"
+    assert "simulated truncation" in payload["exception_detail"]
+    assert payload["generation"] == 1
+    assert payload["island_id"] == 0
+
+
+def test_stage3_emits_zero_framing_call_events_when_all_succeed(tmp_path):
+    """Sprint 15 (Q4): clean runs produce ZERO stage3_framing_call
+    events. The trigger is per-failure only — successes are captured
+    by the existing llm_usage + stage4_routine events."""
+    from alphamo.errors import TelemetryContext
+    from alphamo.evaluator.stage4_adversarial import stage4_adversarial
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import STAGE3_FRAMING_CALL
+    from alphamo.schemas import Architecture
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    telemetry = TelemetryContext(
+        audit_log=audit, run_id="r", generation=2, island_id=3
+    )
+
+    client = _make_framing_client(failed_framings=set())  # all clean
+    stage4_adversarial(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framings=DEFAULT_FRAMINGS,
+        telemetry=telemetry,
+    )
+
+    framing_call_events = [
+        e for e in audit.read_all() if e.trigger == STAGE3_FRAMING_CALL
+    ]
+    assert framing_call_events == []
+
+
+def test_stage3_framing_call_events_classify_other_failure_for_unknown_stop_reason(
+    tmp_path,
+):
+    """Sprint 15 (Q4): exceptions that don't carry a recognized
+    `stop_reason` (e.g., generic RuntimeError from a non-provider call
+    site, or a Stage4OutputError with an unrecognized reason) fall into
+    the `other_failure` catch-all bucket."""
+    from alphamo.errors import TelemetryContext
+    from alphamo.evaluator.stage4_adversarial import stage4_adversarial
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import STAGE3_FRAMING_CALL
+    from alphamo.schemas import Architecture
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    telemetry = TelemetryContext(
+        audit_log=audit, run_id="r", generation=5, island_id=2
+    )
+
+    client = MagicMock()
+
+    def parse_side_effect(**kwargs):
+        system_text = " ".join(b["text"] for b in kwargs["system"])
+        if FRAMINGS["economic"][:60] in system_text:
+            # Generic RuntimeError — not provider-wrapped, no
+            # stop_reason attribute, lands in other_failure.
+            raise RuntimeError("unexpected blowup")
+        return FakeParsedMessage(RawFindingsBatch(findings=[], assessment=None))
+
+    client.messages.parse.side_effect = parse_side_effect
+
+    stage4_adversarial(
+        Architecture(
+            name="g", summary="s", value_chain="v",
+            capture_mechanism="c", entry_resources="e",
+        ),
+        client,
+        framings=DEFAULT_FRAMINGS,
+        telemetry=telemetry,
+    )
+
+    framing_call_events = [
+        e for e in audit.read_all() if e.trigger == STAGE3_FRAMING_CALL
+    ]
+    assert len(framing_call_events) == 1
+    payload = framing_call_events[0].payload
+    assert payload["framing"] == "economic"
+    assert payload["status"] == "other_failure"
+
+
+def test_stage3_partial_and_catastrophic_triggers_continue_firing(tmp_path):
+    """Sprint 15 (Q4) is ADDITIVE — the existing
+    stage3_partial_framing_failure and stage3_catastrophic_framing_failure
+    triggers must still fire from the orchestrator's existing paths.
+    This test exercises the partial-failure case end-to-end and asserts
+    BOTH the new per-framing events AND the orchestrator-side partial-
+    failure event are present.
+
+    Caveat: stage4_adversarial alone doesn't emit the partial-failure
+    trigger (the orchestrator does, after reading the _meta sentinel).
+    So we verify both layers via the orchestrator's step().
+    """
+    from alphamo.context.hyperparams import Hyperparameters
+    from alphamo.evaluator import cascade as cascade_mod
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import (
+        STAGE3_FRAMING_CALL,
+        STAGE3_PARTIAL_FAILURE_TRIGGER,
+        Orchestrator,
+    )
+    from alphamo.schemas.findings import Stage1Finding, Stage2Finding
+
+    monkey_client = _make_framing_client(failed_framings={"economic"})
+
+    import pytest
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(
+            cascade_mod, "stage1_feasibility",
+            lambda a, c, **kw: Stage1Finding(
+                feasibility=0.9, middle_class_accessible=True, reasoning="ok"
+            ),
+        )
+        monkeypatch.setattr(
+            cascade_mod, "stage2_structured",
+            lambda a, c, **kw: Stage2Finding(
+                one_person_threshold=0.9, billion_dollar_potential=0.9,
+                labor_separation=0.9, structural=0.9, reasoning="ok",
+            ),
+        )
+
+        from tests.fixtures.parsed_message import FakeParsedMessage as _FPM
+        from alphamo.schemas import Architecture as _Arch
+        from alphamo.schemas.findings import (
+            Classification, ClassificationVerdict,
+        )
+
+        proposer_client = MagicMock()
+
+        def proposer_parse(**kwargs):
+            output_format = kwargs.get("output_format")
+            if output_format is _Arch:
+                return _FPM(_Arch(
+                    name="generated", summary="s", value_chain="vc",
+                    capture_mechanism="cm", entry_resources="er",
+                ))
+            if output_format is ClassificationVerdict:
+                return _FPM(ClassificationVerdict(
+                    classification=Classification.COSMETIC, rationale="x",
+                ))
+            # Stage 3 framings route through the framing-aware client.
+            return monkey_client.messages.parse.side_effect(**kwargs)
+
+        proposer_client.messages.parse.side_effect = proposer_parse
+
+        from pathlib import Path as _Path
+        db_path = tmp_path / "x.db"
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLog(audit_path)
+        from alphamo.database import ProgramsDB
+        db = ProgramsDB(f"sqlite:///{db_path}")
+        hp = Hyperparameters(
+            num_islands=2, reset_every_generations=1000,
+            milestone_min_generation=10_000,
+        )
+        orch = Orchestrator.for_new_run(db, proposer_client, audit, hp=hp)
+        orch._bootstrap_islands()
+        orch.step(generation=1)
+
+        events = audit.read_all()
+        framing_call_events = [
+            e for e in events if e.trigger == STAGE3_FRAMING_CALL
+        ]
+        partial_events = [
+            e for e in events if e.trigger == STAGE3_PARTIAL_FAILURE_TRIGGER
+        ]
+        # New per-framing audit event fired (additive)
+        assert len(framing_call_events) == 1
+        assert framing_call_events[0].payload["framing"] == "economic"
+        # Existing partial-failure trigger still fires (not a replacement)
+        assert len(partial_events) == 1
+    finally:
+        monkeypatch.undo()

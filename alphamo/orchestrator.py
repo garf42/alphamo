@@ -124,6 +124,16 @@ BOOTSTRAP_AUDIT_TRIGGER = "bootstrap_islands"
 # and flow through the existing iteration-failure path.
 STAGE3_PARTIAL_FAILURE_TRIGGER = "stage3_partial_framing_failure"
 STAGE3_CATASTROPHIC_FAILURE_TRIGGER = "stage3_catastrophic_framing_failure"
+# Sprint 15 (Q4): one event per FAILED framing call, additive to the
+# existing partial / catastrophic triggers (those fire at the gate
+# level; this one fires per-framing on the actual failure). Emitted
+# from inside stage4_adversarial via the telemetry context; not
+# imported back into stage4_adversarial.py to avoid a circular import
+# (orchestrator.py already imports FAILED_FRAMINGS_SENTINEL from
+# stage4_adversarial.py — keeping that direction unidirectional).
+# stage4_adversarial uses the literal string "stage3_framing_call";
+# this constant is the canonical reference for tests and consumers.
+STAGE3_FRAMING_CALL = "stage3_framing_call"
 # Sprint 7: previously-silent failure paths in step() now emit dedicated
 # audit events. PROPOSER_FAILURE_TRIGGER fires when proposer.propose()
 # raises an LLMOutputError (parse error, refusal, truncation).

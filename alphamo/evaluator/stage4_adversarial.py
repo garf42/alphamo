@@ -296,15 +296,80 @@ def stage4_adversarial(
     # passes. Stored framing→text so the reasoning summary can surface
     # WHY each clean framing came back clean (closed-RL-loop signal).
     framing_assessments: dict[str, str] = {}
+    # Sprint 15 (Q4): per-framing failure details for one structured
+    # audit event per failed call. Populated alongside failed_framings
+    # so the emit loop has typed access to exception type + detail
+    # without re-walking raw_results.
+    failure_records: list[dict[str, str]] = []
     for framing, result in zip(framings, raw_results):
         if isinstance(result, Exception):
             failed_framings.append(framing)
+            stop_reason = getattr(result, "stop_reason", "") or ""
+            # Classification per the Sprint 15 (Q4) status vocabulary.
+            # parse_error / api_error are explicit Stage4OutputError
+            # stop_reasons set by the provider layer; truncation /
+            # empty-content surfaces as "length", "max_tokens",
+            # "end_turn", or "no_choices"; everything else is the
+            # catch-all "other_failure" bucket.
+            if stop_reason == "parse_error":
+                status = "parse_failure"
+            elif stop_reason == "api_error":
+                status = "api_error"
+            elif stop_reason in ("length", "max_tokens", "end_turn", "no_choices"):
+                status = "empty_content"
+            else:
+                status = "other_failure"
+            failure_records.append(
+                {
+                    "framing": framing,
+                    "status": status,
+                    "exception_type": type(result).__name__,
+                    "exception_detail": (
+                        getattr(result, "detail", "") or str(result)
+                    )[:300],
+                }
+            )
         else:
             succeeded_framings.append(framing)
             concerns, assessment = result
             all_concerns.extend(concerns)
             if assessment:
                 framing_assessments[framing] = assessment
+
+    # Sprint 15 (Q4): emit one `stage3_framing_call` audit event per
+    # failed framing. Additive to the existing partial / catastrophic
+    # triggers — those fire at the gate level (one event per candidate);
+    # this one fires per-framing so post-run analysis can see WHICH
+    # framing failed HOW without parsing exception-detail strings.
+    # Successes are deliberately not logged here — they're already
+    # captured by the BaseProvider.parse `llm_usage` event and the
+    # downstream `stage4_routine` event. The trigger string is the
+    # literal canonical value; the matching constant is
+    # `orchestrator.STAGE3_FRAMING_CALL`.
+    if telemetry is not None and failure_records:
+        from alphamo.meta.audit_log import AuditEvent
+        for record in failure_records:
+            telemetry.audit_log.append(
+                AuditEvent(
+                    timestamp=telemetry.audit_log.now(),
+                    run_id=telemetry.run_id,
+                    trigger="stage3_framing_call",
+                    classification="routine",
+                    action="recorded",
+                    rationale=(
+                        f"framing={record['framing']} status={record['status']} "
+                        f"exception_type={record['exception_type']}"
+                    ),
+                    payload={
+                        "framing": record["framing"],
+                        "status": record["status"],
+                        "exception_type": record["exception_type"],
+                        "exception_detail": record["exception_detail"],
+                        "generation": telemetry.generation,
+                        "island_id": telemetry.island_id,
+                    },
+                )
+            )
 
     if len(succeeded_framings) < STAGE3_MIN_SUCCESSFUL_FRAMINGS:
         # Catastrophic Stage 3 failure: signal is too degraded to score
