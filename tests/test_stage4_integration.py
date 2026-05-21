@@ -156,7 +156,9 @@ def _stub_client(classification: Classification) -> MagicMock:
 def _milestone_hp() -> Hyperparameters:
     """HP that lets milestone trigger fire easily — low generation gate and
     fitness/robustness floors below the stub values (0.99 fitness, 0.99
-    robustness in the stubbed cascade)."""
+    robustness in the stubbed cascade). Sprint 14: explicitly opts in to
+    `curator_pause_enabled=True` since the Sprint 14 production default
+    is disabled."""
     return Hyperparameters(
         num_islands=2,
         reset_every_generations=1000,
@@ -164,6 +166,7 @@ def _milestone_hp() -> Hyperparameters:
         milestone_min_generation=1,
         milestone_absolute_fitness_threshold=0.50,
         milestone_absolute_robustness_threshold=0.50,
+        curator_pause_enabled=True,
     )
 
 

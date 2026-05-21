@@ -831,7 +831,14 @@ class Orchestrator:
 
         A milestone with empty Stage 4 concerns (clean adversarial pass) does
         not invoke the curator — there's nothing to classify.
+
+        Sprint 14 follow-up: gated on `hp.curator_pause_enabled`. Defaults
+        to False (disabled) so production unattended runs execute through
+        to the defined generation count without human-review stops. Set
+        `curator_pause_enabled=True` on the HP to opt in.
         """
+        if not self.hp.curator_pause_enabled:
+            return None
         if not self._is_milestone(generation, fitness, stage4.robustness):
             return None
         if not stage4.concerns:

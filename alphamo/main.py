@@ -359,15 +359,24 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     type=int,
     default=25,
     show_default=True,
-    help="Red-team trigger requires generation >= this (warmup gate).",
+    help=(
+        "Secondary gate on the milestone trigger — milestone only fires "
+        "at generation >= this. Only takes effect when "
+        "--curator-pause-enabled is set; otherwise the curator path is "
+        "skipped entirely."
+    ),
 )
 @click.option(
-    "--milestone-delta",
-    "milestone_fitness_delta",
-    type=float,
-    default=0.02,
+    "--curator-pause-enabled/--no-curator-pause-enabled",
+    "curator_pause_enabled",
+    default=False,
     show_default=True,
-    help="Red-team trigger requires fitness > seed_baseline_fitness + this.",
+    help=(
+        "Master switch for the milestone-triggered curator pause-for-"
+        "human path. Default is disabled — unattended runs execute "
+        "through to the defined generation count. Set to enable human-"
+        "review-at-milestones behavior."
+    ),
 )
 @click.option(
     "--resume",
@@ -401,7 +410,7 @@ def run(
     target_generation: int | None,
     num_islands: int,
     milestone_min_generation: int,
-    milestone_fitness_delta: float,
+    curator_pause_enabled: bool,
     resume_id: str | None,
     no_resume: bool,
     force_resume: bool,
@@ -508,7 +517,7 @@ def run(
         hp = Hyperparameters(
             num_islands=num_islands,
             milestone_min_generation=milestone_min_generation,
-            milestone_fitness_delta=milestone_fitness_delta,
+            curator_pause_enabled=curator_pause_enabled,
         )
         orchestrator = Orchestrator.for_new_run(db, client, audit, hp=hp)
         click.echo(f"started run {orchestrator.run_id}")

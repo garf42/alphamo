@@ -562,6 +562,85 @@ def test_hyperparameters_default_provider_routing_is_fireworks():
     assert hp.provider_curator == "fireworks"
 
 
+def test_hyperparameters_curator_pause_disabled_by_default():
+    """Sprint 14 follow-up: production unattended runs should execute
+    through to the defined generation count without human-review
+    stops. `curator_pause_enabled` defaults to False so the
+    milestone-triggered curator path is dormant unless explicitly
+    enabled."""
+    hp = Hyperparameters()
+    assert hp.curator_pause_enabled is False
+
+
+def test_orchestrator_skips_curator_when_pause_disabled(tmp_path):
+    """Direct invariant test: with curator_pause_enabled=False,
+    `_maybe_milestone_curate` returns None immediately even when
+    fitness, robustness, and generation all cross the milestone
+    thresholds. No classification calls, no curator audit events."""
+    from alphamo.context.hyperparams import Hyperparameters as _HP
+    from alphamo.database import ProgramsDB
+    from alphamo.meta.audit_log import AuditLog
+    from alphamo.orchestrator import Orchestrator
+    from alphamo.schemas.findings import Severity, StructuralConcern, Stage4Finding
+
+    db = ProgramsDB(f"sqlite:///{tmp_path / 'alphamo.db'}")
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    # MagicMock client never gets exercised because the gate short-
+    # circuits before reaching any classify call.
+    client = MagicMock()
+    hp = _HP(
+        num_islands=2,
+        milestone_min_generation=1,
+        milestone_absolute_fitness_threshold=0.50,
+        milestone_absolute_robustness_threshold=0.50,
+        curator_pause_enabled=False,
+    )
+    orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
+    stage4 = Stage4Finding(
+        robustness=0.99,
+        concerns=[
+            StructuralConcern(
+                framing="regulatory",
+                claim="c", evidence="e",
+                falsification_condition="if x",
+                severity=Severity.HIGH,
+            )
+        ],
+        reasoning="r",
+    )
+
+    outcome = orch._maybe_milestone_curate(
+        generation=10, candidate_id=1, fitness=0.99, stage4=stage4
+    )
+    assert outcome is None
+    # No curator classify call landed on the client.
+    assert client.messages.parse.call_count == 0
+
+
+def test_cli_run_command_exposes_curator_pause_enabled_flag():
+    """The Sprint 14 follow-up CLI surface — `--curator-pause-enabled`
+    and `--no-curator-pause-enabled` — must be wired to the
+    `curator_pause_enabled` HP field on the `alphamo run` command."""
+    from alphamo.main import cli
+
+    run_command = cli.commands["run"]
+    flag_names = [opt.name for opt in run_command.params]
+    assert "curator_pause_enabled" in flag_names
+
+
+def test_cli_run_command_no_longer_has_dead_milestone_delta_flag():
+    """The `--milestone-delta` CLI flag passed `milestone_fitness_delta`
+    to the Hyperparameters constructor, but that HP field was deleted
+    in Sprint 2 (replaced by absolute thresholds). The value has been
+    silently swallowed by Pydantic's `extra="ignore"` ever since. The
+    Sprint 14 follow-up commit removed the dead knob."""
+    from alphamo.main import cli
+
+    run_command = cli.commands["run"]
+    flag_names = [opt.name for opt in run_command.params]
+    assert "milestone_fitness_delta" not in flag_names
+
+
 def test_hyperparameters_default_model_is_deepseek_v4_flash():
     hp = Hyperparameters()
     assert hp.model_proposer == FIREWORKS_DEFAULT_MODEL

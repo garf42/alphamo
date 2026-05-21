@@ -206,3 +206,16 @@ class Hyperparameters(BaseModel):
     reasoning_effort_proposer: str = Field(default="high")
     reasoning_effort_stage3: str = Field(default="high")
     reasoning_effort_curator: str = Field(default="high")
+
+    # Sprint 14 follow-up: master switch for the milestone-triggered
+    # curator path. Defaults to False — production runs execute
+    # uninterrupted to the defined generation count. The curator
+    # module is still in the codebase and exercised by tests; flipping
+    # this to True opts the run in to human-review-at-milestones
+    # behavior. When False, `_maybe_milestone_curate` returns None
+    # immediately — no classification calls, no `milestone_candidate`
+    # audit events, no PAUSE_FOR_HUMAN stop. The
+    # `milestone_min_generation` / `milestone_absolute_*_threshold`
+    # fields remain as secondary gates that take effect only when
+    # curator_pause is enabled.
+    curator_pause_enabled: bool = Field(default=False)

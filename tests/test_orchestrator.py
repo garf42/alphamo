@@ -106,13 +106,18 @@ def _stub_client(
 
 
 def _hp(**kwargs) -> Hyperparameters:
-    """Default test HP. Disables milestone trigger via high min_generation;
-    individual milestone tests override."""
+    """Default test HP. Enables the curator gate (Sprint 14 production
+    default is disabled; tests in this module exercise the curator path
+    or are explicitly milestone-related, so opt the helper in). Also
+    disables milestone trigger via high min_generation by default;
+    individual milestone tests override min_generation but inherit
+    curator_pause_enabled=True from this default."""
     defaults = dict(
         num_islands=2,
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        curator_pause_enabled=True,
     )
     defaults.update(kwargs)
     return Hyperparameters(**defaults)
