@@ -72,7 +72,7 @@ from alphamo.proposer import Proposer
 from alphamo.providers.base import BaseProvider, ensure_provider
 from alphamo.providers.factory import build_provider
 from alphamo.sampler import Sampler
-from alphamo.schemas import Architecture
+from alphamo.schemas import Architecture, Scores
 
 
 def _build_component_providers(
@@ -486,45 +486,58 @@ class Orchestrator:
         alive candidate. Returns the number of seed copies inserted.
 
         No-op when this run already has alive candidates (resumed run, or
-        bootstrap already executed in a prior session). On a fresh run,
-        scores the trivial seed once through the cascade and copies the
-        resulting Scores into each island's gen-0 row.
+        bootstrap already executed in a prior session).
 
         FunSearch alignment: "Each island is initialized with a copy of
         the user-provided initial program and is evolved separately."
         Single architecture, copied to all m islands; per-island
         evolution proceeds independently.
 
-        We deliberately score the seed ONCE and copy the scores to all
-        islands rather than running the cascade m times on the same
-        architecture. The cascade has LLM-side variance; m independent
-        evaluations would inject noise into what should be m identical
-        starting points. Cost saving (m-1 evaluations) is incidental;
-        the calibration argument is the load-bearing reason.
+        Sprint 14 fix: the trivial seed gets a HARD-CODED model-independent
+        Scores rather than running through the cascade. The trivial seed
+        is a GA initializer, not a candidate being scored for quality —
+        it just needs to be alive (`fitness > 0.0`) so the within-island
+        sampler returns something on gen 1. The pre-Sprint-14 design
+        scored it through Stage 1 + Stage 2 + 9 Stage 3 framings (11 LLM
+        calls per run, identical seed every time, model-family-dependent
+        output). That assumed the trivial seed would score above 0.0
+        across model families; DeepSeek V4 Flash treats "no leverage, no
+        scale" as incoherent and returns feasibility=0.0, which fails
+        stage1_threshold=0.4, zeroes structural, and (via
+        `aggregate_fitness`) produces fitness=0.0 — below the sampler's
+        strict `fitness > 0.0` alive filter, dropping the seed and
+        crashing the proposer on gen 1 with empty seeds.
+
+        Hard-coded `feasibility=0.50, structural=0.50` gives the seed an
+        aggregate fitness of 0.50 — comfortably above the alive
+        threshold, low enough that any real generated candidate scoring
+        on its merits sorts above it. `robustness=None` and
+        `exemplar_similarity=None` follow the Sprint 2/4 conventions
+        for fields that weren't computed.
+
+        Side effect of skipping the cascade: bootstrap no longer emits
+        any `llm_usage` audit events. The `bootstrap` audit event still
+        fires and carries the hard-coded scores.
         """
         if self.db.count_candidates_in_run(self.run_id) > 0:
             return 0
 
-        # Sprint 8: bootstrap telemetry context — generation=0 marks the
-        # trivial seed's gen-0 placement; island_id is None because the
-        # same evaluation result is copied across all islands.
-        bootstrap_telemetry = TelemetryContext(
-            audit_log=self.audit_log,
-            run_id=self.run_id,
-            generation=0,
-            island_id=None,
+        # Sprint 14: model-independent Scores. See docstring for the
+        # full rationale — short version, the trivial seed is a GA
+        # initializer, not a candidate being evaluated.
+        seed_scores = Scores(
+            feasibility=0.50,
+            structural=0.50,
+            robustness=None,
+            exemplar_similarity=None,
+            middle_class_accessible=True,
         )
-        result = self.cascade.evaluate(TRIVIAL_SEED, telemetry=bootstrap_telemetry)
-        stage4_findings_payload = (
-            [c.model_dump(mode="json") for c in result.stage3.concerns]
-            if result.stage3 is not None
-            else None
-        )
+        stage4_findings_payload = None
         inserted_ids: list[int] = []
         for island_id in range(self.hp.num_islands):
             candidate_id = self.db.insert(
                 TRIVIAL_SEED,
-                result.scores,
+                seed_scores,
                 run_id=self.run_id,
                 island_id=island_id,
                 generation=0,
@@ -546,7 +559,7 @@ class Orchestrator:
                 ),
                 payload={
                     "seed_architecture": TRIVIAL_SEED.model_dump(mode="json"),
-                    "seed_scores": result.scores.model_dump(mode="json"),
+                    "seed_scores": seed_scores.model_dump(mode="json"),
                     "candidate_ids": inserted_ids,
                     "num_islands": self.hp.num_islands,
                 },

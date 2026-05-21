@@ -321,46 +321,29 @@ def test_llm_usage_event_carries_generation_and_island_id_from_step(
     assert payload["island_id"] == 1
 
 
-def test_bootstrap_emits_llm_usage_with_generation_zero(
-    db, monkeypatch, tmp_path
-):
-    """Bootstrap-side llm_usage events carry generation=0 and
-    island_id=None per the orchestrator's bootstrap_telemetry."""
-    # Wire a real cascade so the bootstrap path runs through the real
-    # parse_or_raise that emits the events.
-    def parse_side_effect(**kwargs):
-        output_format = kwargs.get("output_format")
-        response = FakeParsedMessage(None, stop_reason="end_turn")
-        response.usage = _FakeUsage(input_tokens=100, output_tokens=50)
-        if output_format is Stage1Finding:
-            response = FakeParsedMessage(_stage1_finding(), stop_reason="end_turn")
-        elif output_format is Stage2Finding:
-            response = FakeParsedMessage(_stage2_finding(), stop_reason="end_turn")
-        elif output_format is RawFindingsBatch:
-            response = FakeParsedMessage(
-                RawFindingsBatch(findings=[]), stop_reason="end_turn"
-            )
-        elif output_format is Architecture:
-            response = FakeParsedMessage(
-                Architecture(
-                    name="g", summary="s", value_chain="v",
-                    capture_mechanism="c", entry_resources="e",
-                ),
-                stop_reason="end_turn",
-            )
-        else:
-            response = FakeParsedMessage(MagicMock(), stop_reason="end_turn")
-        response.usage = _FakeUsage(input_tokens=100, output_tokens=50)
-        return response
+def test_bootstrap_emits_no_llm_usage_events(db, tmp_path):
+    """Sprint 14: bootstrap no longer runs the trivial seed through the
+    cascade — it gets a hard-coded model-independent Scores so it
+    lands in the DB with fitness > 0.0 regardless of which model
+    family the run is routed to. Side effect: zero `llm_usage` audit
+    events emitted by bootstrap.
 
+    Pre-Sprint-14 the bootstrap fired 11 events (Stage 1 + Stage 2 +
+    9 Stage 3 framings) for the same trivial-seed evaluation every
+    run. The seed is a GA initializer, not a candidate being scored
+    for quality; the cascade evaluation was always extraneous and
+    happened to break on DeepSeek V4 Flash (feasibility=0.0 → early
+    exit → fitness=0.0 → sampler drops the seed → proposer crashes
+    on gen 1 with empty seeds).
+    """
     audit = AuditLog(tmp_path / "audit.jsonl")
+    # `client` must be supplied to satisfy the Orchestrator constructor
+    # but is never invoked because bootstrap no longer calls the cascade.
     client = MagicMock()
-    client.messages.parse.side_effect = parse_side_effect
 
     hp = Hyperparameters(
         num_islands=2,
         reset_every_generations=1000,
-        research_every_generations=1000,
         milestone_min_generation=10_000,
     )
     orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
@@ -369,11 +352,33 @@ def test_bootstrap_emits_llm_usage_with_generation_zero(
     bootstrap_usage = [
         e for e in audit.read_all() if e.trigger == LLM_USAGE_TRIGGER
     ]
-    # Bootstrap fires Stage 1 + Stage 2 + 9 Stage 3 framings = 11 events.
-    assert len(bootstrap_usage) == 11
-    for event in bootstrap_usage:
-        assert event.payload["generation"] == 0
-        assert event.payload["island_id"] is None
+    assert bootstrap_usage == []
+    # The SDK must NOT have been called during bootstrap.
+    assert client.messages.parse.call_count == 0
+
+
+def test_bootstrap_seed_fitness_passes_alive_filter(db, tmp_path):
+    """Sprint 14: the hard-coded bootstrap Scores must produce fitness
+    > 0.0 so the within-island sampler picks it up on gen 1. With
+    `feasibility=0.50, structural=0.50, robustness=None`, the
+    aggregate_fitness average is 0.50 — comfortably above the
+    sampler's strict `fitness > 0.0` alive filter."""
+    from alphamo.evaluator.exemplar_library import TRIVIAL_SEED
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    client = MagicMock()
+    hp = Hyperparameters(num_islands=2, reset_every_generations=1000)
+    orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
+    orch._bootstrap_islands()
+
+    for island_id in range(hp.num_islands):
+        rows = db.top_k_in_island(
+            island_id=island_id, k=1, run_id=orch.run_id
+        )
+        assert len(rows) == 1
+        assert rows[0].architecture_spec["name"] == TRIVIAL_SEED.name
+        assert rows[0].fitness > 0.0
+        assert abs(rows[0].fitness - 0.50) < 1e-9
 
 
 # ---------------------------------------------------------------- corner cases

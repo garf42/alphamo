@@ -402,15 +402,11 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
         ),
     )
 
-    # First call (bootstrap): all framings succeed so the trivial seed
-    # gets inserted. Subsequent calls (the iteration's generated
-    # candidate): 6 framings fail so catastrophic failure raises.
-    call_count = {"n": 0}
-
-    def stage3_branched(a, c, **kw):
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            return stage4_adversarial(a, _make_framing_client(set()))
+    # Sprint 14: bootstrap no longer invokes the cascade (the trivial
+    # seed gets a hard-coded model-independent Scores), so every
+    # stage3 invocation is for the step()'s generated candidate. Fail
+    # 6 of 9 framings unconditionally so catastrophic failure raises.
+    def stage3_always_catastrophic(a, c, **kw):
         failed = {
             "regulatory", "economic", "operational",
             "timeline_plausibility", "mechanism_robustness",
@@ -418,7 +414,7 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
         }
         return stage4_adversarial(a, _make_framing_client(failed))
 
-    monkeypatch.setattr(cascade_mod, "stage4_adversarial", stage3_branched)
+    monkeypatch.setattr(cascade_mod, "stage4_adversarial", stage3_always_catastrophic)
 
     from tests.fixtures.parsed_message import FakeParsedMessage
     from alphamo.schemas import Architecture
