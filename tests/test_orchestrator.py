@@ -213,6 +213,30 @@ def test_step_inserts_a_new_candidate(db, monkeypatch, tmp_path):
     assert db.count_candidates(status="alive") == before + 1
 
 
+def test_step_populates_parent_ids_from_proposer_seeds(db, monkeypatch, tmp_path):
+    """Sprint 15 (Q3): the orchestrator must propagate the sampler's
+    seed candidate ids onto the new candidate's `parent_ids` column.
+    Pre-Sprint-15 these were computed-but-discarded (Seed dataclass
+    didn't carry .id), so the column stayed NULL for the entire main
+    proposer loop — only the reset path populated it. After the fix,
+    every generated candidate from `step()` carries a non-NULL
+    parent_ids pointing at the k seeds that drove the proposer call.
+    """
+    orch = _make_orchestrator(db, monkeypatch, tmp_path)
+    # Bootstrap inserts the trivial seed into 2 islands (per _hp default
+    # num_islands=2) at gen 0; those candidates are the lineage source
+    # for any gen-1 step.
+    event = orch.step(generation=1)
+    assert event.candidate_id is not None
+    new_row = db.get(event.candidate_id)
+    assert new_row.parent_ids is not None
+    assert len(new_row.parent_ids) >= 1
+    # Every parent_id resolves to a candidate in the same run.
+    for pid in new_row.parent_ids:
+        parent = db.get(pid)
+        assert parent.run_id == new_row.run_id
+
+
 # ----------------------------------------------------------------- milestone trigger
 
 

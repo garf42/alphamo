@@ -929,12 +929,18 @@ class Orchestrator:
             if result.stage3 is not None
             else None
         )
+        # Sprint 15 (Q3): propagate seed candidate ids as parent_ids so
+        # lineage is queryable. Seeds whose `.id` is None (legacy / ad-
+        # hoc constructions) are filtered out; an all-None list collapses
+        # to None so the column stays NULL rather than carrying [].
+        parent_ids_payload = [s.id for s in seeds if s.id is not None] or None
         candidate_id = self.db.insert(
             architecture,
             result.scores,
             run_id=self.run_id,
             island_id=island_id,
             generation=generation,
+            parent_ids=parent_ids_payload,
             stage4_findings=stage4_findings_payload,
         )
         row = self.db.get(candidate_id)

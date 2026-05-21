@@ -37,12 +37,18 @@ class Seed:
     is closed. `None` when the candidate predates Stage 4 / exited the
     cascade early / is the trivial bootstrap seed. Empty list when
     adversarial scrutiny ran clean.
+
+    Sprint 15 (Q3 parent_ids): `id` carries the source candidate's DB
+    primary key so the orchestrator can populate `parent_ids` on the
+    new candidate row at insert time. Optional (`None` default) because
+    legacy / test paths may construct Seeds without a backing DB row.
     """
 
     architecture: Architecture
     scores: Scores
     fitness: float
     stage4_findings: list[StructuralConcern] | None = None
+    id: int | None = None
 
 
 def _softmax(values: list[float], temperature: float) -> list[float]:
@@ -131,6 +137,7 @@ def _row_to_seed(row) -> Seed:
         scores=Scores(**row.scores),
         fitness=row.fitness,
         stage4_findings=findings,
+        id=row.id,
     )
 
 
