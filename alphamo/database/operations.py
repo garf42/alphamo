@@ -518,10 +518,43 @@ class ProgramsDB:
     def mean_fitness_per_island(
         self, num_islands: int, run_id: str | None = None
     ) -> dict[int, float]:
-        """Mean fitness of alive candidates per island. Empty islands map to 0.0."""
+        """Mean fitness over **fully-scored** alive candidates per island.
+
+        Sprint 17: the WHERE clause filters to candidates with a non-null
+        `scores.robustness` — i.e., candidates that completed Stage 3
+        cleanly. Pre-Sprint-17 the mean was taken over every alive row,
+        including the bootstrap trivial seed (fitness 0.50, robustness
+        None), Stage 1 exits (fitness ≈ feasibility/2 since structural
+        is forced to 0.0 on Stage 1 exit), Stage 2 exits (fitness ≈
+        (feasibility + structural)/2 with robustness None), and middle-
+        class filter exits (fitness 0.0). Those non-scored rows pulled
+        the per-island mean down asymmetrically, penalising islands for
+        attempt volume rather than ranking by lineage quality.
+
+        The reset trigger at `IslandsManager.maybe_reset` consumes this
+        metric via `rank_by_mean_fitness`; Sprint 17 aligns reset
+        judgement with what the run is actually optimising for (Stage-3
+        survival). The `alphamo islands` CLI inspection command also
+        consumes this method — its display now matches the reset
+        metric, which is the desired alignment (operators inspecting
+        island state see what reset will see).
+
+        Islands with zero fully-scored candidates map to 0.0 — the
+        pre-initialised dict default handles the missing-key case; the
+        empty island ranks as weak, which preserves the Sprint-15
+        invariant that dead islands stay eligible for reset.
+        """
+        # SQLite `json_extract(scores, '$.robustness') IS NOT NULL` filter.
+        # The Candidate.scores column is a JSON dict; the robustness key
+        # is None when stage 3 didn't run (Stage 1/2 exits, middle-class
+        # filter exits, bootstrap seed). `json_extract` returns SQL NULL
+        # for both "key missing" and "key value is JSON null"; the IS NOT
+        # NULL predicate excludes both.
+        robustness_path = func.json_extract(Candidate.scores, "$.robustness")
         stmt = (
             select(Candidate.island_id, func.avg(Candidate.fitness))
             .where(Candidate.status == "alive")
+            .where(robustness_path.is_not(None))
             .group_by(Candidate.island_id)
         )
         if run_id is not None:
