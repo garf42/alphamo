@@ -22,6 +22,7 @@ from alphamo.schemas.findings import (
 )
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
 from tests.fixtures.parsed_message import FakeParsedMessage
+from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
 
 
 # --------------------------------------------------------------------- helpers
@@ -38,13 +39,7 @@ def _stub_cascade(monkeypatch, fit=0.85):
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=fit,
-            billion_dollar_potential=fit,
-            labor_separation=fit,
-            structural=fit,
-            reasoning="ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod,

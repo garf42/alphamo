@@ -105,6 +105,18 @@ class Candidate(Base):
     stage4_assessments: Mapped[dict[str, str] | None] = mapped_column(
         JSON, nullable=True
     )
+    # Sprint Stage 2 PAJAMA: the full Stage 2 evidence dict
+    # (categoricals + booleans + lists + reasoning string) for
+    # candidates that reached Stage 2. NULL when Stage 1 short-
+    # circuited (middle-class filter exit or stage1_threshold exit).
+    # The persisted scalar `scores.structural` is derived from this
+    # evidence via `evaluator.stage2_structured.compute_structural` —
+    # the evidence is the audit trail behind the scalar, queryable
+    # via SQL (e.g. find every alive candidate with
+    # `automation_plausibility = 'requires_human_judgment'`).
+    stage2_evidence: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
     fitness: Mapped[float] = mapped_column(Float, nullable=False)
     island_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     generation: Mapped[int | None] = mapped_column(Integer, nullable=True)

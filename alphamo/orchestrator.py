@@ -948,6 +948,17 @@ class Orchestrator:
             if result.stage3 is not None
             else None
         )
+        # Sprint Stage 2 PAJAMA: persist the full Stage 2 evidence dict
+        # so the deterministic `scores.structural` scalar has a queryable
+        # audit trail. None when Stage 2 didn't run (middle-class filter
+        # exit or stage1_threshold exit). `model_dump(mode="json")`
+        # serialises the AutomationPlausibility / TAMEstimate enums to
+        # their string values for storage in the JSON column.
+        stage2_evidence_payload = (
+            result.stage2.model_dump(mode="json")
+            if result.stage2 is not None
+            else None
+        )
         # Sprint 15 (Q3): propagate seed candidate ids as parent_ids so
         # lineage is queryable. Seeds whose `.id` is None (legacy / ad-
         # hoc constructions) are filtered out; an all-None list collapses
@@ -962,6 +973,7 @@ class Orchestrator:
             parent_ids=parent_ids_payload,
             stage4_findings=stage4_findings_payload,
             stage4_assessments=stage4_assessments_payload,
+            stage2_evidence=stage2_evidence_payload,
         )
         row = self.db.get(candidate_id)
 

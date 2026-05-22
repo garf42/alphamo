@@ -35,6 +35,7 @@ from alphamo.schemas.findings import (
     Severity,
 )
 from tests.fixtures.parsed_message import FakeParsedMessage
+from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
 
 
 # ---------------------------------------------------------------- Fix 1
@@ -314,10 +315,7 @@ def test_orchestrator_emits_partial_failure_audit_event_when_stage3_partial(
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=0.9, billion_dollar_potential=0.9,
-            labor_separation=0.9, structural=0.9, reasoning="ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
     )
     # Stub stage3 (the renamed stage4_adversarial) to fail only the
     # "economic" framing for every call. The trivial-seed bootstrap and
@@ -396,10 +394,7 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=0.9, billion_dollar_potential=0.9,
-            labor_separation=0.9, structural=0.9, reasoning="ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
     )
 
     # Sprint 14: bootstrap no longer invokes the cascade (the trivial
@@ -649,10 +644,7 @@ def test_stage3_partial_and_catastrophic_triggers_continue_firing(tmp_path):
         )
         monkeypatch.setattr(
             cascade_mod, "stage2_structured",
-            lambda a, c, **kw: Stage2Finding(
-                one_person_threshold=0.9, billion_dollar_potential=0.9,
-                labor_separation=0.9, structural=0.9, reasoning="ok",
-            ),
+            lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
         )
 
         from tests.fixtures.parsed_message import FakeParsedMessage as _FPM

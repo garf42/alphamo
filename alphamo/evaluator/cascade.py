@@ -34,7 +34,7 @@ from typing import Any
 from alphamo.errors import TelemetryContext
 from alphamo.evaluator.middle_class_check import passes_middle_class_filter
 from alphamo.evaluator.stage1_feasibility import stage1_feasibility
-from alphamo.evaluator.stage2_structured import stage2_structured
+from alphamo.evaluator.stage2_structured import compute_structural, stage2_structured
 from alphamo.evaluator.stage4_adversarial import stage4_adversarial
 from alphamo.providers.base import BaseProvider, ensure_provider
 from alphamo.schemas import Architecture, Scores
@@ -163,11 +163,19 @@ class EvaluatorCascade:
         if self.stage2_model is not None:
             s2_kwargs["model"] = self.stage2_model
         s2 = stage2_structured(architecture, self.stage2_provider, **s2_kwargs)
-        if s2.structural < self.stage2_threshold:
+        # Sprint Stage 2 PAJAMA: the model no longer returns a structural
+        # float; the score comes from the deterministic Python function
+        # `compute_structural` applied to the model's evidence fields.
+        # See alphamo/evaluator/stage2_structured.py for the formula and
+        # weight constants. The threshold gate still compares against
+        # `hp.stage2_threshold` (default 0.5); the comparand is now the
+        # PAJAMA-computed scalar.
+        s2_structural = compute_structural(s2)
+        if s2_structural < self.stage2_threshold:
             return CascadeResult(
                 scores=Scores(
                     feasibility=s1.feasibility,
-                    structural=s2.structural,
+                    structural=s2_structural,
                     exemplar_similarity=None,
                     robustness=None,
                     middle_class_accessible=True,
@@ -192,7 +200,7 @@ class EvaluatorCascade:
         return CascadeResult(
             scores=Scores(
                 feasibility=s1.feasibility,
-                structural=s2.structural,
+                structural=s2_structural,
                 exemplar_similarity=None,
                 robustness=s3.robustness,
                 middle_class_accessible=True,

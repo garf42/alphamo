@@ -38,6 +38,7 @@ from alphamo.schemas.findings import (
     StructuralConcern,
 )
 from tests.fixtures.parsed_message import FakeParsedMessage
+from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
 
 
 # --------------------------------------------------------------------- aggregate_fitness
@@ -110,10 +111,7 @@ def _stub_full_cascade(monkeypatch, stage4_concerns, stage4_robustness=0.99):
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=0.99, billion_dollar_potential=0.99,
-            labor_separation=0.99, structural=0.99, reasoning="ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod,

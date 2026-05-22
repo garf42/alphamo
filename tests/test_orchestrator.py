@@ -50,16 +50,25 @@ def _stub_cascade(
             reasoning="stub",
         ),
     )
+    # Sprint Stage 2 PAJAMA: the stub returns evidence — the cascade
+    # then runs compute_structural on it. The `structural` kwarg now
+    # selects between the passing (≈0.773) and failing (≈0.049)
+    # fixtures based on the requested side of the stage2_threshold=0.5
+    # gate; tests that previously asked for exact intermediates instead
+    # get the deterministic computed scalar.
+    from tests.fixtures.stage2_evidence import (
+        failing_stage2_finding,
+        passing_stage2_finding,
+    )
+    _stage2_fixture = (
+        passing_stage2_finding(reasoning="stub")
+        if structural >= 0.5
+        else failing_stage2_finding(reasoning="stub")
+    )
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=structural,
-            billion_dollar_potential=structural,
-            labor_separation=structural,
-            structural=structural,
-            reasoning="stub",
-        ),
+        lambda a, c, **kw: _stage2_fixture,
     )
     monkeypatch.setattr(
         cascade_mod,

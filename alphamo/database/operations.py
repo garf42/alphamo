@@ -121,6 +121,17 @@ class ProgramsDB:
                 conn.execute(
                     text("ALTER TABLE candidates ADD COLUMN stage4_assessments JSON")
                 )
+        # Sprint Stage 2 PAJAMA: stage2_evidence column carries the
+        # full Stage 2 evidence dict (categoricals + booleans + lists
+        # + reasoning) so the deterministic scalar
+        # `scores.structural` has a queryable audit trail. NULL on
+        # legacy rows and on candidates that exited the cascade
+        # before Stage 2 ran.
+        if "stage2_evidence" not in column_names:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE candidates ADD COLUMN stage2_evidence JSON")
+                )
 
         with self._session() as session:
             null_count = session.scalar(
@@ -410,6 +421,7 @@ class ProgramsDB:
         status: str = "alive",
         stage4_findings: list[dict[str, Any]] | None = None,
         stage4_assessments: dict[str, str] | None = None,
+        stage2_evidence: dict[str, Any] | None = None,
     ) -> int:
         """Insert one candidate. Returns the new row id. `run_id` is required.
 
@@ -424,6 +436,14 @@ class ProgramsDB:
         and at least one framing came back clean; leave None for
         short-circuit-exit candidates or candidates where every framing
         produced concerns.
+
+        Sprint Stage 2 PAJAMA: `stage2_evidence` is the full
+        `Stage2Finding.model_dump(mode='json')` for candidates that
+        reached Stage 2 — the categorical / boolean / list evidence
+        from which `scores.structural` was derived. Pass it when
+        Stage 2 ran; leave None for middle-class-filter exits and
+        Stage-1-threshold exits (Stage 2 didn't run, no evidence to
+        record).
         """
         if not run_id:
             raise ValueError("run_id is required on insert")
@@ -433,6 +453,7 @@ class ProgramsDB:
             scores=scores.model_dump(),
             stage4_findings=stage4_findings,
             stage4_assessments=stage4_assessments,
+            stage2_evidence=stage2_evidence,
             fitness=aggregate_fitness(scores),
             island_id=island_id,
             generation=generation,

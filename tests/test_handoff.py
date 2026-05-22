@@ -29,6 +29,7 @@ from alphamo.schemas.findings import (
     Stage4Finding,
     StructuralConcern,
 )
+from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
 
 
 @pytest.fixture()
@@ -43,13 +44,7 @@ def cascade(monkeypatch) -> EvaluatorCascade:
     monkeypatch.setattr(
         cascade_mod,
         "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=0.9,
-            billion_dollar_potential=0.9,
-            labor_separation=0.9,
-            structural=0.9,
-            reasoning="s2 ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="s2 ok"),
     )
     monkeypatch.setattr(
         cascade_mod,

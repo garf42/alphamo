@@ -49,6 +49,7 @@ from alphamo.schemas.findings import (
     Stage4Finding,
 )
 from tests.fixtures.parsed_message import FakeParsedMessage
+from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
 
 
 # ---------------------------------------------------------------- helpers
@@ -63,10 +64,7 @@ def _stub_cascade(monkeypatch):
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
-        lambda a, c, **kw: Stage2Finding(
-            one_person_threshold=0.9, billion_dollar_potential=0.9,
-            labor_separation=0.9, structural=0.9, reasoning="ok",
-        ),
+        lambda a, c, **kw: passing_stage2_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod, "stage4_adversarial",

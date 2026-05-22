@@ -72,18 +72,24 @@ def test_stage1_raises_on_truncated_json():
 
 
 def test_stage2_returns_parsed_output_on_success():
-    finding = Stage2Finding(
-        one_person_threshold=0.85,
-        billion_dollar_potential=0.85,
-        labor_separation=0.85,
-        structural=0.85,
-        reasoning="ok",
-    )
+    """Sprint Stage 2 PAJAMA: the function now returns evidence (no
+    structural float). Verify that the call-side wiring still returns
+    the parsed Pydantic model verbatim — the cascade is what runs
+    compute_structural on it later. Asserting on a few representative
+    evidence fields proves the model was correctly threaded through."""
+    from tests.fixtures.stage2_evidence import passing_stage2_finding
+    from alphamo.schemas.findings import AutomationPlausibility, TAMEstimate
+
+    finding = passing_stage2_finding(reasoning="cascade-stages unit test")
     result = stage2_structured(
         SATOSHI_FIXTURE.architecture, _client_returning(finding)
     )
     assert isinstance(result, Stage2Finding)
-    assert result.structural == 0.85
+    # Evidence-field round-trip checks (representative subset).
+    assert result.automation_plausibility == AutomationPlausibility.REQUIRES_CUSTOM_ENGINEERING
+    assert result.tam_estimate == TAMEstimate.OVER_100B
+    assert result.one_person_operable is True
+    assert result.reasoning == "cascade-stages unit test"
 
 
 def test_stage2_raises_when_parsed_is_none():
