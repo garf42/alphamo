@@ -577,6 +577,39 @@ def islands(num_islands: int, run_id: str | None, db_path: Path) -> None:
     ),
 )
 @click.option(
+    "--candidates-per-generation",
+    "candidates_per_generation",
+    type=int,
+    default=None,
+    help=(
+        "Sprint parallel-candidates: candidates produced per generation "
+        "(one per island, capped at num_islands). Falls through to the "
+        "Hyperparameters default (8) when omitted."
+    ),
+)
+@click.option(
+    "--max-parallel-candidates",
+    "max_parallel_candidates",
+    type=int,
+    default=None,
+    help=(
+        "Sprint parallel-candidates: max concurrent pipeline runs per "
+        "generation. The Stage 3 intra-candidate fan-out (9 framings @ "
+        "4 workers) nests inside this. Falls through to the "
+        "Hyperparameters default (4) when omitted."
+    ),
+)
+@click.option(
+    "--reset-every",
+    "reset_every_generations",
+    type=int,
+    default=None,
+    help=(
+        "FunSearch-style island reset cadence in generations. Falls "
+        "through to the Hyperparameters default (40) when omitted."
+    ),
+)
+@click.option(
     "--resume",
     "resume_id",
     type=str,
@@ -609,6 +642,9 @@ def run(
     num_islands: int,
     milestone_min_generation: int,
     curator_pause_enabled: bool,
+    candidates_per_generation: int | None,
+    max_parallel_candidates: int | None,
+    reset_every_generations: int | None,
     resume_id: str | None,
     no_resume: bool,
     force_resume: bool,
@@ -712,11 +748,23 @@ def run(
             f"through {generations}"
         )
     else:
-        hp = Hyperparameters(
+        # Sprint cli-hp-overrides: fall-through pattern for the parallel-
+        # sprint HP fields. Pass only non-None values so the Pydantic
+        # default kicks in for omitted flags, keeping CLI and HP defaults
+        # from drifting (the HP default IS the source of truth at
+        # --help time and at runtime).
+        hp_overrides: dict[str, object] = dict(
             num_islands=num_islands,
             milestone_min_generation=milestone_min_generation,
             curator_pause_enabled=curator_pause_enabled,
         )
+        if candidates_per_generation is not None:
+            hp_overrides["candidates_per_generation"] = candidates_per_generation
+        if max_parallel_candidates is not None:
+            hp_overrides["max_parallel_candidates"] = max_parallel_candidates
+        if reset_every_generations is not None:
+            hp_overrides["reset_every_generations"] = reset_every_generations
+        hp = Hyperparameters(**hp_overrides)
         orchestrator = Orchestrator.for_new_run(db, client, audit, hp=hp)
         click.echo(f"started run {orchestrator.run_id}")
 
