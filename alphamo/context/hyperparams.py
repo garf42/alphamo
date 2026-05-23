@@ -167,9 +167,58 @@ class Hyperparameters(BaseModel):
         default=5,
         ge=1,
         description=(
-            "Halt the run after this many consecutive iterations without a "
-            "scored candidate (LLM output parsing failures or empty islands). "
-            "Guards against burning the API budget on broken outputs."
+            "Halt the run after this many consecutive generations in which "
+            "NO candidate was successfully scored. Sprint parallel-candidates "
+            "redefined the unit from 'iteration' to 'generation': a batch "
+            "that produces at least one scored candidate resets the counter, "
+            "even if other candidates in the batch failed. At "
+            "candidates_per_generation=1 this is identical to the pre-sprint "
+            "consecutive-iteration semantics; at N>1 it's strictly more "
+            "permissive, which is appropriate because partial failures in a "
+            "batch are normal and recoverable."
+        ),
+    )
+
+    # Sprint parallel-candidates: per-generation batch size + parallel
+    # worker cap. Pre-sprint AlphaMo ran 1 candidate per generation
+    # serially; each island received ~5 scored candidates per
+    # reset_every_generations=40 cycle, which is too sparse for
+    # within-island evolutionary dynamics. The batched path runs N
+    # candidates per generation (one per island), increasing per-cycle
+    # throughput by a factor of `candidates_per_generation`.
+    #
+    # At candidates_per_generation = num_islands = 8 every island gets
+    # one candidate per generation; even coverage by construction. Set
+    # lower for budget-constrained runs (fewer LLM calls per generation
+    # at the cost of more generations to fill the same evolutionary
+    # depth per island).
+    #
+    # `max_parallel_candidates` caps the ThreadPoolExecutor worker count
+    # for the outer fan-out. This is the API-rate-limit safety valve:
+    # at 4 parallel candidates the worst-case concurrent LLM calls is
+    # ~16 (4 candidates × up to 4 concurrent Stage 3 framings each
+    # under the existing DEFAULT_MAX_WORKERS=4). At 8 parallel
+    # candidates it could spike to 32, which exceeded Fireworks's
+    # serverless tier during the Sprint 14 follow-up reasoning_effort
+    # bump. Default 4 keeps the spike bounded; bump only if the
+    # provider's rate limits accommodate.
+    candidates_per_generation: int = Field(
+        default=8,
+        ge=1,
+        description=(
+            "Number of candidates produced per generation (one per island, "
+            "capped at num_islands). Default 8 matches the default island "
+            "count so every island sees activity each generation."
+        ),
+    )
+    max_parallel_candidates: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "Max concurrent pipeline runs per generation. The Stage 3 "
+            "intra-candidate fan-out (9 framings @ 4 workers) nests inside "
+            "this; total concurrent LLM calls is bounded by "
+            "max_parallel_candidates × Stage3_max_workers."
         ),
     )
 

@@ -88,6 +88,34 @@ class IslandsManager:
         """Uniform-random island id for the next inner-loop step."""
         return self.rng.randrange(self.num_islands)
 
+    def pick_islands(self, n: int) -> list[int]:
+        """Select up to `n` distinct islands for parallel evaluation.
+
+        Sprint parallel-candidates: the batched orchestrator calls this
+        once per generation to drive one pipeline per selected island.
+
+        Semantics:
+          - `n >= num_islands`: return all islands in shuffled order.
+            Every island runs once per batch; even coverage by
+            construction. This is the production default at
+            `candidates_per_generation = num_islands`.
+          - `n < num_islands`: uniform random sample WITHOUT replacement
+            of `n` distinct islands.
+          - `n <= 0` raises ValueError — a zero-size batch is meaningless
+            and would silently produce empty generations.
+
+        The result is never duplicated. Order is shuffled so callers
+        that bind side resources (e.g. ordering of telemetry slots) don't
+        accidentally privilege a fixed island id.
+        """
+        if n <= 0:
+            raise ValueError(f"pick_islands(n={n}): n must be positive")
+        all_islands = list(range(self.num_islands))
+        if n >= self.num_islands:
+            self.rng.shuffle(all_islands)
+            return all_islands
+        return self.rng.sample(all_islands, n)
+
     def rank_by_mean_fitness(self) -> list[int]:
         """Island ids sorted by mean alive fitness in this run, highest first."""
         means = self.db.mean_fitness_per_island(self.num_islands, run_id=self.run_id)

@@ -315,6 +315,7 @@ def _disable_milestone_hp() -> Hyperparameters:
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        candidates_per_generation=1,
     )
 
 

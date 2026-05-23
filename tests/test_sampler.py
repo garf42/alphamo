@@ -479,3 +479,113 @@ def test_within_cluster_boltzmann_no_duplicates_without_replacement():
     picked = sampler._draw_from_cluster(rows, k=3)
     assert len(picked) == 3
     assert len({r.id for r in picked}) == 3
+
+
+# ----------------------------------------------------------------- Sprint parallel-candidates: draw_from_snapshot
+
+
+def test_draw_from_snapshot_matches_draw_when_snapshot_matches_db(
+    populated_db, default_run
+):
+    """`draw_from_snapshot` is the snapshot-aware twin of `draw`. With
+    a snapshot built from the same rows `draw` would query, the two
+    draws must return the same Seed records (same RNG, same logic).
+
+    Pin two RNGs to the same seed so the within-cluster Boltzmann draw
+    is identical across both calls — what differs is only the
+    population-read path (live query vs. snapshot lookup)."""
+    # Build a snapshot from a live query — the same query draw() does
+    # internally.
+    snapshot = {
+        0: populated_db.top_k_in_island(island_id=0, k=1000, run_id=default_run)
+    }
+    sampler_live = Sampler(
+        populated_db, pool_size=1000, rng=random.Random(0), run_id=default_run
+    )
+    sampler_snap = Sampler(
+        populated_db, pool_size=1000, rng=random.Random(0), run_id=default_run
+    )
+    live = sampler_live.draw(island_id=0, k=2)
+    snap = sampler_snap.draw_from_snapshot(island_id=0, snapshot=snapshot, k=2)
+    assert [s.architecture.name for s in live] == [
+        s.architecture.name for s in snap
+    ]
+
+
+def test_draw_from_snapshot_empty_island_returns_empty(db):
+    """Snapshot missing the island key, OR present with empty list,
+    must degrade gracefully to an empty result — same as draw() on
+    an empty island."""
+    sampler = Sampler(db)
+    # Missing key.
+    assert sampler.draw_from_snapshot(island_id=0, snapshot={}, k=2) == []
+    # Present but empty list.
+    assert sampler.draw_from_snapshot(
+        island_id=0, snapshot={0: []}, k=2
+    ) == []
+
+
+def test_draw_from_snapshot_excludes_zero_fitness_rows(populated_db, default_run):
+    """The middle-class-filter foils have fitness=0.0; they must be
+    excluded from snapshot draws just as they are from live draws."""
+    foil_names = {f.architecture.name for f in FOILS}
+    snapshot = {
+        0: populated_db.top_k_in_island(island_id=0, k=1000, run_id=default_run)
+    }
+    sampler = Sampler(populated_db, pool_size=1000, rng=random.Random(0))
+    seen: set[str] = set()
+    for _ in range(30):
+        seeds = sampler.draw_from_snapshot(island_id=0, snapshot=snapshot, k=2)
+        seen.update(s.architecture.name for s in seeds)
+    assert seen.isdisjoint(foil_names), (
+        f"foils appeared in snapshot draws: {seen & foil_names}"
+    )
+
+
+def test_draw_from_snapshot_is_independent_of_db_state(populated_db, default_run):
+    """Sprint parallel-candidates load-bearing property: a snapshot is
+    a frozen view. If new rows get inserted between snapshot capture
+    and snapshot use, the snapshot draw must NOT see them. This is
+    the invariant that lets parallel pipelines see consistent island
+    state — no sibling pipeline's freshly-inserted candidate can
+    pollute another's seed pool."""
+    from alphamo.schemas import Architecture, Scores
+
+    snapshot = {
+        0: populated_db.top_k_in_island(island_id=0, k=1000, run_id=default_run)
+    }
+    snapshot_size = len(snapshot[0])
+
+    # Inject a brand-new candidate INTO the live DB after snapshot capture.
+    populated_db.insert(
+        Architecture(
+            name="post-snapshot intruder",
+            summary="should not appear in snapshot draws",
+            value_chain="vc", capture_mechanism="cm",
+            entry_resources="er",
+        ),
+        Scores(
+            feasibility=0.99, structural=0.99, robustness=0.99,
+            middle_class_accessible=True,
+        ),
+        run_id=default_run,
+        island_id=0,
+    )
+
+    sampler = Sampler(populated_db, pool_size=1000, rng=random.Random(0))
+    seen_names: set[str] = set()
+    for _ in range(40):
+        seeds = sampler.draw_from_snapshot(island_id=0, snapshot=snapshot, k=2)
+        seen_names.update(s.architecture.name for s in seeds)
+    assert "post-snapshot intruder" not in seen_names, (
+        "snapshot draw saw a row inserted after snapshot capture — "
+        "the snapshot is not frozen"
+    )
+    # And confirm the live DB does see the intruder, so the negative
+    # assertion above isn't a false negative from a broken insert.
+    assert len(snapshot[0]) == snapshot_size  # snapshot unchanged
+    live_rows = populated_db.top_k_in_island(
+        island_id=0, k=1000, run_id=default_run
+    )
+    live_names = {r.architecture_spec["name"] for r in live_rows}
+    assert "post-snapshot intruder" in live_names

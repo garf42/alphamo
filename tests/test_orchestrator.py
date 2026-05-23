@@ -143,13 +143,19 @@ def _hp(**kwargs) -> Hyperparameters:
     or are explicitly milestone-related, so opt the helper in). Also
     disables milestone trigger via high min_generation by default;
     individual milestone tests override min_generation but inherit
-    curator_pause_enabled=True from this default."""
+    curator_pause_enabled=True from this default.
+
+    Sprint parallel-candidates: defaults `candidates_per_generation=1`
+    so existing test assertions (one event per step) hold without
+    modification. The parallel-batch path is covered by a dedicated
+    test module that opts into the production default."""
     defaults = dict(
         num_islands=2,
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
         curator_pause_enabled=True,
+        candidates_per_generation=1,
     )
     defaults.update(kwargs)
     return Hyperparameters(**defaults)
@@ -239,7 +245,7 @@ def test_bootstrap_is_idempotent_no_op_on_resume(db, monkeypatch, tmp_path):
 def test_step_inserts_a_new_candidate(db, monkeypatch, tmp_path):
     orch = _make_orchestrator(db, monkeypatch, tmp_path)
     before = db.count_candidates(status="alive")
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is not None
     assert event.skipped_reason is None
     assert db.count_candidates(status="alive") == before + 1
@@ -258,7 +264,7 @@ def test_step_populates_parent_ids_from_proposer_seeds(db, monkeypatch, tmp_path
     # Bootstrap inserts the trivial seed into 2 islands (per _hp default
     # num_islands=2) at gen 0; those candidates are the lineage source
     # for any gen-1 step.
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is not None
     new_row = db.get(event.candidate_id)
     assert new_row.parent_ids is not None
@@ -308,7 +314,7 @@ def test_milestone_does_not_fire_below_absolute_fitness_threshold(db, monkeypatc
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger is None
     assert event.meta_decision is None
 
@@ -331,7 +337,7 @@ def test_milestone_does_not_fire_below_absolute_robustness_threshold(db, monkeyp
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger is None
 
 
@@ -353,7 +359,7 @@ def test_milestone_does_not_fire_before_min_generation(db, monkeypatch, tmp_path
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger is None
 
 
@@ -377,7 +383,7 @@ def test_milestone_does_not_fire_when_adversarial_clean(db, monkeypatch, tmp_pat
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=30)
+    [event] = orch.step(generation=30)
     assert event.meta_trigger is None
 
 
@@ -400,7 +406,7 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_fitness(db, monkeypa
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger == "milestone_candidate"
     assert event.meta_decision is not None
 
@@ -430,7 +436,7 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monke
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger == "milestone_candidate"
 
 
@@ -448,7 +454,7 @@ def test_milestone_does_not_fire_when_robustness_is_none(db, monkeypatch, tmp_pa
         ),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger is None
 
 
@@ -471,7 +477,7 @@ def test_step_does_not_fire_research_meta_path_under_sprint12(
         hp=_hp(),
     )
     orch._bootstrap_islands()
-    event = orch.step(generation=5)
+    [event] = orch.step(generation=5)
     assert event.meta_trigger is None
 
 

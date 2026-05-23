@@ -359,6 +359,7 @@ def test_orchestrator_emits_partial_failure_audit_event_when_stage3_partial(
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        candidates_per_generation=1,
     )
     orch = Orchestrator.for_new_run(db, proposer_client, audit, hp=hp)
     orch._bootstrap_islands()
@@ -439,10 +440,11 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        candidates_per_generation=1,
     )
     orch = Orchestrator.for_new_run(db, proposer_client, audit, hp=hp)
     orch._bootstrap_islands()
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
 
     # Iteration counts as a failure: no candidate inserted, failure
     # reason set, candidate_id is None.
@@ -675,6 +677,7 @@ def test_stage3_partial_and_catastrophic_triggers_continue_firing(tmp_path):
         hp = Hyperparameters(
             num_islands=2, reset_every_generations=1000,
             milestone_min_generation=10_000,
+            candidates_per_generation=1,
         )
         orch = Orchestrator.for_new_run(db, proposer_client, audit, hp=hp)
         orch._bootstrap_islands()

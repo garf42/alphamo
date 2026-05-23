@@ -398,3 +398,71 @@ def test_maybe_reset_source_diversity_across_many_cycles(db, default_run):
             f"trial {trial}: source_islands {event.source_islands} "
             "contains duplicates"
         )
+
+
+# ----------------------------------------------------------------- Sprint parallel-candidates: pick_islands
+
+
+def test_pick_islands_returns_all_islands_when_n_equals_num_islands(
+    db, default_run
+):
+    """Production default: candidates_per_generation == num_islands so
+    every batch covers every island exactly once."""
+    mgr = IslandsManager(
+        db, run_id=default_run, num_islands=8, rng=random.Random(0)
+    )
+    selected = mgr.pick_islands(8)
+    assert sorted(selected) == [0, 1, 2, 3, 4, 5, 6, 7]
+    # Every id appears exactly once — full permutation.
+    assert len(selected) == len(set(selected)) == 8
+
+
+def test_pick_islands_caps_at_num_islands_when_n_too_large(db, default_run):
+    """With n > num_islands, return only num_islands distinct ids — no
+    island gets two pipeline slots per batch."""
+    mgr = IslandsManager(
+        db, run_id=default_run, num_islands=4, rng=random.Random(0)
+    )
+    selected = mgr.pick_islands(10)
+    assert len(selected) == 4
+    assert sorted(selected) == [0, 1, 2, 3]
+
+
+def test_pick_islands_returns_distinct_ids_when_n_less_than_num_islands(
+    db, default_run
+):
+    """Subset case: a random-without-replacement sample of n distinct
+    islands. No duplicates."""
+    mgr = IslandsManager(
+        db, run_id=default_run, num_islands=8, rng=random.Random(0)
+    )
+    for _ in range(20):
+        selected = mgr.pick_islands(3)
+        assert len(selected) == 3
+        assert len(set(selected)) == 3
+        for iid in selected:
+            assert 0 <= iid < 8
+
+
+def test_pick_islands_rejects_non_positive_n(db, default_run):
+    mgr = IslandsManager(db, run_id=default_run, num_islands=4)
+    with pytest.raises(ValueError):
+        mgr.pick_islands(0)
+    with pytest.raises(ValueError):
+        mgr.pick_islands(-1)
+
+
+def test_pick_islands_full_coverage_is_shuffled(db, default_run):
+    """Full-coverage case shouldn't always return [0, 1, ..., n-1] in
+    that order — the shuffle prevents accidental ordering bias on the
+    side of any caller that binds extra resources to result[0]."""
+    mgr = IslandsManager(
+        db, run_id=default_run, num_islands=8, rng=random.Random(42)
+    )
+    orders_seen = {tuple(mgr.pick_islands(8)) for _ in range(50)}
+    # 8! is way more than 50; any non-shuffled implementation would
+    # produce 1 unique ordering. We just need >1 to confirm shuffling.
+    assert len(orders_seen) > 1, (
+        "pick_islands(num_islands) should be shuffled, but produced a "
+        "single ordering across 50 calls"
+    )

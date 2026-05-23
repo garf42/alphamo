@@ -5,10 +5,16 @@ timestamp, trigger, classification, action, and rationale. Without it, two
 runs of the same input could diverge and there'd be no way to tell whether
 divergence was legitimate (meta caught something real) or pathological
 (meta drifted). JSONL on disk — append-only by construction.
+
+Sprint parallel-candidates: `append()` is now thread-safe. Multiple
+candidate pipelines run concurrently inside `Orchestrator.step()` and
+each emits `llm_usage` events through telemetry; without the lock the
+JSONL writes can interleave at the byte level and corrupt the file.
 """
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,15 +39,22 @@ class AuditEvent(BaseModel):
 
 
 class AuditLog:
-    """JSONL audit log. Open per-write, never truncate."""
+    """JSONL audit log. Open per-write, never truncate. Thread-safe append."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
     def append(self, event: AuditEvent) -> None:
-        with self.path.open("a") as f:
-            f.write(event.model_dump_json() + "\n")
+        # Sprint parallel-candidates: serialize concurrent appends so the
+        # JSONL file doesn't get interleaved bytes from two writers. The
+        # lock guards the open + write; serialization to JSON happens
+        # outside so the critical section stays short.
+        line = event.model_dump_json() + "\n"
+        with self._lock:
+            with self.path.open("a") as f:
+                f.write(line)
 
     def read_all(self) -> list[AuditEvent]:
         if not self.path.exists():

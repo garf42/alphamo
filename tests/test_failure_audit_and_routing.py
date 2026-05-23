@@ -93,6 +93,9 @@ def _hp(**kwargs) -> Hyperparameters:
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        # Sprint parallel-candidates: pin one-candidate-per-generation
+        # so existing single-event-per-step assertions hold unchanged.
+        candidates_per_generation=1,
     )
     defaults.update(kwargs)
     return Hyperparameters(**defaults)
@@ -144,7 +147,7 @@ def test_proposer_failure_writes_proposer_failure_audit_event(
 
     monkeypatch.setattr(orch.proposer, "propose", proposer_raises)
 
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is None
     assert event.failure_reason is not None
 
@@ -191,7 +194,7 @@ def test_stage1_failure_writes_cascade_failure_audit_event_with_feasibility_stag
 
     monkeypatch.setattr(cascade_mod, "stage1_feasibility", stage1_raises)
 
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is None
 
     cascade_events = [
@@ -220,7 +223,7 @@ def test_stage2_failure_writes_cascade_failure_audit_event_with_structural_stage
 
     monkeypatch.setattr(cascade_mod, "stage2_structured", stage2_raises)
 
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is None
 
     cascade_events = [
@@ -253,7 +256,7 @@ def test_generic_stage4_failure_writes_cascade_failure_audit_event_with_adversar
 
     monkeypatch.setattr(cascade_mod, "stage4_adversarial", stage3_raises)
 
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is None
 
     all_events = audit.read_all()
@@ -288,7 +291,7 @@ def test_stage3_catastrophic_failure_still_uses_dedicated_trigger_regression(
         cascade_mod, "stage4_adversarial", stage3_raises_catastrophic
     )
 
-    event = orch.step(generation=1)
+    [event] = orch.step(generation=1)
     assert event.candidate_id is None
 
     all_events = audit.read_all()

@@ -84,6 +84,7 @@ def _hp(**overrides) -> Hyperparameters:
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,  # disables milestone trigger by default
+        candidates_per_generation=1,
     )
     base.update(overrides)
     return Hyperparameters(**base)

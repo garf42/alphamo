@@ -181,10 +181,46 @@ class Sampler:
     # ------------------------------------------------------------------ public
 
     def draw(self, island_id: int, k: int = 2) -> list[Seed]:
-        """Two-stage clustering draw. Returns up to k Seed records."""
+        """Two-stage clustering draw. Returns up to k Seed records.
+
+        Loads alive rows from the live DB; identical to
+        `draw_from_snapshot` with a snapshot built one query later.
+        """
         rows = self.db.top_k_in_island(
             island_id=island_id, k=self.pool_size, run_id=self.run_id
         )
+        return self._draw_from_rows(rows, k)
+
+    def draw_from_snapshot(
+        self,
+        island_id: int,
+        snapshot: dict[int, list],
+        k: int = 2,
+    ) -> list[Seed]:
+        """Sprint parallel-candidates: draw from a pre-built snapshot of
+        alive rows, not from a live DB query.
+
+        The batched orchestrator builds the snapshot once before fan-out
+        so all parallel pipelines see a consistent island view — no
+        candidate in the batch can see another candidate from the same
+        batch (which would happen if we queried live mid-fan-out and a
+        sibling pipeline finished first). When `island_id` is missing
+        from the snapshot the draw degrades gracefully to an empty
+        result, matching `draw()`'s empty-island behaviour.
+
+        Result is exactly what `draw()` would have produced if the
+        snapshot was captured at the moment `draw()` was called — same
+        cluster logic, same RNG, same row-to-Seed conversion.
+        """
+        rows = snapshot.get(island_id, [])
+        return self._draw_from_rows(rows, k)
+
+    def _draw_from_rows(self, rows: list, k: int) -> list[Seed]:
+        """Two-stage clustering draw applied to an in-memory row list.
+
+        Sprint parallel-candidates: factored out of `draw()` so the
+        snapshot path and the live-query path share one implementation.
+        """
         alive = [r for r in rows if r.fitness > 0.0]
         if not alive:
             return []

@@ -164,6 +164,7 @@ def _milestone_hp() -> Hyperparameters:
         milestone_absolute_fitness_threshold=0.50,
         milestone_absolute_robustness_threshold=0.50,
         curator_pause_enabled=True,
+        candidates_per_generation=1,
     )
 
 
@@ -234,6 +235,7 @@ def test_routine_adversarial_firing_writes_audit_entry(db, monkeypatch, tmp_path
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        candidates_per_generation=1,
     )
     orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
     orch.run(max_generations=3)

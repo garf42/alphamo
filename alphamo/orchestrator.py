@@ -9,16 +9,28 @@ One Orchestrator drives a run. Lifecycle:
       starts with the same baseline; from gen 1 onward, evolution
       diverges per-island.)
 
-  Inner loop (each iteration):
-    1. Pick an island (uniform).
-    2. Draw k candidates from the island via softmax-weighted sampling.
-    3. Propose a new architecture via Opus — the proposer sees ONLY
-       those k island-drawn candidates (no global reference library).
-    4. Score it through the cascade.
-    5. Insert into the DB.
-    6. If the new fitness clears the absolute milestone thresholds,
-       fire the red-team curator gate.
-    7. Apply the islands manager's reset cadence — when fired, the
+  Inner loop (each generation — Sprint parallel-candidates):
+    1. Pick N islands via `islands.pick_islands(candidates_per_generation)`.
+       At candidates_per_generation = num_islands the result is a
+       shuffled permutation — every island runs once per generation.
+    2. Build a per-island snapshot of alive rows ONCE — every parallel
+       pipeline reads from this snapshot, not from the live DB. This
+       keeps the sampling view consistent across the batch: no candidate
+       in the batch can see another candidate from the same batch.
+    3. Sample seeds per island from the snapshot (cheap, no LLM).
+    4. Fan out N proposer+cascade pipelines via
+       `_concurrent.run_parallel_collect_results` capped at
+       `max_parallel_candidates` workers. Each pipeline returns either
+       a `_PipelineSuccess` (architecture + cascade result) or a
+       `_PipelineFailure` carrying the failure stage label and exception.
+    5. Sequentially process results: db.insert each success, write the
+       Stage 4 routine / partial-failure / cascade-failure /
+       proposer-failure audit events, run milestone curate per success.
+       Sequential because SQLite serializes writes anyway and the audit
+       log writes need stable ordering for diagnostics.
+    6. Once per generation (NOT per candidate): apply the islands
+       manager's reset cadence. The reset sees the full batch of new
+       inserts and chooses sources accordingly. When fired, the
        FunSearch per-weak-island independent draw reseeds the bottom-
        half islands.
     (Sprint 12 removed the scheduled-research / stall-triggered
@@ -27,7 +39,12 @@ One Orchestrator drives a run. Lifecycle:
     candidates only.)
 
 Termination: max_generations reached, OR curator returns PAUSE_FOR_HUMAN
-on a structural finding, OR `max_consecutive_failures` LLM output failures.
+on a structural finding, OR `max_consecutive_failures` consecutive
+all-fail generations. Sprint parallel-candidates redefined the failure
+unit from "consecutive iterations" to "consecutive generations in
+which no candidate succeeded" — at candidates_per_generation=1 the two
+are identical, at N>1 the new shape is more permissive (a batch with
+even one success resets the counter).
 
 Sprint 3 redesign: bootstrap is back — the trivial Solo Service Provider
 seed (`exemplar_library.TRIVIAL_SEED`) is inserted into every island at
@@ -41,11 +58,13 @@ audit event is scoped to that run.
 
 from __future__ import annotations
 
+import functools
 import random
 import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from alphamo._concurrent import run_parallel_collect_results
 from alphamo.context.hyperparams import Hyperparameters
 from alphamo.context.parent_goal import PARENT_GOAL_VERSION
 from alphamo.context.verifier import VERIFIER_VERSION
@@ -71,7 +90,7 @@ MILESTONE_CANDIDATE_TRIGGER = "milestone_candidate"
 from alphamo.proposer import Proposer
 from alphamo.providers.base import BaseProvider, ensure_provider
 from alphamo.providers.factory import build_provider
-from alphamo.sampler import Sampler
+from alphamo.sampler import Sampler, Seed
 from alphamo.schemas import Architecture, Scores
 
 
@@ -194,6 +213,41 @@ class IterationEvent:
     `candidate_id`: candidate_id is None → eval-side failure (counts toward
     consecutive_failures); candidate_id set → meta-side failure (the
     candidate is in the DB and forward progress was made)."""
+
+
+@dataclass(frozen=True)
+class _PipelineSuccess:
+    """Sprint parallel-candidates: result of one successful proposer +
+    cascade pass. Carries everything the post-fan-out sequential pass
+    needs to perform db.insert + audit logging + milestone curate.
+    Thread-immutable (frozen) so it can move across thread boundaries
+    without locking."""
+
+    island_id: int
+    architecture: Architecture
+    cascade_result: Any  # CascadeResult; typed as Any to avoid the import cycle
+    parent_ids: list[int] | None
+
+
+@dataclass(frozen=True)
+class _PipelineFailure:
+    """Sprint parallel-candidates: result of one failed proposer +
+    cascade pass. Carries the failure stage and exception so the
+    sequential post-pass writes the correct audit event.
+
+    `stage`:
+      - "proposer"               — proposer.propose raised LLMOutputError
+      - "stage3_catastrophic"    — Stage 3 framings dropped below the floor
+      - "cascade"                — any other cascade-side LLMOutputError
+    `architecture` is None for proposer-stage failures (no architecture
+    produced); set for cascade-stage failures (the candidate the cascade
+    refused to score).
+    """
+
+    island_id: int
+    architecture: Architecture | None
+    stage: str
+    exc: LLMOutputError
 
 
 @dataclass
@@ -861,74 +915,138 @@ class Orchestrator:
         )
         return MILESTONE_CANDIDATE_TRIGGER, decision
 
-    def step(self, generation: int) -> IterationEvent:
-        """Run one inner-loop generation. Returns an audit record.
+    def _snapshot_islands(
+        self, island_ids: list[int]
+    ) -> dict[int, list]:
+        """Sprint parallel-candidates: build a per-island view of alive
+        rows so all parallel pipelines see a consistent snapshot.
 
-        LLM parse failures on the eval-side path (proposer or cascade) return
-        an event with `candidate_id=None` and `failure_reason` set; nothing
-        is inserted. Meta-side failures (red-team / research / curator) are
-        recorded in `failure_reason` but do not roll back the inserted
-        candidate — forward progress was made.
+        Reads at most `sampler.pool_size` rows per island (matching
+        `sampler.draw()`'s live-query behaviour) so the snapshot path
+        and the live-query path see the same candidate pool. Built
+        once per generation, before fan-out.
         """
-        island_id = self.islands.pick_island()
-        # Sprint 8: one TelemetryContext per step, threaded through
-        # proposer + cascade + curator + research so every LLM call in
-        # this iteration emits an `llm_usage` audit event attributed
-        # back to this generation/island.
-        telemetry = TelemetryContext(
-            audit_log=self.audit_log,
-            run_id=self.run_id,
-            generation=generation,
-            island_id=island_id,
-        )
-        seeds = self.sampler.draw(island_id=island_id, k=self.hp.k_seeds)
-        # Empty seeds is OK: the proposer bootstraps from the reference
-        # exemplars alone. This is the expected path on the first iteration
-        # for each island (Sprint 2 redesign: islands start empty).
+        return {
+            iid: self.db.top_k_in_island(
+                island_id=iid, k=self.sampler.pool_size, run_id=self.run_id
+            )
+            for iid in island_ids
+        }
 
+    def _run_candidate_pipeline(
+        self,
+        island_id: int,
+        seeds: list[Seed],
+        telemetry: TelemetryContext,
+    ) -> _PipelineSuccess | _PipelineFailure:
+        """Sprint parallel-candidates: thread-safe proposer + cascade pass.
+
+        Runs INSIDE the parallel fan-out. Does NOT touch the database;
+        the caller does sequential inserts after the join. Audit-log
+        writes are restricted to the deep `llm_usage` events emitted by
+        provider.parse — those go through `AuditLog.append` which is
+        thread-safe (sprint parallel-candidates added a lock).
+
+        Returns:
+          - _PipelineSuccess on a clean run: caller inserts the row and
+            writes the stage4_routine / stage3_partial / milestone-
+            curator audit events sequentially.
+          - _PipelineFailure on proposer / cascade LLMOutputError: caller
+            writes the corresponding failure audit event sequentially
+            (so the audit log retains stable per-generation ordering).
+
+        The two-bucket return shape lets `step()` partition results
+        cleanly without re-raising across thread boundaries — the
+        `run_parallel_collect_results` helper's `Exception` channel is
+        reserved for genuinely unexpected (non-LLMOutputError) errors,
+        which are bubbled up unchanged so the orchestrator can crash
+        loudly instead of silently swallowing bugs.
+        """
         try:
             architecture = self.proposer.propose(seeds, telemetry=telemetry)
         except LLMOutputError as exc:
-            # Sprint 7: previously-silent proposer failure path now
-            # writes an audit event so the failure is diagnosable from
-            # audit.jsonl alone, regardless of whether stdout was
-            # captured.
-            self._log_proposer_failure(generation, island_id, exc)
-            return IterationEvent(
-                generation=generation,
+            return _PipelineFailure(
                 island_id=island_id,
-                failure_reason=str(exc),
+                architecture=None,
+                stage="proposer",
+                exc=exc,
             )
 
         try:
-            result = self.cascade.evaluate(architecture, telemetry=telemetry)
+            cascade_result = self.cascade.evaluate(
+                architecture, telemetry=telemetry
+            )
         except LLMOutputError as exc:
-            # Sprint 4: distinguish catastrophic Stage 3 failure (most
-            # framings failed; signal degraded) from generic LLM-output
-            # failures. The former gets its own audit-event trigger so
-            # post-run analysis can identify Anthropic-side outages.
-            #
-            # Sprint 7: all OTHER cascade LLMOutputErrors (Stage 1 / Stage
-            # 2 / non-catastrophic Stage 3) now also write a structured
-            # audit event under the cascade_failure trigger. The
-            # previously-silent paths are diagnosable post-run.
             if (
                 isinstance(exc, Stage4OutputError)
                 and exc.stop_reason == "stage3_catastrophic_framing_failure"
             ):
-                self._log_stage3_catastrophic_failure(
-                    generation, island_id, architecture, exc
-                )
+                stage = "stage3_catastrophic"
             else:
-                self._log_cascade_failure(
-                    generation, island_id, architecture, exc
-                )
+                stage = "cascade"
+            return _PipelineFailure(
+                island_id=island_id,
+                architecture=architecture,
+                stage=stage,
+                exc=exc,
+            )
+
+        parent_ids = [s.id for s in seeds if s.id is not None] or None
+        return _PipelineSuccess(
+            island_id=island_id,
+            architecture=architecture,
+            cascade_result=cascade_result,
+            parent_ids=parent_ids,
+        )
+
+    def _process_pipeline_failure(
+        self,
+        generation: int,
+        failure: _PipelineFailure,
+    ) -> IterationEvent:
+        """Sequential post-fan-out: write the failure audit event and
+        return the IterationEvent shape the caller expects. Mirrors the
+        pre-sprint inline failure-handling paths in `step()` so the
+        emitted audit triggers stay byte-stable."""
+        if failure.stage == "proposer":
+            self._log_proposer_failure(generation, failure.island_id, failure.exc)
             return IterationEvent(
                 generation=generation,
-                island_id=island_id,
-                architecture_name=architecture.name,
-                failure_reason=str(exc),
+                island_id=failure.island_id,
+                failure_reason=str(failure.exc),
             )
+        if failure.stage == "stage3_catastrophic":
+            # architecture is non-None here by construction
+            self._log_stage3_catastrophic_failure(
+                generation, failure.island_id, failure.architecture, failure.exc
+            )
+        else:  # "cascade"
+            self._log_cascade_failure(
+                generation, failure.island_id, failure.architecture, failure.exc
+            )
+        return IterationEvent(
+            generation=generation,
+            island_id=failure.island_id,
+            architecture_name=(
+                failure.architecture.name
+                if failure.architecture is not None
+                else None
+            ),
+            failure_reason=str(failure.exc),
+        )
+
+    def _process_pipeline_success(
+        self,
+        generation: int,
+        success: _PipelineSuccess,
+        telemetry: TelemetryContext,
+    ) -> IterationEvent:
+        """Sequential post-fan-out: insert the candidate, write the
+        stage4_routine / stage3_partial / milestone-curator audit
+        events, and return the IterationEvent."""
+        result = success.cascade_result
+        architecture = success.architecture
+        island_id = success.island_id
 
         # Sprint 1 (Bug 2): Stage 4 concerns persist on the candidate row so
         # they're queryable per candidate via SQL, not just buried in the
@@ -940,50 +1058,31 @@ class Orchestrator:
             else None
         )
         # Sprint 15 (Q2): per-framing clean-pass assessments persisted
-        # to the new stage4_assessments column. None when Stage 3 didn't
-        # run OR when every framing produced concerns / no clean framing
-        # populated its assessment field.
+        # to the new stage4_assessments column.
         stage4_assessments_payload = (
             (result.stage3.framing_assessments or None)
             if result.stage3 is not None
             else None
         )
-        # Sprint Stage 2 PAJAMA: persist the full Stage 2 evidence dict
-        # so the deterministic `scores.structural` scalar has a queryable
-        # audit trail. None when Stage 2 didn't run (middle-class filter
-        # exit or stage1_threshold exit). `model_dump(mode="json")`
-        # serialises the AutomationPlausibility / TAMEstimate enums to
-        # their string values for storage in the JSON column.
+        # Sprint Stage 2 PAJAMA: persist the full Stage 2 evidence dict.
         stage2_evidence_payload = (
             result.stage2.model_dump(mode="json")
             if result.stage2 is not None
             else None
         )
-        # Sprint Stage 1 PAJAMA: persist the full Stage 1 evidence dict
-        # so the deterministic `scores.feasibility` scalar (and the
-        # downstream soft-zone-adjusted value flowing into Scores) has
-        # a queryable audit trail. Stage 1 is the cascade entry point —
-        # every inserted candidate post-PAJAMA carries non-None
-        # stage1_evidence. The enum string serialisations (RevenueType,
-        # BuyerAccessibility, CapitalRequired, RegulatorySeverity) come
-        # through unchanged via model_dump(mode="json").
+        # Sprint Stage 1 PAJAMA: persist the full Stage 1 evidence dict.
         stage1_evidence_payload = (
             result.stage1.model_dump(mode="json")
             if result.stage1 is not None
             else None
         )
-        # Sprint 15 (Q3): propagate seed candidate ids as parent_ids so
-        # lineage is queryable. Seeds whose `.id` is None (legacy / ad-
-        # hoc constructions) are filtered out; an all-None list collapses
-        # to None so the column stays NULL rather than carrying [].
-        parent_ids_payload = [s.id for s in seeds if s.id is not None] or None
         candidate_id = self.db.insert(
             architecture,
             result.scores,
             run_id=self.run_id,
             island_id=island_id,
             generation=generation,
-            parent_ids=parent_ids_payload,
+            parent_ids=success.parent_ids,
             stage4_findings=stage4_findings_payload,
             stage4_assessments=stage4_assessments_payload,
             stage2_evidence=stage2_evidence_payload,
@@ -991,16 +1090,8 @@ class Orchestrator:
         )
         row = self.db.get(candidate_id)
 
-        # Every Stage 4 firing is recorded in the audit log, milestone or not.
-        # This is the routine selection-pressure path: robustness is already
-        # in the candidate's scores, but the per-framing diagnostic trail is
-        # the only place the concerns themselves get persisted.
         if result.stage3 is not None:
             self._log_stage4_routine(candidate_id, result.stage3)
-            # Sprint 4: also emit a dedicated audit event when Stage 3 ran
-            # with partial coverage (one or more framings failed after SDK
-            # retries exhausted). The sentinel concern in stage3.concerns
-            # carries the failed-framings list.
             failed_framings = [
                 c for c in result.stage3.concerns
                 if c.framing == FAILED_FRAMINGS_SENTINEL
@@ -1027,16 +1118,8 @@ class Orchestrator:
             )
             if milestone_outcome is not None:
                 meta_trigger, meta_decision = milestone_outcome
-            # Sprint 12: the second meta-path (scheduled/stall-triggered
-            # research → curator) is removed. Layer B's per-run-start
-            # refresh now provides current-developments grounding;
-            # curator firing is gated on milestone candidates only.
         except LLMOutputError as exc:
             meta_failure = str(exc)
-
-        reset_event = self.islands.maybe_reset(generation)
-        if reset_event is not None:
-            self._log_island_reset(generation, reset_event)
 
         return IterationEvent(
             generation=generation,
@@ -1045,32 +1128,149 @@ class Orchestrator:
             fitness=row.fitness,
             architecture_name=architecture.name,
             early_exit=result.early_exit,
-            reset_event=reset_event,
             meta_trigger=meta_trigger,
             meta_decision=meta_decision,
             failure_reason=meta_failure,
         )
 
+    def step(self, generation: int) -> list[IterationEvent]:
+        """Run one generation. Returns one IterationEvent per candidate
+        in the batch (1 to candidates_per_generation events).
+
+        Sprint parallel-candidates: the per-generation pipeline:
+          1. `islands.pick_islands(candidates_per_generation)` — N
+             distinct island ids.
+          2. `_snapshot_islands(island_ids)` — one DB read per island.
+             All parallel samplers draw from this snapshot so no
+             intra-batch sibling can pollute another's view.
+          3. Sample seeds per island sequentially (cheap; no LLM).
+          4. Run N proposer+cascade pipelines in parallel via
+             `run_parallel_collect_results` capped at
+             `max_parallel_candidates` workers.
+          5. Sequential post-pass: db.insert for each success, write
+             the per-result audit events, run milestone curator gate.
+          6. `islands.maybe_reset(generation)` once for the whole batch.
+
+        Backward compat invariant: at `candidates_per_generation=1`
+        the returned list has length 1 and the single event matches
+        the pre-sprint single-event semantics, including reset_event
+        being attached to the sole event.
+        """
+        n = min(self.hp.candidates_per_generation, self.hp.num_islands)
+        island_ids = self.islands.pick_islands(n)
+
+        # Sprint parallel-candidates: snapshot built ONCE before fan-out.
+        # Empty per-island lists are fine — proposer.propose tolerates
+        # empty seeds (the bootstrap path always has TRIVIAL_SEED so in
+        # practice every post-bootstrap island has at least one row).
+        snapshot = self._snapshot_islands(island_ids)
+
+        # Per-island telemetry contexts; each pipeline gets its own so
+        # the `llm_usage` audit events attribute correctly to (gen,
+        # island). TelemetryContext is frozen so it's safe to pass into
+        # worker threads.
+        telemetry_per_island: dict[int, TelemetryContext] = {
+            iid: TelemetryContext(
+                audit_log=self.audit_log,
+                run_id=self.run_id,
+                generation=generation,
+                island_id=iid,
+            )
+            for iid in island_ids
+        }
+
+        # Sample seeds sequentially from the snapshot — this is cheap
+        # (no LLM, no DB), and keeping it serial avoids any RNG
+        # threading concerns in the sampler.
+        seeds_per_island: dict[int, list[Seed]] = {
+            iid: self.sampler.draw_from_snapshot(
+                island_id=iid, snapshot=snapshot, k=self.hp.k_seeds
+            )
+            for iid in island_ids
+        }
+
+        # Build pipeline tasks. `functools.partial` so the executor
+        # gets zero-arg callables matching run_parallel's contract.
+        tasks = [
+            functools.partial(
+                self._run_candidate_pipeline,
+                iid,
+                seeds_per_island[iid],
+                telemetry_per_island[iid],
+            )
+            for iid in island_ids
+        ]
+
+        # Fan-out. Failures are returned as _PipelineFailure (caught
+        # inside _run_candidate_pipeline); unexpected exceptions are
+        # surfaced via run_parallel_collect_results's exception channel
+        # and re-raised below — we don't want bugs hidden behind a
+        # silent batch-success.
+        raw_results = run_parallel_collect_results(
+            tasks, max_workers=self.hp.max_parallel_candidates
+        )
+
+        # Sequential post-pass. The order of `island_ids` is stable
+        # because pick_islands returns a concrete shuffled list; the
+        # results list from run_parallel_collect_results preserves
+        # submission order, so zip pairs each result with its island.
+        events: list[IterationEvent] = []
+        for iid, raw in zip(island_ids, raw_results):
+            if isinstance(raw, Exception):
+                # Unexpected non-LLMOutputError exception from inside a
+                # worker. Re-raise so the bug surfaces rather than
+                # silently dropping the candidate.
+                raise raw
+            if isinstance(raw, _PipelineFailure):
+                events.append(self._process_pipeline_failure(generation, raw))
+            else:  # _PipelineSuccess
+                events.append(
+                    self._process_pipeline_success(
+                        generation, raw, telemetry_per_island[iid]
+                    )
+                )
+
+        # One reset check per generation, not per candidate. The reset
+        # sees the full batch of new inserts in the DB and ranks
+        # islands accordingly. Attached to the last event in the batch
+        # so test code can still find `event.reset_event` without
+        # changing the IterationEvent shape.
+        reset_event = self.islands.maybe_reset(generation)
+        if reset_event is not None:
+            self._log_island_reset(generation, reset_event)
+            if events:
+                # IterationEvent is a mutable dataclass — direct
+                # assignment is fine and avoids a `dataclasses.replace`
+                # allocation here.
+                events[-1].reset_event = reset_event
+
+        return events
+
     def run(self, max_generations: int) -> RunResult:
-        """Drive up to `max_generations` iterations.
+        """Drive up to `max_generations` generations.
+
+        Sprint parallel-candidates: each generation produces up to
+        `candidates_per_generation` candidates via the batched
+        `step()`. The result.events list aggregates every IterationEvent
+        from every generation (one per candidate produced), so a 5-
+        generation run at N=8 produces up to 40 events.
 
         Bootstrap step: before the main loop, every island gets a copy
         of the trivial seed at gen 0 via `_bootstrap_islands()`. No-op
         on resume (existing alive candidates ⇒ skip).
 
         Sprint 4: the loop's start generation is derived from the DB
-        after bootstrap — `db.latest_generation_in_run + 1`. On a fresh
-        run this is 1 (bootstrap inserts at gen 0). On a resumed run
-        that previously completed N generations, this is N+1 — fixing
-        the pre-Sprint-4 bug where resumed runs restarted the loop
-        from gen 1 and double-counted generations from the perspective
-        of reset cadence and milestone gates.
+        after bootstrap — `db.latest_generation_in_run + 1`.
 
         Stops early on (a) a structural curator pause or (b) when
-        consecutive eval-side failures reach `hp.max_consecutive_failures`.
-        If start_generation > max_generations (the run already completed
-        more iterations than the user requested), exits cleanly with
-        stopped_reason="max_generations" without running any steps.
+        `max_consecutive_failures` consecutive ALL-FAIL generations
+        have occurred — a batch in which no candidate succeeded.
+        Sprint parallel-candidates redefined the failure unit from
+        "consecutive iterations" to "consecutive all-fail generations":
+        at N=1 the two are identical; at N>1 partial failures within a
+        batch do not increment the counter, which is appropriate since
+        a single LLM-output failure on one of 8 candidates is normal
+        and does not indicate a broken pipeline.
 
         Stamps the run's `stopped_reason` and `completed_at` on the Run
         row before returning.
@@ -1078,19 +1278,27 @@ class Orchestrator:
         self._bootstrap_islands()
         start_generation = self.db.latest_generation_in_run(self.run_id) + 1
         # Bootstrap inserts at generation 0, so post-bootstrap fresh runs
-        # have start_generation = 1. Defensive max() guards against the
-        # case where the run somehow has no candidates at all (would
-        # otherwise produce start_generation = 0).
+        # have start_generation = 1.
         start_generation = max(1, start_generation)
         result = RunResult()
         consecutive_failures = 0
         for generation in range(start_generation, max_generations + 1):
-            event = self.step(generation)
-            result.events.append(event)
+            events = self.step(generation)
+            result.events.extend(events)
 
-            if event.candidate_id is not None:
+            # Sprint parallel-candidates: per-generation failure counter.
+            # A generation succeeds (resets the counter) iff at least
+            # one of its events carries a candidate_id (a candidate
+            # made it into the DB). A generation fails iff every event
+            # is a parse/cascade failure with no candidate_id. Empty
+            # event lists (no work) are treated as no-progress and
+            # increment the counter — this should never happen in
+            # practice because pick_islands always returns at least
+            # one island.
+            any_succeeded = any(e.candidate_id is not None for e in events)
+            if any_succeeded:
                 consecutive_failures = 0
-            elif event.failure_reason is not None:
+            else:
                 consecutive_failures += 1
                 if consecutive_failures >= self.hp.max_consecutive_failures:
                     result.stopped_reason = "consecutive_failures"
@@ -1098,10 +1306,18 @@ class Orchestrator:
                     self.db.complete_run(self.run_id, result.stopped_reason)
                     return result
 
-            if (
-                event.meta_decision is not None
-                and event.meta_decision.action == CuratorAction.PAUSE_FOR_HUMAN
-            ):
+            # PAUSE_FOR_HUMAN fires the moment any candidate in this
+            # generation gets one. Scan the batch's events; first hit wins.
+            paused_event = next(
+                (
+                    e
+                    for e in events
+                    if e.meta_decision is not None
+                    and e.meta_decision.action == CuratorAction.PAUSE_FOR_HUMAN
+                ),
+                None,
+            )
+            if paused_event is not None:
                 result.paused = True
                 result.stopped_reason = "curator_pause"
                 result.consecutive_failures_at_stop = consecutive_failures

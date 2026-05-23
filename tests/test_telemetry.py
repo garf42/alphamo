@@ -301,11 +301,17 @@ def test_llm_usage_event_carries_generation_and_island_id_from_step(
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        # Sprint parallel-candidates: pin to 1 so the batched step()
+        # call below runs a single pipeline for one island (matching
+        # the pre-sprint single-event semantics this test asserts).
+        candidates_per_generation=1,
     )
     orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
     orch._bootstrap_islands()
-    # Force a deterministic island choice for the test.
-    orch.islands.pick_island = lambda: 1  # type: ignore[assignment]
+    # Force a deterministic island choice for the test. The batched
+    # step() calls `islands.pick_islands(n)`; with n=1 it returns a
+    # single-element list, so the monkeypatch returns [1].
+    orch.islands.pick_islands = lambda n: [1]  # type: ignore[assignment]
     orch.step(generation=5)
 
     proposer_events = [
@@ -493,6 +499,7 @@ def test_existing_stage4_routine_audit_still_fires_with_telemetry_enabled(
         reset_every_generations=1000,
         research_every_generations=1000,
         milestone_min_generation=10_000,
+        candidates_per_generation=1,
     )
     orch = Orchestrator.for_new_run(db, client, audit, hp=hp)
     orch._bootstrap_islands()
