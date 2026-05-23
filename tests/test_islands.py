@@ -273,3 +273,128 @@ def test_constructor_rejects_too_few_islands(db, default_run):
 def test_constructor_rejects_missing_run_id(db):
     with pytest.raises(ValueError):
         IslandsManager(db, run_id="", num_islands=4)
+
+
+# ----------------------------------------------------------------- Sprint reset-diversity
+
+
+def test_maybe_reset_source_islands_no_duplicates_when_weak_equals_strong(
+    db, default_run
+):
+    """Sprint reset-diversity: with 4 strong and 4 weak (the default
+    8-island shape), every source island must appear AT MOST ONCE
+    across all four weak-island seed assignments. Pre-sprint the
+    `rng.choice(strong)` draws were independent uniform with
+    replacement; run_9f8bba65's gen-120 reset assigned island 0 to all
+    four weak islands, seeding id=77 four times. Without-replacement
+    sampling makes that impossible at this shape.
+    """
+    mgr = IslandsManager(
+        db,
+        run_id=default_run,
+        num_islands=8,
+        reset_every_generations=10,
+        rng=random.Random(0),
+    )
+    # 4 strong islands (0..3): each with a high-fitness candidate.
+    for island_id in range(4):
+        db.insert(
+            _gen_arch(f"strong-{island_id}"), _high_scores(),
+            run_id=default_run, island_id=island_id,
+        )
+    # 4 weak islands (4..7): one low-fitness candidate each.
+    for island_id in range(4, 8):
+        db.insert(
+            _gen_arch(f"weak-{island_id}"), _low_scores(),
+            run_id=default_run, island_id=island_id,
+        )
+
+    event = mgr.maybe_reset(current_generation=10)
+    assert event is not None
+    assert len(event.source_islands) == 4
+    # Every source distinct.
+    assert len(set(event.source_islands)) == 4, (
+        f"source_islands {event.source_islands} contains duplicates; "
+        "the without-replacement constraint must guarantee distinct "
+        "sources when n_weak ≤ n_strong"
+    )
+    # And every source is in the strong set.
+    assert set(event.source_islands).issubset(set(event.strong_islands))
+
+
+def test_maybe_reset_source_islands_round_robin_when_weak_exceeds_strong(
+    db, default_run
+):
+    """Sprint reset-diversity: with odd `num_islands` the split is
+    uneven (e.g. num_islands=5 → strong=ranked[:2], weak=ranked[2:]
+    giving 3 weak vs 2 strong). When weak > strong, sampling without
+    replacement runs out of strong islands; the implementation falls
+    back to round-robin walking shuffled_strong, so no single source
+    island is assigned more than ceil(n_weak / n_strong) times.
+    """
+    mgr = IslandsManager(
+        db,
+        run_id=default_run,
+        num_islands=5,
+        reset_every_generations=10,
+        rng=random.Random(0),
+    )
+    # 2 strong islands.
+    for island_id in range(2):
+        db.insert(
+            _gen_arch(f"strong-{island_id}"), _high_scores(),
+            run_id=default_run, island_id=island_id,
+        )
+    # 3 weak islands.
+    for island_id in range(2, 5):
+        db.insert(
+            _gen_arch(f"weak-{island_id}"), _low_scores(),
+            run_id=default_run, island_id=island_id,
+        )
+
+    event = mgr.maybe_reset(current_generation=10)
+    assert event is not None
+    assert len(event.source_islands) == 3
+    # No source used more than ceil(3 / 2) = 2 times.
+    from collections import Counter
+    counts = Counter(event.source_islands)
+    max_uses = max(counts.values())
+    expected_ceiling = (3 + 2 - 1) // 2  # ceil(3 / 2)
+    assert max_uses <= expected_ceiling, (
+        f"source_islands counts={dict(counts)} — max use {max_uses} "
+        f"exceeds round-robin ceiling {expected_ceiling}"
+    )
+    # And every source is in the strong set.
+    assert set(event.source_islands).issubset(set(event.strong_islands))
+
+
+def test_maybe_reset_source_diversity_across_many_cycles(db, default_run):
+    """Sprint reset-diversity statistical check: across 200 reset cycles
+    with 4 strong + 4 weak, EVERY cycle's source_islands must be a
+    permutation of the strong set. The without-replacement constraint
+    is a per-cycle structural property, not a long-run frequency
+    property — pre-sprint the statistical test
+    `test_maybe_reset_chooses_uniformly_from_surviving_islands`
+    couldn't distinguish duplicate-source cycles from clean ones
+    because it aggregated across cycles."""
+    mgr_rng = random.Random(7)
+    for trial in range(200):
+        trial_run = db.create_run(
+            hyperparameters={}, parent_goal_version="t", verifier_version="t"
+        )
+        mgr = IslandsManager(
+            db, run_id=trial_run, num_islands=8,
+            reset_every_generations=10, rng=mgr_rng,
+        )
+        for island_id in range(4):
+            db.insert(_gen_arch(f"s{island_id}"), _high_scores(),
+                      run_id=trial_run, island_id=island_id)
+        for island_id in range(4, 8):
+            db.insert(_gen_arch(f"w{island_id}"), _low_scores(),
+                      run_id=trial_run, island_id=island_id)
+        event = mgr.maybe_reset(current_generation=10)
+        assert event is not None
+        assert len(set(event.source_islands)) == 4, (
+            f"trial {trial}: source_islands {event.source_islands} "
+            "contains duplicates"
+        )

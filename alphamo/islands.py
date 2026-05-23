@@ -118,23 +118,50 @@ class IslandsManager:
         strong = ranked[:half]
         weak = ranked[half:]
 
-        # Per-weak-island independent uniform draw over surviving islands.
-        # FunSearch (Nature 2023, §A.1): "Each of these islands is then
-        # seeded with a single program, obtained by first choosing one of
-        # the surviving m/2 islands uniformly at random and then retrieving
-        # the best program from it."
+        # Sprint reset-diversity: per-weak-island source draws are now
+        # WITHOUT replacement across the strong set, rather than the
+        # pre-sprint `rng.choice(strong)` independent uniform draws
+        # (which sampled WITH replacement). Run_9f8bba65's gen-120
+        # reset assigned island 0 as the source for all four weak
+        # islands, seeding id=77 four times — a duplicate-source
+        # pathology the old shape allows because each weak island's
+        # source draw was independent.
+        #
+        # New shape: shuffle the strong set once per reset cycle, then
+        # walk weak[i] → strong_shuffled[i % len(strong)]. With the
+        # default 8-island split (4 strong, 4 weak) every strong
+        # island is used exactly once. The round-robin fallback (`i %
+        # len(strong)`) covers the odd-num_islands case where weak >
+        # strong (e.g., num_islands=5 → 2 strong, 3 weak); each
+        # strong is used at most ceil(n_weak / n_strong) times.
+        #
+        # The shuffle preserves FunSearch's per-weak-island
+        # uniformly-random-source intent on the first pass; the
+        # without-replacement constraint adds a diversity guarantee
+        # the pre-sprint code lacked. The FunSearch citation
+        # underwrote the WITH-replacement design — that was an
+        # implementation choice rather than a spec requirement, and
+        # the duplicate-source pathology shows it's the wrong choice
+        # at small island counts.
+        shuffled_strong = list(strong)
+        self.rng.shuffle(shuffled_strong)
+
         source_islands: list[int] = []
         seed_program_ids: list[int] = []
         actual_weak: list[int] = []
-        for weak_island in weak:
-            source_island = self.rng.choice(strong)
+        for i, weak_island in enumerate(weak):
+            source_island = shuffled_strong[i % len(shuffled_strong)]
             top = self.db.top_k_in_island(
                 island_id=source_island, k=1, run_id=self.run_id
             )
             if not top:
                 # Source island has no alive candidates — skip this weak
                 # island this cycle. Loop continues so other weak islands
-                # may still reseed from other surviving sources.
+                # may still reseed from other surviving sources. (Note:
+                # the without-replacement constraint applies to
+                # selection; a degenerate source still consumes its
+                # slot in the round-robin walk, matching the pre-sprint
+                # behaviour of one-source-attempt-per-weak-island.)
                 continue
             best = top[0]
             self.db.reset_island(weak_island, [best.id], run_id=self.run_id)
