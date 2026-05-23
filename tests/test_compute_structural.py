@@ -23,11 +23,11 @@ from __future__ import annotations
 import pytest
 
 from alphamo.evaluator.stage2_structured import (
-    _NONLINEAR_SCALING_BOOST,
-    _NO_CAPTURE_MECHANISM_FACTOR,
-    _NO_MARKET_NAMED_FACTOR,
-    _NO_SEPARATION_FACTOR,
-    _ONE_PERSON_FAIL_FACTOR,
+    _NONLINEAR_SCALING_BONUS,
+    _NO_CAPTURE_MECHANISM_PENALTY,
+    _NO_MARKET_NAMED_PENALTY,
+    _NO_SEPARATION_PENALTY,
+    _ONE_PERSON_FAIL_PENALTY,
     _PER_LABOR_POINT_PENALTY,
     _SEPARATION_NO_EVIDENCE,
     compute_structural,
@@ -133,15 +133,17 @@ def test_per_labor_point_penalty_lowers_ops_score():
     assert with_one == pytest.approx((0.92 + 1.0 + 1.0) / 3.0, abs=1e-3)
 
 
-def test_one_person_operable_false_applies_heavy_penalty():
-    """one_person_operable=False multiplies the ops component by 0.3."""
+def test_one_person_operable_false_applies_additive_penalty():
+    """Sprint PAJAMA-stabilization: one_person_operable=False subtracts
+    _ONE_PERSON_FAIL_PENALTY (0.20) from ops_score (additive, not
+    multiplicative). Pre-stabilization this was `× 0.3` which produced
+    a 70% swing on ops; the additive form caps the swing at 0.20.
+    """
     score = compute_structural(_build(one_person_operable=False))
-    # ops_score: 1.0 * 0.3 = 0.3; market = 1.0, sep = 1.0
-    # structural = (0.3 + 1.0 + 1.0) / 3 = 0.767
-    assert score == pytest.approx((0.3 + 1.0 + 1.0) / 3.0, abs=1e-3)
-    # Confirm the penalty constant is the one applied (defends against
-    # silent constant drift in a future refactor).
-    assert _ONE_PERSON_FAIL_FACTOR == 0.3
+    # ops: max(0, 1.0 - 0.20) = 0.80; market = 1.0; sep = 1.0
+    # structural = (0.80 + 1.0 + 1.0) / 3 = 0.933
+    assert score == pytest.approx((0.80 + 1.0 + 1.0) / 3.0, abs=1e-3)
+    assert _ONE_PERSON_FAIL_PENALTY == 0.20
 
 
 def test_automation_plausibility_categorical_weights_apply():
@@ -181,33 +183,41 @@ def test_tam_estimate_categorical_weights_apply():
         )
 
 
-def test_target_market_not_named_applies_penalty():
-    """target_market_named=False multiplies market by 0.3."""
+def test_target_market_not_named_applies_additive_penalty():
+    """Sprint PAJAMA-stabilization: target_market_named=False subtracts
+    _NO_MARKET_NAMED_PENALTY (0.15) from market_score."""
     score = compute_structural(_build(target_market_named=False))
-    # market: 1.0 * 0.3 * 1.0 = 0.3
-    assert score == pytest.approx((1.0 + 0.3 + 1.0) / 3.0, abs=1e-3)
-    assert _NO_MARKET_NAMED_FACTOR == 0.3
+    # market: max(0, 1.0 - 0.15) = 0.85
+    assert score == pytest.approx((1.0 + 0.85 + 1.0) / 3.0, abs=1e-3)
+    assert _NO_MARKET_NAMED_PENALTY == 0.15
 
 
-def test_capture_mechanism_unidentified_applies_penalty():
-    """capture_mechanism_identified=False multiplies market by 0.4."""
+def test_capture_mechanism_unidentified_applies_additive_penalty():
+    """Sprint PAJAMA-stabilization: capture_mechanism_identified=False
+    subtracts _NO_CAPTURE_MECHANISM_PENALTY (0.15) from market_score."""
     score = compute_structural(_build(capture_mechanism_identified=False))
-    assert score == pytest.approx((1.0 + 0.4 + 1.0) / 3.0, abs=1e-3)
-    assert _NO_CAPTURE_MECHANISM_FACTOR == 0.4
+    assert score == pytest.approx((1.0 + 0.85 + 1.0) / 3.0, abs=1e-3)
+    assert _NO_CAPTURE_MECHANISM_PENALTY == 0.15
 
 
-def test_nonlinear_scaling_boost_capped_at_one():
-    """When market base ≥ 1/1.3 ≈ 0.77, the 1.3× boost is capped at 1.0."""
-    # OVER_100B (base 1.0) → 1.0 × 1.3 = 1.3 → capped at 1.0.
+def test_nonlinear_scaling_bonus_additive_capped_at_one():
+    """Sprint PAJAMA-stabilization: nonlinear_scaling_path=True adds
+    _NONLINEAR_SCALING_BONUS (0.10) to market_score, capped at 1.0
+    (the dimension ceiling). Pre-stabilization this was `× 1.3` —
+    the multiplicative form produced larger swings on mid-range
+    market scores."""
+    # OVER_100B (base 1.0) + 0.10 → capped at 1.0.
     score = compute_structural(_build(nonlinear_scaling_path=True))
     assert score == 1.0
-    # TEN_TO_100B (base 0.7) × 1.3 = 0.91, NOT capped.
+    # TEN_TO_100B (base 0.7) + 0.10 = 0.80; NOT capped.
     score = compute_structural(_build(
         tam_estimate=TAMEstimate.TEN_TO_100B,
         nonlinear_scaling_path=True,
     ))
-    expected_market = min(1.0, 0.7 * _NONLINEAR_SCALING_BOOST)
+    expected_market = min(1.0, 0.7 + _NONLINEAR_SCALING_BONUS)
+    assert expected_market == pytest.approx(0.80, abs=1e-9)
     assert score == pytest.approx((1.0 + expected_market + 1.0) / 3.0, abs=1e-3)
+    assert _NONLINEAR_SCALING_BONUS == 0.10
 
 
 # ----------------------------------------------------------------- separation sub-component
@@ -238,12 +248,14 @@ def test_separation_ratio_over_list_lengths():
     assert score == pytest.approx((1.0 + 1.0 + 0.75) / 3.0, abs=1e-3)
 
 
-def test_separation_not_achieved_applies_half_penalty():
-    """separation_achieved=False multiplies sep by 0.5."""
+def test_separation_not_achieved_applies_additive_penalty():
+    """Sprint PAJAMA-stabilization: separation_achieved=False subtracts
+    _NO_SEPARATION_PENALTY (0.20) from sep_score. Pre-stabilization
+    this was `× 0.5`, a 50% swing on the sep component."""
     score = compute_structural(_build(separation_achieved=False))
-    # sep: 1.0 * 0.5 = 0.5
-    assert score == pytest.approx((1.0 + 1.0 + 0.5) / 3.0, abs=1e-3)
-    assert _NO_SEPARATION_FACTOR == 0.5
+    # sep: max(0, 1.0 - 0.20) = 0.80
+    assert score == pytest.approx((1.0 + 1.0 + 0.80) / 3.0, abs=1e-3)
+    assert _NO_SEPARATION_PENALTY == 0.20
 
 
 # ----------------------------------------------------------------- cross-criterion independence
@@ -275,6 +287,78 @@ def test_one_labor_point_penalty_constant():
     # 13 labor points under ALREADY_AUTOMATED: 1.0 - 1.04 = -0.04 → clamped to 0
     score = compute_structural(_build(labor_dependency_points=["a"] * 13))
     assert score == pytest.approx((0.0 + 1.0 + 1.0) / 3.0, abs=1e-3)
+
+
+# ----------------------------------------------------------------- noise resistance
+
+
+def test_single_field_flip_swings_structural_by_at_most_design_cap():
+    """Sprint PAJAMA-stabilization load-bearing invariant: flipping any
+    single boolean field on a Stage2Finding shifts the final structural
+    score by AT MOST 0.20.
+
+    The constraint is the design cap from the sprint spec; the formula
+    is calibrated to land well under it (the largest single-field
+    contribution is 0.20 on a sub-component, which the 3-way mean
+    divides to 0.067 on the final score). This test guards against a
+    future refactor that re-introduces a multiplicative penalty large
+    enough to violate the cap.
+
+    Coverage: every bottom-line boolean on Stage2Finding plus a one-
+    labor-point increment, exercised from both a maxed-baseline and
+    a partially-saturated baseline (to verify caps don't artificially
+    hide variance when one sub-component is at the ceiling).
+    """
+    DESIGN_CAP = 0.20
+
+    boolean_flips = (
+        "one_person_operable",
+        "target_market_named",
+        "capture_mechanism_identified",
+        "nonlinear_scaling_path",
+        "separation_achieved",
+    )
+
+    for baseline_overrides in (
+        # Max-baseline: every dimension at its ceiling.
+        dict(nonlinear_scaling_path=True),
+        # Partial-baseline: TEN_TO_100B market so the nonlinear bonus
+        # ISN'T capped at the dimension ceiling, exposing the full
+        # additive swing.
+        dict(tam_estimate=TAMEstimate.TEN_TO_100B),
+        # Mid-baseline: REQUIRES_CUSTOM_ENGINEERING ops + one labor
+        # point + mixed separation lists. Realistic for the variance-
+        # test candidates (Proptax, TaxVeritas).
+        dict(
+            automation_plausibility=AutomationPlausibility.REQUIRES_CUSTOM_ENGINEERING,
+            labor_dependency_points=["maintenance"],
+            tam_estimate=TAMEstimate.TEN_TO_100B,
+            autonomous_value_sources=["a", "b"],
+            active_labor_requirements=["c"],
+        ),
+    ):
+        baseline = _build(**baseline_overrides)
+        baseline_score = compute_structural(baseline)
+        for flip in boolean_flips:
+            current_value = getattr(baseline, flip)
+            flipped = baseline.model_copy(update={flip: not current_value})
+            delta = abs(compute_structural(flipped) - baseline_score)
+            assert delta <= DESIGN_CAP, (
+                f"flipping {flip} on baseline={baseline_overrides} "
+                f"produced delta {delta:.4f} > design cap {DESIGN_CAP}"
+            )
+
+        # One additional labor point: should be well under the cap too.
+        labored = baseline.model_copy(
+            update={
+                "labor_dependency_points": baseline.labor_dependency_points + ["extra"],
+            }
+        )
+        delta = abs(compute_structural(labored) - baseline_score)
+        assert delta <= DESIGN_CAP, (
+            f"+1 labor point on baseline={baseline_overrides} "
+            f"produced delta {delta:.4f} > design cap {DESIGN_CAP}"
+        )
 
 
 # ----------------------------------------------------------------- output shape

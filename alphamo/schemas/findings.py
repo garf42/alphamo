@@ -9,7 +9,43 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _coerce_to_enum(value: object, enum_class: type[Enum]) -> object:
+    """Sprint PAJAMA-stabilization defensive coercion for the Stage 1
+    enum fields. Fireworks's grammar-mode response_format SHOULD pin
+    enum outputs to exact values, but real-world responses occasionally
+    surface near-miss casings ("Under 10K", "REQUIRES_HUMAN_JUDGMENT",
+    etc.) — particularly under truncation-adjacent edge cases. Pre-
+    PAJAMA-stabilization a near-miss bubbled up as Stage1OutputError;
+    this coercion accepts the near-miss and maps it to the canonical
+    value before Pydantic's enum validation runs.
+
+    Coercion is intentionally narrow:
+      - exact match: enum_class(value) succeeds → return as-is.
+      - normalize whitespace / case / hyphens-to-underscores → retry.
+      - if still no match: return value unchanged. Pydantic raises the
+        natural ValidationError; the caller can debug from the real
+        offending value.
+
+    The function is a no-op for inputs that are already enum instances
+    (defensive against double-validation paths) and for non-string
+    inputs (Pydantic handles those).
+    """
+    if isinstance(value, enum_class):
+        return value
+    if not isinstance(value, str):
+        return value
+    try:
+        return enum_class(value)
+    except ValueError:
+        pass
+    normalized = value.strip().lower().replace(" ", "_").replace("-", "_")
+    for member in enum_class:
+        if member.value.lower() == normalized:
+            return member
+    return value
 
 
 class RevenueType(str, Enum):
@@ -246,6 +282,37 @@ class Stage1Finding(BaseModel):
             "compute_feasibility ignores this field entirely."
         ),
     )
+
+    # Sprint PAJAMA-stabilization: defensive enum coercion. The four
+    # categorical fields below pre-validate string inputs through
+    # `_coerce_to_enum` which accepts near-miss casings / spacings (e.g.
+    # "Under 10K" → "under_10k", "REQUIRES_HUMAN_JUDGMENT" →
+    # "requires_human_judgment") before Pydantic's enum validation
+    # runs. Exact matches and existing enum instances pass through
+    # unchanged; genuinely invalid values still raise. This guards
+    # against the variance-test class of Stage1OutputError where the
+    # model emitted a near-miss enum string that grammar mode hadn't
+    # constrained.
+    @field_validator("revenue_type", mode="before")
+    @classmethod
+    def _coerce_revenue_type(cls, value: object) -> object:
+        return _coerce_to_enum(value, RevenueType)
+
+    @field_validator("buyer_accessibility", mode="before")
+    @classmethod
+    def _coerce_buyer_accessibility(cls, value: object) -> object:
+        return _coerce_to_enum(value, BuyerAccessibility)
+
+    @field_validator("capital_required", mode="before")
+    @classmethod
+    def _coerce_capital_required(cls, value: object) -> object:
+        return _coerce_to_enum(value, CapitalRequired)
+
+    @field_validator("regulatory_severity", mode="before")
+    @classmethod
+    def _coerce_regulatory_severity(cls, value: object) -> object:
+        return _coerce_to_enum(value, RegulatorySeverity)
+
 
 
 class AutomationPlausibility(str, Enum):

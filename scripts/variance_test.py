@@ -214,35 +214,83 @@ def _print_table(report: dict[str, Any]) -> None:
 
     # Ranking-preservation table — flips signal that the evaluator can't
     # reliably distinguish the candidates being measured.
+    #
+    # Sprint PAJAMA-stabilization: a trial that hit Stage1OutputError /
+    # Stage2OutputError / etc. stores fitness=None for that row. Sorting
+    # mixed None and float values raises TypeError, so:
+    #   - Per-trial rendering shows "— (error)" for None-fitness rows.
+    #   - The ranking-preservation verdict considers ONLY trials where
+    #     every candidate produced a valid fitness — partial-coverage
+    #     trials are not comparable across the candidate set.
     scored = [c for c in report["candidates"] if not c.get("error")]
     if len(scored) >= 2 and report["trials"] >= 2:
         print("\nRanking by per-trial fitness (lower-indexed = higher fitness):\n")
         header = "  trial  " + "  ".join(f"id={c['candidate_id']:>5}" for c in scored)
         print(header)
+
+        # Build per-trial fits with explicit None handling, then render
+        # rank labels only for trials whose fits are fully valid.
+        per_trial_fits: list[list[tuple[int, float | None]]] = []
         for t_idx in range(report["trials"]):
-            fits = []
+            fits: list[tuple[int, float | None]] = []
             for c in scored:
                 if t_idx < len(c["trials"]):
                     fits.append((c["candidate_id"], c["trials"][t_idx]["fitness"]))
                 else:
-                    fits.append((c["candidate_id"], float("-inf")))
-            ranking = sorted(fits, key=lambda kv: kv[1], reverse=True)
+                    # Trial didn't run (shorter trial list — shouldn't
+                    # happen in normal flow but defended for completeness).
+                    fits.append((c["candidate_id"], None))
+            per_trial_fits.append(fits)
+
+        for t_idx, fits in enumerate(per_trial_fits, start=1):
+            valid = [(cid, f) for cid, f in fits if f is not None]
+            if len(valid) < 2:
+                # Can't rank with fewer than 2 valid fitness values; render
+                # the row with all entries marked as errored / unrankable.
+                row = f"  {t_idx:>5}  " + "  ".join(
+                    "— (error)" if f is None else f"  ({f:.3f})"
+                    for _, f in fits
+                )
+                print(row)
+                continue
+            ranking = sorted(valid, key=lambda kv: kv[1], reverse=True)
             rank_of = {cid: r for r, (cid, _) in enumerate(ranking, 1)}
-            row = f"  {t_idx + 1:>5}  " + "  ".join(
-                f"rank={rank_of[c['candidate_id']]}  ({c['trials'][t_idx]['fitness']:.3f})"
-                for c in scored
-            )
+            row_parts: list[str] = []
+            for cid, f in fits:
+                if f is None:
+                    row_parts.append("— (error)")
+                else:
+                    row_parts.append(f"rank={rank_of[cid]}  ({f:.3f})")
+            row = f"  {t_idx:>5}  " + "  ".join(row_parts)
             print(row)
-        # Did ranks vary?
+
+        # Did ranks vary? Compare ONLY across trials where every
+        # candidate produced a valid fitness — partial-coverage trials
+        # can't contribute to a ranking signature.
         ranking_signatures = set()
-        for t_idx in range(report["trials"]):
-            fits = sorted(
-                ((c["candidate_id"], c["trials"][t_idx]["fitness"]) for c in scored),
-                key=lambda kv: kv[1], reverse=True,
-            )
-            ranking_signatures.add(tuple(cid for cid, _ in fits))
+        valid_trial_count = 0
+        for fits in per_trial_fits:
+            if any(f is None for _, f in fits):
+                continue
+            valid_trial_count += 1
+            sorted_fits = sorted(fits, key=lambda kv: kv[1], reverse=True)
+            ranking_signatures.add(tuple(cid for cid, _ in sorted_fits))
         print()
-        if len(ranking_signatures) == 1:
+        if valid_trial_count == 0:
+            print(f"  → Ranking UNVERIFIABLE — every trial had at least "
+                  f"one candidate error. ({report['trials']} total trials.)")
+        elif valid_trial_count < report["trials"]:
+            suffix = (
+                f"{valid_trial_count} valid trial(s) of {report['trials']} "
+                f"— {report['trials'] - valid_trial_count} trial(s) had "
+                f"at least one candidate error and were excluded."
+            )
+            if len(ranking_signatures) == 1:
+                print(f"  → Ranking PRESERVED across {suffix}")
+            else:
+                print(f"  → Ranking VARIED — {len(ranking_signatures)} "
+                      f"distinct orderings across {suffix}")
+        elif len(ranking_signatures) == 1:
             print(f"  → Ranking PRESERVED across all {report['trials']} trials.")
         else:
             print(f"  → Ranking VARIED — {len(ranking_signatures)} distinct orderings "

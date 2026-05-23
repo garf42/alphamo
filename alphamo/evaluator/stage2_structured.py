@@ -72,25 +72,36 @@ _TAM_SCORES: dict[TAMEstimate, float] = {
 # score 1.0, 12.5 labor points zeros the ops component entirely; with
 # auto score 0.4 (REQUIRES_CUSTOM_ENGINEERING), 5 labor points zero it.
 # The intent: incremental penalty proportional to how many discrete
-# human-touch operations the architecture stacks.
+# human-touch operations the architecture stacks. Already additive
+# and well-behaved pre-PAJAMA-stabilization; preserved unchanged.
 _PER_LABOR_POINT_PENALTY = 0.08
 
-# Bottom-line-judgement penalty multipliers. Each is "heavy but not
-# zero" — preserves gradient so the proposer gets "wrong direction"
-# signal instead of a hard zero that erases the dimension.
-_ONE_PERSON_FAIL_FACTOR = 0.3        # one_person_operable=False
-_NO_MARKET_NAMED_FACTOR = 0.3        # target_market_named=False
-_NO_CAPTURE_MECHANISM_FACTOR = 0.4   # capture_mechanism_identified=False
-_NO_SEPARATION_FACTOR = 0.5          # separation_achieved=False
+# Sprint PAJAMA-stabilization: bottom-line-judgement penalties are now
+# ADDITIVE rather than multiplicative. Pre-stabilization the formula
+# used `× 0.3 / × 0.4 / × 0.5` boolean gates, which produced 50-70%
+# structural-score swings when the LLM flipped a single bool between
+# extractions (Proptax stdev 0.213, TaxVeritas 0.095 in the variance
+# test). The new shape mirrors `compute_feasibility`'s additive
+# pattern (max single-field swing ≤ 0.15 on the Stage 1 score, stdev
+# 0.011-0.038). The constraint here: max single-field swing on the
+# final structural score ≤ 0.20, achieved by bounding each penalty
+# at ≤ 0.20 on its respective sub-component (sub-component / 3 = the
+# final-score impact per flip).
+_ONE_PERSON_FAIL_PENALTY = 0.20      # one_person_operable=False
+_NO_MARKET_NAMED_PENALTY = 0.15      # target_market_named=False
+_NO_CAPTURE_MECHANISM_PENALTY = 0.15 # capture_mechanism_identified=False
+_NO_SEPARATION_PENALTY = 0.20        # separation_achieved=False
 
-# Boost applied to the market component when nonlinear_scaling_path=True.
-# Capped at 1.0 in the formula — a candidate that already scores 1.0 on
-# every market input can't go above the dimension's ceiling.
-_NONLINEAR_SCALING_BOOST = 1.3
+# Sprint PAJAMA-stabilization: additive bonus replaces the
+# `× 1.3 capped at 1.0` boost. Bonus is applied to market_score and
+# the dimension is still capped at 1.0 (a candidate at the dimension
+# ceiling can't go above it).
+_NONLINEAR_SCALING_BONUS = 0.10
 
 # Baseline when the model populates BOTH autonomous_value_sources and
 # active_labor_requirements as empty lists — no evidence either way.
 # Centered low-ish so an absence of evidence isn't a free pass.
+# Preserved unchanged.
 _SEPARATION_NO_EVIDENCE = 0.25
 
 
@@ -102,54 +113,68 @@ def compute_structural(finding: Stage2Finding) -> float:
     function maps it to a scalar via fixed constants. No randomness,
     no LLM calls, no state-dependent inputs.
 
+    Sprint PAJAMA-stabilization: rewritten with ADDITIVE penalties to
+    cap single-field-flip variance. Pre-stabilization the formula used
+    multiplicative gates (`× 0.3` for one_person_operable=False, `× 0.5`
+    for separation_achieved=False, etc.) which produced 50-70% structural
+    swings when the LLM flipped a single bool. The variance test
+    (commit 0da8f2c) showed Proptax stdev 0.213 and TaxVeritas 0.095 —
+    the dominant remaining noise source after Stage 1 PAJAMA. Stage 1's
+    additive `compute_feasibility` produced stdev 0.011-0.038 on the
+    same variance test; this rewrite applies the same pattern.
+
     Aggregation: equal-weighted arithmetic mean of three sub-component
     scores (ops, market, separation). Each sub-component is bounded
-    [0, 1] before averaging.
+    [0, 1] before averaging via `max(0, ...)` / `min(1.0, ...)` clamps.
 
     Sub-component formulas:
 
       ops_score
         = max(0, AUTOMATION_SCORES[automation_plausibility]
                - 0.08 * len(labor_dependency_points))
-        × (1.0 if one_person_operable else 0.3)
+        - (0.20 if not one_person_operable else 0.0)
+        # clamped to [0, 1]
 
       market_score
         = TAM_SCORES[tam_estimate]
-        × (1.0 if target_market_named else 0.3)
-        × (1.0 if capture_mechanism_identified else 0.4)
-        × (1.3 if nonlinear_scaling_path else 1.0)
-        # capped at 1.0
+        - (0.15 if not target_market_named else 0.0)
+        - (0.15 if not capture_mechanism_identified else 0.0)
+        + (0.10 if nonlinear_scaling_path else 0.0)
+        # clamped to [0, 1]
 
       sep_score
-        = if no labor lists at all: 0.25
-          else: n_autonomous / (n_autonomous + n_active)
-        × (1.0 if separation_achieved else 0.5)
+        = (if no lists: 0.25; else n_autonomous / (n_autonomous + n_active))
+        - (0.20 if not separation_achieved else 0.0)
+        # clamped to [0, 1]
 
       structural = (ops_score + market_score + sep_score) / 3
         # rounded to 3 decimal places
 
     Each sub-criterion contributes independently — no cross-criterion
-    interaction in v1. The constants above are explicit and auditable;
-    if a future calibration finds them wrong, the bend is one edit
-    here, not a re-ranking of every persisted candidate (their
-    Stage 2 evidence is persisted in `candidates.stage2_evidence`
-    starting this sprint).
+    interaction. Maximum single-field-flip impact on final structural:
+      - one_person_operable flip:   up to 0.20 on ops   → 0.067 on structural
+      - target_market_named flip:   up to 0.15 on mkt   → 0.050 on structural
+      - capture_mechanism flip:     up to 0.15 on mkt   → 0.050 on structural
+      - nonlinear_scaling flip:     up to 0.10 on mkt   → 0.033 on structural
+      - separation_achieved flip:   up to 0.20 on sep   → 0.067 on structural
+      - per_labor_point flip (Δ1):  0.08 on ops         → 0.027 on structural
+    Worst single-field swing: 0.067, well under the design cap of 0.20.
     """
     # one-person-threshold component
     labor_count = len(finding.labor_dependency_points)
     auto_score = _AUTOMATION_SCORES[finding.automation_plausibility]
     ops_score = max(0.0, auto_score - _PER_LABOR_POINT_PENALTY * labor_count)
     if not finding.one_person_operable:
-        ops_score *= _ONE_PERSON_FAIL_FACTOR
+        ops_score = max(0.0, ops_score - _ONE_PERSON_FAIL_PENALTY)
 
     # billion-dollar-potential component
     market_score = _TAM_SCORES[finding.tam_estimate]
     if not finding.target_market_named:
-        market_score *= _NO_MARKET_NAMED_FACTOR
+        market_score = max(0.0, market_score - _NO_MARKET_NAMED_PENALTY)
     if not finding.capture_mechanism_identified:
-        market_score *= _NO_CAPTURE_MECHANISM_FACTOR
+        market_score = max(0.0, market_score - _NO_CAPTURE_MECHANISM_PENALTY)
     if finding.nonlinear_scaling_path:
-        market_score = min(1.0, market_score * _NONLINEAR_SCALING_BOOST)
+        market_score = min(1.0, market_score + _NONLINEAR_SCALING_BONUS)
 
     # labor-separation component
     n_auto = len(finding.autonomous_value_sources)
@@ -159,7 +184,7 @@ def compute_structural(finding: Stage2Finding) -> float:
     else:
         sep_score = n_auto / (n_auto + n_active)
     if not finding.separation_achieved:
-        sep_score *= _NO_SEPARATION_FACTOR
+        sep_score = max(0.0, sep_score - _NO_SEPARATION_PENALTY)
 
     return round((ops_score + market_score + sep_score) / 3.0, 3)
 

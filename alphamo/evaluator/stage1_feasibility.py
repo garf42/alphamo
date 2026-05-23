@@ -49,7 +49,7 @@ from __future__ import annotations
 from typing import Any
 
 from alphamo.errors import Stage1OutputError, TelemetryContext
-from alphamo.evaluator._common import HAIKU_MODEL, MAX_TOKENS_SHORT, cached_system
+from alphamo.evaluator._common import HAIKU_MODEL, MAX_TOKENS_MEDIUM, cached_system
 from alphamo.prompts.evaluator_prompts import STAGE1_SYSTEM, render_candidate
 from alphamo.providers.base import ensure_provider
 from alphamo.schemas import Architecture
@@ -273,7 +273,16 @@ def stage1_feasibility(
         component="stage1",
         telemetry=telemetry,
         model=model,
-        max_tokens=MAX_TOKENS_SHORT,
+        # Sprint PAJAMA-stabilization: bumped MAX_TOKENS_SHORT (2048) →
+        # MAX_TOKENS_MEDIUM (4096) to match Stage 2's similarly-sized
+        # evidence schema. The new Stage 1 schema has 13 required fields
+        # including 3 list-of-string fields (labor_dependency_points
+        # equivalents) plus a reasoning string. Worst-case output is
+        # ~2000 tokens — right at the 2048 cap, causing truncation under
+        # heavy regulatory_blockers / feasibility_risks lists. The
+        # CarbonSentry (id=144) variance test saw 2 of 5 trials hit
+        # Stage1OutputError; truncation was the most likely cause.
+        max_tokens=MAX_TOKENS_MEDIUM,
         system=cached_system(STAGE1_SYSTEM),
         messages=[{"role": "user", "content": render_candidate(architecture)}],
         output_format=Stage1Finding,

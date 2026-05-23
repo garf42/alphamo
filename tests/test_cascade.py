@@ -55,7 +55,7 @@ def _make_s2(passing: bool = True) -> Stage2Finding:
     """Sprint Stage 2 PAJAMA: model no longer returns a structural float —
     structural is derived from evidence via `compute_structural`. Tests
     that previously asked for a specific scalar now request either the
-    passing (structural ≈ 0.773) or failing (structural ≈ 0.049)
+    passing (structural ≈ 0.773) or failing (structural ≈ 0.033)
     evidence shape from `tests/fixtures/stage2_evidence`."""
     return passing_stage2_finding() if passing else failing_stage2_finding()
 
@@ -237,10 +237,11 @@ def test_low_stage2_score_skips_stage3(cascade, monkeypatch):
     assert result.early_exit == "stage2_structured"
     assert s3_calls == []
     # Sprint Stage 2 PAJAMA: structural derived from the failing fixture's
-    # evidence shape (compute_structural ≈ 0.049). The gate at 0.5 fires
-    # because the computed value is below threshold; the persisted score
-    # is the computed value, not a model-emitted scalar.
-    assert result.scores.structural == 0.049
+    # evidence shape (Sprint PAJAMA-stabilization: additive formula
+    # gives compute_structural ≈ 0.033, down from 0.049 pre-stabilization).
+    # The gate at 0.5 fires because the computed value is below threshold;
+    # the persisted score is the computed value, not a model-emitted scalar.
+    assert result.scores.structural == 0.033
     assert result.scores.structural < cascade.stage2_threshold
     assert result.scores.exemplar_similarity is None
     assert result.scores.robustness is None
