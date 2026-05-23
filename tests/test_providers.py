@@ -130,7 +130,7 @@ def test_ensure_provider_wraps_loose_anthropic_client():
 
 def test_fireworks_provider_strips_cache_control_and_concatenates_system_blocks():
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     system_blocks = [
         {"type": "text", "text": "CORPUS BLOCK", "cache_control": {"type": "ephemeral"}},
@@ -157,7 +157,7 @@ def test_fireworks_provider_strips_cache_control_and_concatenates_system_blocks(
 
 def test_fireworks_provider_passes_reasoning_effort_via_extra_body():
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     provider.parse(
         error_cls=Stage1OutputError,
@@ -182,7 +182,7 @@ def test_fireworks_provider_passes_reasoning_effort_max_without_thinking_field()
     combination with HTTP 400 ("cannot specify both 'thinking' and
     'reasoning_effort'"). reasoning_effort alone controls mode."""
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     provider.parse(
         error_cls=Stage1OutputError,
@@ -200,7 +200,7 @@ def test_fireworks_provider_passes_reasoning_effort_max_without_thinking_field()
 
 def test_fireworks_provider_omits_extra_body_when_no_reasoning_effort():
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     provider.parse(
         error_cls=Stage1OutputError,
@@ -216,7 +216,7 @@ def test_fireworks_provider_omits_extra_body_when_no_reasoning_effort():
 
 def test_fireworks_provider_sets_response_format_json_schema():
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     provider.parse(
         error_cls=Stage1OutputError,
@@ -243,7 +243,7 @@ def test_fireworks_provider_silently_drops_top_level_anthropic_thinking_field():
     `reasoning_effort` set — Sprint 14 hotfix). Only reasoning_effort
     survives in extra_body."""
     provider, mock_client = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": 0.7, "middle_class_accessible": true, "reasoning": "ok"}')
+        _fake_openai_response('{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "ok"}')
     )
     provider.parse(
         error_cls=Stage1OutputError,
@@ -267,7 +267,7 @@ def test_fireworks_provider_silently_drops_top_level_anthropic_thinking_field():
 
 
 def test_fireworks_provider_parses_valid_json_response():
-    payload = '{"feasibility": 0.9, "middle_class_accessible": true, "reasoning": "looks fine"}'
+    payload = '{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "looks fine"}'
     provider, _ = _fireworks_with_mock_create(_fake_openai_response(payload))
     result = provider.parse(
         error_cls=Stage1OutputError,
@@ -278,14 +278,16 @@ def test_fireworks_provider_parses_valid_json_response():
         output_format=Stage1Finding,
     )
     assert isinstance(result, Stage1Finding)
-    assert result.feasibility == 0.9
+    # Sprint Stage 1 PAJAMA: the model no longer emits a feasibility
+    # float; representative evidence-field round-trip checks below.
     assert result.middle_class_accessible is True
+    assert result.revenue_mechanism_identified is True
 
 
 def test_fireworks_provider_strips_leading_think_block_on_retry():
     payload = (
         "<think>I should weigh the structural factors before responding…</think>\n"
-        '{"feasibility": 0.5, "middle_class_accessible": false, "reasoning": "x"}'
+        '{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": false, "reasoning": "x"}'
     )
     provider, _ = _fireworks_with_mock_create(_fake_openai_response(payload))
     result = provider.parse(
@@ -320,7 +322,7 @@ def test_fireworks_provider_raises_on_validation_failure():
     """Schema mismatch wraps into the component error_cls — matches the
     Anthropic side's pydantic.ValidationError handling."""
     provider, _ = _fireworks_with_mock_create(
-        _fake_openai_response('{"feasibility": "not_a_number", "middle_class_accessible": true, "reasoning": "x"}')
+        _fake_openai_response('{"revenue_mechanism_identified": "not_a_bool", "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "x"}')
     )
     with pytest.raises(Stage1OutputError) as exc:
         provider.parse(
@@ -365,7 +367,7 @@ def test_fireworks_usage_reads_prompt_cache_hit_tokens_when_present():
     )
     provider, _ = _fireworks_with_mock_create(
         _fake_openai_response(
-            '{"feasibility": 0.5, "middle_class_accessible": true, "reasoning": "x"}',
+            '{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "x"}',
             usage=usage,
         )
     )
@@ -393,7 +395,7 @@ def test_fireworks_usage_falls_back_to_prompt_tokens_details_cached_tokens():
     )
     provider, _ = _fireworks_with_mock_create(
         _fake_openai_response(
-            '{"feasibility": 0.5, "middle_class_accessible": true, "reasoning": "x"}',
+            '{"revenue_mechanism_identified": true, "revenue_mechanism_description": "x", "revenue_type": "recurring", "buyer_identified": true, "buyer_description": "x", "buyer_accessibility": "direct_to_business", "capital_required": "under_10k", "capital_justification": "x", "regulatory_blockers": [], "regulatory_severity": "manageable", "feasibility_risks": [], "existing_market_validation": true, "middle_class_accessible": true, "reasoning": "x"}',
             usage=usage,
         )
     )
@@ -741,10 +743,9 @@ def test_anthropic_provider_call_shape_matches_legacy_parse_or_raise():
     from tests.fixtures.parsed_message import FakeParsedMessage
 
     client = MagicMock()
+    from tests.fixtures.stage1_evidence import passing_stage1_finding
     client.messages.parse.return_value = FakeParsedMessage(
-        Stage1Finding(
-            feasibility=0.5, middle_class_accessible=True, reasoning="x"
-        )
+        passing_stage1_finding(reasoning="x")
     )
     provider = AnthropicProvider(client)
     provider.parse(
@@ -773,10 +774,9 @@ def test_anthropic_provider_omits_thinking_when_not_supplied():
     from tests.fixtures.parsed_message import FakeParsedMessage
 
     client = MagicMock()
+    from tests.fixtures.stage1_evidence import passing_stage1_finding
     client.messages.parse.return_value = FakeParsedMessage(
-        Stage1Finding(
-            feasibility=0.5, middle_class_accessible=True, reasoning="x"
-        )
+        passing_stage1_finding(reasoning="x")
     )
     provider = AnthropicProvider(client)
     provider.parse(

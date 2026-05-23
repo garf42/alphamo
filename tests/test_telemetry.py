@@ -51,6 +51,7 @@ from alphamo.schemas.findings import (
 )
 from tests.fixtures.parsed_message import FakeParsedMessage
 from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
+from tests.fixtures.stage1_evidence import failing_stage1_finding, passing_stage1_finding
 
 
 # ---------------------------------------------------------------- helpers
@@ -107,9 +108,7 @@ def _arch() -> Architecture:
 
 
 def _stage1_finding() -> Stage1Finding:
-    return Stage1Finding(
-        feasibility=0.9, middle_class_accessible=True, reasoning="ok"
-    )
+    return passing_stage1_finding(reasoning="ok")
 
 
 def _stage2_finding() -> Stage2Finding:

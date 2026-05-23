@@ -30,6 +30,7 @@ from alphamo.schemas.findings import (
     StructuralConcern,
 )
 from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
+from tests.fixtures.stage1_evidence import failing_stage1_finding, passing_stage1_finding
 
 
 @pytest.fixture()
@@ -37,9 +38,7 @@ def cascade(monkeypatch) -> EvaluatorCascade:
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c, **kw: Stage1Finding(
-            feasibility=0.95, middle_class_accessible=True, reasoning="s1 ok"
-        ),
+        lambda a, c, **kw: passing_stage1_finding(reasoning="s1 ok"),
     )
     monkeypatch.setattr(
         cascade_mod,

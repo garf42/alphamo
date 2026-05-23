@@ -36,6 +36,7 @@ from alphamo.schemas.findings import (
 )
 from tests.fixtures.parsed_message import FakeParsedMessage
 from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
+from tests.fixtures.stage1_evidence import failing_stage1_finding, passing_stage1_finding
 
 
 # ---------------------------------------------------------------- Fix 1
@@ -309,9 +310,7 @@ def test_orchestrator_emits_partial_failure_audit_event_when_stage3_partial(
     from alphamo.schemas.findings import Stage1Finding, Stage2Finding
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
-        lambda a, c, **kw: Stage1Finding(
-            feasibility=0.9, middle_class_accessible=True, reasoning="ok"
-        ),
+        lambda a, c, **kw: passing_stage1_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
@@ -388,9 +387,7 @@ def test_orchestrator_emits_catastrophic_failure_audit_event_when_stage3_below_t
     from alphamo.schemas.findings import Stage1Finding, Stage2Finding
     monkeypatch.setattr(
         cascade_mod, "stage1_feasibility",
-        lambda a, c, **kw: Stage1Finding(
-            feasibility=0.9, middle_class_accessible=True, reasoning="ok"
-        ),
+        lambda a, c, **kw: passing_stage1_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod, "stage2_structured",
@@ -638,9 +635,7 @@ def test_stage3_partial_and_catastrophic_triggers_continue_firing(tmp_path):
     try:
         monkeypatch.setattr(
             cascade_mod, "stage1_feasibility",
-            lambda a, c, **kw: Stage1Finding(
-                feasibility=0.9, middle_class_accessible=True, reasoning="ok"
-            ),
+            lambda a, c, **kw: passing_stage1_finding(reasoning="ok"),
         )
         monkeypatch.setattr(
             cascade_mod, "stage2_structured",

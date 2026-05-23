@@ -117,6 +117,20 @@ class Candidate(Base):
     stage2_evidence: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True
     )
+    # Sprint Stage 1 PAJAMA: the full Stage 1 evidence dict
+    # (categoricals + booleans + lists + reasoning string) for
+    # candidates that reached Stage 1 (which is every candidate that
+    # got inserted, since Stage 1 is the entry point of the cascade
+    # and only catastrophic cascade-side failures prevent insertion).
+    # The persisted scalar `scores.feasibility` is derived from this
+    # evidence via `evaluator.stage1_feasibility.compute_feasibility`
+    # plus the soft-zone scaling in `apply_stage1_soft_zone`.
+    # Queryable via SQL — e.g. find every alive candidate with
+    # `regulatory_severity = 'prohibitive'` or with feasibility_risks
+    # mentioning a specific concern.
+    stage1_evidence: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
     fitness: Mapped[float] = mapped_column(Float, nullable=False)
     island_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     generation: Mapped[int | None] = mapped_column(Integer, nullable=True)

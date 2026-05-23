@@ -12,27 +12,239 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class Stage1Finding(BaseModel):
-    """Stage 1 — cheap feasibility + middle-class accessibility filter."""
+class RevenueType(str, Enum):
+    """7-way categorical for Stage 1's revenue-mechanism evidence.
 
-    feasibility: float = Field(
-        ge=0.0,
-        le=1.0,
+    Sprint Stage 1 PAJAMA. The model classifies the architecture's
+    revenue-collection mechanism into the closest matching bucket;
+    `compute_feasibility` maps each bucket to a fixed numeric weight.
+    """
+
+    RECURRING = "recurring"
+    TRANSACTIONAL = "transactional"
+    ASSET_APPRECIATION = "asset_appreciation"
+    LICENSING = "licensing"
+    ARBITRAGE = "arbitrage"
+    HYBRID = "hybrid"
+    UNCLEAR = "unclear"
+
+
+class BuyerAccessibility(str, Enum):
+    """5-way categorical for Stage 1's buyer-identification evidence.
+
+    Sprint Stage 1 PAJAMA. The model classifies who pays and how
+    accessible that buyer is to a middle-class-starting operator —
+    direct B2C / B2B paths score higher than intermediated or
+    government-contract paths.
+    """
+
+    DIRECT_TO_CONSUMER = "direct_to_consumer"
+    DIRECT_TO_BUSINESS = "direct_to_business"
+    REQUIRES_INTERMEDIARY = "requires_intermediary"
+    REQUIRES_GOVERNMENT_CONTRACT = "requires_government_contract"
+    UNCLEAR = "unclear"
+
+
+class CapitalRequired(str, Enum):
+    """6-way categorical for Stage 1's capital-requirement evidence.
+
+    Sprint Stage 1 PAJAMA. The buckets align with the PARENT_GOAL
+    middle-class-entry constraint ($10K-$50K savings range): "none"
+    and "under_10k" are clearly middle-class-accessible from a
+    capital perspective; "over_1m" effectively rules it out.
+    "unquantifiable" is the honest-vagueness bucket when the
+    architecture's description doesn't support an estimate.
+    """
+
+    NONE = "none"
+    UNDER_10K = "under_10k"
+    BETWEEN_10K_AND_100K = "10k_to_100k"
+    BETWEEN_100K_AND_1M = "100k_to_1m"
+    OVER_1M = "over_1m"
+    UNQUANTIFIABLE = "unquantifiable"
+
+
+class RegulatorySeverity(str, Enum):
+    """4-way categorical for Stage 1's regulatory-burden evidence.
+
+    Sprint Stage 1 PAJAMA. Aggregate assessment of regulatory
+    burden — separate from `regulatory_blockers` (which counts
+    specific named barriers). `compute_feasibility` applies a base
+    penalty per severity tier, plus a small per-blocker increment,
+    so two-axis evidence about regulatory friction produces a
+    bounded score impact rather than a winner-take-all flip.
+    """
+
+    NONE = "none"
+    MANAGEABLE = "manageable"
+    SIGNIFICANT = "significant"
+    PROHIBITIVE = "prohibitive"
+
+
+class Stage1Finding(BaseModel):
+    """Stage 1 — evidence extraction for basic feasibility.
+
+    Sprint Stage 1 PAJAMA: the model's role changed from scorer to
+    evidence extractor (same pattern as Stage 2 PAJAMA and Stage 3's
+    long-standing pattern). Pre-PAJAMA the model returned a single
+    `feasibility: float` which Python read directly; the variance test
+    (commit bcdb86c) showed feasibility stdev 0.239-0.278 across 5
+    trials on the same candidate, and the hard threshold at
+    stage1_threshold=0.4 turned that noise into bimodal early-exit
+    behaviour (CarbonSentry: 4 of 5 trials exited early because
+    feasibility randomly landed below 0.4).
+
+    Under PAJAMA the model returns structured categorical / boolean /
+    list evidence; `evaluator.stage1_feasibility.compute_feasibility`
+    maps it to a deterministic scalar in [0.0, 1.0]. The cascade then
+    routes the candidate through a soft-penalty zone (not a hard
+    threshold) so per-trial variance in the evidence doesn't produce
+    cliffs in the fitness output.
+
+    `middle_class_accessible` is **retained from the pre-PAJAMA
+    schema** — it's a load-bearing boolean (the PARENT_GOAL's third
+    constraint is a structural filter, not a soft preference) and is
+    consumed unchanged by `passes_middle_class_filter` for the hard
+    fitness-to-zero gate at `cascade.py`. The bool is independent of
+    the feasibility-zone logic.
+
+    Six evidence dimensions plus the MC boolean and the audit-only
+    reasoning string. The additive scoring (rather than Stage 2's
+    multiplicative) was chosen specifically to make the result
+    noise-resistant: a single field flip shifts the score by at most
+    ~0.15 rather than 70% on a 0.3× boolean multiplier.
+    """
+
+    # --- revenue mechanism ---
+    revenue_mechanism_identified: bool = Field(
         description=(
-            "How plausible is this architecture as a value-capture configuration? "
-            "1.0 = clearly coherent; 0.0 = malformed or contradictory."
+            "Does the architecture name a specific way it gets paid? "
+            "'Generic SaaS' or 'consulting' alone is too vague to count "
+            "as identified; named mechanisms like 'per-transaction take "
+            "rate', 'annual subscription with usage tiers', 'IP licensing "
+            "royalty stream' do count."
         ),
     )
+    revenue_mechanism_description: str = Field(
+        description=(
+            "Brief description of the revenue mechanism, for audit "
+            "trail. Empty string when revenue_mechanism_identified is "
+            "False."
+        ),
+    )
+    revenue_type: RevenueType = Field(
+        description=(
+            "Categorical classification of the revenue mechanism. Must "
+            "be one of the seven RevenueType values."
+        ),
+    )
+
+    # --- buyer identification ---
+    buyer_identified: bool = Field(
+        description=(
+            "Does the architecture name who pays? 'Businesses' or "
+            "'consumers' alone is too vague; named buyer cohorts like "
+            "'SMB e-commerce operators', 'mid-market law firms', or "
+            "'regulated healthcare providers' count as identified."
+        ),
+    )
+    buyer_description: str = Field(
+        description=(
+            "Brief description of the buyer cohort, for audit trail. "
+            "Empty string when buyer_identified is False."
+        ),
+    )
+    buyer_accessibility: BuyerAccessibility = Field(
+        description=(
+            "How accessible the buyer is to a middle-class-starting "
+            "operator. Categorical; must be one of the five "
+            "BuyerAccessibility values."
+        ),
+    )
+
+    # --- capital requirements ---
+    capital_required: CapitalRequired = Field(
+        description=(
+            "Approximate capital required to build and launch the "
+            "architecture, BEFORE first revenue. Categorical bucket; "
+            "must be one of the six CapitalRequired values. "
+            "'unquantifiable' is the honest fallback when the "
+            "architecture's description doesn't support an estimate."
+        ),
+    )
+    capital_justification: str = Field(
+        description=(
+            "Brief description of what requires the capital, for audit "
+            "trail. Examples: 'cloud infrastructure + legal setup', "
+            "'initial inventory + warehouse lease'. Empty string only "
+            "when capital_required is 'none'."
+        ),
+    )
+
+    # --- regulatory landscape ---
+    regulatory_blockers: list[str] = Field(
+        description=(
+            "Specific named regulatory barriers, one per entry. Good: "
+            "'state-by-state insurance licensing', 'FDA 510(k) "
+            "clearance', 'FINRA broker-dealer registration', 'CFPB "
+            "licensure for consumer lending'. Bad: 'various regulations', "
+            "'compliance burden'. Empty list = no identified blockers."
+        ),
+    )
+    regulatory_severity: RegulatorySeverity = Field(
+        description=(
+            "Aggregate severity of the regulatory burden. Categorical; "
+            "must be one of the four RegulatorySeverity values. "
+            "Distinct from regulatory_blockers: severity is the bottom-"
+            "line read; blockers is the specifics."
+        ),
+    )
+
+    # --- feasibility risks (distinct from regulatory) ---
+    feasibility_risks: list[str] = Field(
+        description=(
+            "Specific execution risks to basic viability, distinct from "
+            "regulatory blockers. Good: 'depends on Google Maps API "
+            "access that could be revoked', 'requires unrolled "
+            "Pinterest scrape dataset that doesn't exist publicly', "
+            "'value capture requires a partnership Apple has never "
+            "granted'. Bad: 'might be hard to build'. Empty list = no "
+            "identified risks beyond ordinary execution."
+        ),
+    )
+
+    # --- existing-market signal ---
+    existing_market_validation: bool = Field(
+        description=(
+            "Is there evidence that someone is already paying for "
+            "something similar? Reflects market existence, not "
+            "competitive saturation — a $10B existing market is a "
+            "VALIDATION signal even when crowded, since it proves "
+            "buyer willingness-to-pay."
+        ),
+    )
+
+    # --- the PARENT_GOAL load-bearing filter (preserved across PAJAMA) ---
     middle_class_accessible: bool = Field(
         description=(
-            "True iff the entry_resources describe a starting position reachable "
-            "from middle-class personal resources with no privileged starting "
-            "conditions (no family wealth, no institutional backing, no pre-existing "
-            "industry network, no bespoke legal structuring)."
+            "True iff the entry_resources describe a starting position "
+            "reachable from middle-class personal resources with no "
+            "privileged starting conditions (no family wealth, no "
+            "institutional backing, no pre-existing industry network, "
+            "no bespoke legal structuring). This is a STRUCTURAL FILTER "
+            "per PARENT_GOAL: False here triggers a hard fitness-to-zero "
+            "gate at the cascade level, regardless of the rest of the "
+            "evidence."
         ),
     )
+
+    # --- justification (audit/debug only) ---
     reasoning: str = Field(
-        description="One or two sentences. Why this score and accessibility verdict.",
+        description=(
+            "One or two sentences justifying the overall read across "
+            "the evidence dimensions. NOT used in scoring — "
+            "compute_feasibility ignores this field entirely."
+        ),
     )
 
 

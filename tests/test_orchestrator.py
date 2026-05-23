@@ -41,14 +41,37 @@ def _stub_cascade(
     robustness: float = 0.85,
     stage4_concerns: list[StructuralConcern] | None = None,
 ):
+    # Sprint Stage 1 PAJAMA: the stub returns evidence — the cascade
+    # then runs compute_feasibility on it AND applies the soft-zone
+    # logic. The `feasibility` kwarg here selects between passing
+    # (compute → 0.83 → clean_pass), penalty-zone (compute → 0.29 →
+    # adjusted ≈ 0.187), and failing (compute → 0.0 → hard_exit) shapes
+    # based on requested side of the soft zone. The `middle_class`
+    # kwarg is overridden on the chosen fixture so the MC hard gate
+    # tests still work.
+    from tests.fixtures.stage1_evidence import (
+        failing_stage1_finding,
+        passing_stage1_finding,
+        penalty_zone_stage1_finding,
+    )
+    if feasibility < 0.15:
+        _stage1_fixture = failing_stage1_finding(reasoning="stub")
+    elif feasibility < 0.45:
+        _stage1_fixture = penalty_zone_stage1_finding(reasoning="stub")
+    else:
+        _stage1_fixture = passing_stage1_finding(reasoning="stub")
+    # Apply the middle_class override on the chosen fixture — copies
+    # the fixture with the MC bool flipped while preserving every
+    # other evidence field. Required because passing_stage1_finding
+    # hard-codes middle_class_accessible=True; tests that want to
+    # exercise the MC hard gate need it False.
+    _stage1_fixture = _stage1_fixture.model_copy(
+        update={"middle_class_accessible": middle_class}
+    )
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c, **kw: Stage1Finding(
-            feasibility=feasibility,
-            middle_class_accessible=middle_class,
-            reasoning="stub",
-        ),
+        lambda a, c, **kw: _stage1_fixture,
     )
     # Sprint Stage 2 PAJAMA: the stub returns evidence — the cascade
     # then runs compute_structural on it. The `structural` kwarg now
@@ -260,11 +283,19 @@ def _concern(framing: str = "regulatory", severity: Severity = Severity.MEDIUM) 
 
 
 def test_milestone_does_not_fire_below_absolute_fitness_threshold(db, monkeypatch, tmp_path):
-    """Fitness below the absolute floor → no milestone, no curator firing."""
+    """Fitness below the absolute floor → no milestone, no curator firing.
+
+    Sprint Stage 1 PAJAMA: the stub helper maps the `feasibility=0.2`
+    argument to penalty_zone_stage1_finding, whose compute_feasibility
+    output runs through the soft zone to ≈ 0.187. With structural=0.773
+    (passing fixture) and robustness=0.95, the fitness aggregate
+    ≈ 0.637 — below the 0.80 milestone-fitness threshold and milestone
+    must not fire."""
     _stub_cascade(
         monkeypatch,
-        feasibility=0.6, structural=0.6,
-        robustness=0.95,  # high robustness, but low fitness
+        feasibility=0.2,    # → penalty_zone fixture → adjusted ≈ 0.187
+        structural=0.6,     # → passing fixture → 0.773
+        robustness=0.95,    # high robustness, but low fitness aggregate
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -375,11 +406,18 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_fitness(db, monkeypa
 
 
 def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monkeypatch, tmp_path):
-    """Robustness just above threshold + fitness clear → milestone fires."""
+    """Robustness just above threshold + fitness clear → milestone fires.
+
+    Sprint Stage 1 PAJAMA: with the passing fixtures, the achievable
+    fitness aggregate is (0.83 + 0.773 + 0.75)/3 ≈ 0.784 — below the
+    Sprint-pre-PAJAMA-era milestone fitness threshold of 0.80. To preserve
+    the intent of this test (verify milestone fires WHEN robustness is
+    just-above-its-boundary), the fitness threshold is lowered to 0.75
+    so the test focuses on the robustness gate, not on fitness numerics."""
     _stub_cascade(
         monkeypatch,
         feasibility=0.95, structural=0.95,
-        robustness=0.75,  # just above floor of 0.70
+        robustness=0.75,  # just above robustness floor of 0.70
         stage4_concerns=[_concern(severity=Severity.HIGH)],
     )
     audit = AuditLog(tmp_path / "audit.jsonl")
@@ -387,7 +425,7 @@ def test_milestone_fires_at_absolute_threshold_boundary_for_robustness(db, monke
         db, _stub_client(), audit,
         hp=_hp(
             milestone_min_generation=1,
-            milestone_absolute_fitness_threshold=0.80,
+            milestone_absolute_fitness_threshold=0.75,
             milestone_absolute_robustness_threshold=0.70,
         ),
     )

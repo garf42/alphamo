@@ -33,7 +33,11 @@ from typing import Any
 
 from alphamo.errors import TelemetryContext
 from alphamo.evaluator.middle_class_check import passes_middle_class_filter
-from alphamo.evaluator.stage1_feasibility import stage1_feasibility
+from alphamo.evaluator.stage1_feasibility import (
+    apply_stage1_soft_zone,
+    compute_feasibility,
+    stage1_feasibility,
+)
 from alphamo.evaluator.stage2_structured import compute_structural, stage2_structured
 from alphamo.evaluator.stage4_adversarial import stage4_adversarial
 from alphamo.providers.base import BaseProvider, ensure_provider
@@ -128,11 +132,21 @@ class EvaluatorCascade:
         if self.stage1_model is not None:
             s1_kwargs["model"] = self.stage1_model
         s1 = stage1_feasibility(architecture, self.stage1_provider, **s1_kwargs)
+        # Sprint Stage 1 PAJAMA: the model no longer returns a feasibility
+        # float; the score comes from the deterministic Python function
+        # `compute_feasibility` applied to the model's evidence fields.
+        # See alphamo/evaluator/stage1_feasibility.py for the formula
+        # and weight constants.
+        s1_raw_feasibility = compute_feasibility(s1)
 
+        # The middle-class filter is an INDEPENDENT structural gate per
+        # PARENT_GOAL — checked before any feasibility-zone logic. False
+        # here triggers a hard fitness-to-zero exit regardless of the
+        # rest of the evidence.
         if not passes_middle_class_filter(s1):
             return CascadeResult(
                 scores=Scores(
-                    feasibility=s1.feasibility,
+                    feasibility=s1_raw_feasibility,
                     structural=0.0,
                     exemplar_similarity=None,
                     robustness=None,
@@ -144,10 +158,24 @@ class EvaluatorCascade:
                 early_exit="middle_class_filter",
             )
 
-        if s1.feasibility < self.stage1_threshold:
+        # Sprint Stage 1 PAJAMA: the pre-PAJAMA hard threshold at
+        # `stage1_threshold` (default 0.4) created a cliff that
+        # amplified per-call evidence-extraction variance into
+        # bimodal early-exit outcomes. The new path runs a three-
+        # region soft penalty zone via `apply_stage1_soft_zone`:
+        #   - raw < STAGE1_HARD_FLOOR  → hard exit
+        #   - raw < STAGE1_SOFT_CEILING → penalty zone, continue with
+        #     adjusted feasibility = raw² / SOFT_CEILING (continuous
+        #     at the ceiling)
+        #   - raw >= STAGE1_SOFT_CEILING → clean pass, no penalty
+        # `self.stage1_threshold` is preserved on the cascade for
+        # back-compat with persisted HP but is no longer consulted by
+        # the gate logic.
+        s1_adjusted_feasibility, s1_zone = apply_stage1_soft_zone(s1_raw_feasibility)
+        if s1_zone == "hard_exit":
             return CascadeResult(
                 scores=Scores(
-                    feasibility=s1.feasibility,
+                    feasibility=s1_adjusted_feasibility,
                     structural=0.0,
                     exemplar_similarity=None,
                     robustness=None,
@@ -174,7 +202,7 @@ class EvaluatorCascade:
         if s2_structural < self.stage2_threshold:
             return CascadeResult(
                 scores=Scores(
-                    feasibility=s1.feasibility,
+                    feasibility=s1_adjusted_feasibility,
                     structural=s2_structural,
                     exemplar_similarity=None,
                     robustness=None,
@@ -199,7 +227,7 @@ class EvaluatorCascade:
 
         return CascadeResult(
             scores=Scores(
-                feasibility=s1.feasibility,
+                feasibility=s1_adjusted_feasibility,
                 structural=s2_structural,
                 exemplar_similarity=None,
                 robustness=s3.robustness,

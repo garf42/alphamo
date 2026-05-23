@@ -41,14 +41,27 @@ def _client_returning(parsed_output) -> MagicMock:
 
 
 def test_stage1_returns_parsed_output_on_success():
-    finding = Stage1Finding(
-        feasibility=0.9, middle_class_accessible=True, reasoning="ok"
+    """Sprint Stage 1 PAJAMA: the function now returns evidence (no
+    feasibility float). Verify that the call-side wiring still returns
+    the parsed Pydantic model verbatim — the cascade is what runs
+    compute_feasibility on it later. Asserting on a few representative
+    evidence fields proves the model was correctly threaded through."""
+    from tests.fixtures.stage1_evidence import passing_stage1_finding
+    from alphamo.schemas.findings import (
+        BuyerAccessibility, RegulatorySeverity, RevenueType,
     )
+
+    finding = passing_stage1_finding(reasoning="cascade-stages unit test")
     result = stage1_feasibility(
         SATOSHI_FIXTURE.architecture, _client_returning(finding)
     )
     assert isinstance(result, Stage1Finding)
-    assert result.feasibility == 0.9
+    # Evidence-field round-trip checks (representative subset).
+    assert result.revenue_type == RevenueType.RECURRING
+    assert result.buyer_accessibility == BuyerAccessibility.DIRECT_TO_BUSINESS
+    assert result.regulatory_severity == RegulatorySeverity.MANAGEABLE
+    assert result.middle_class_accessible is True
+    assert result.reasoning == "cascade-stages unit test"
 
 
 def test_stage1_raises_when_parsed_is_none():

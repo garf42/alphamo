@@ -132,6 +132,17 @@ class ProgramsDB:
                 conn.execute(
                     text("ALTER TABLE candidates ADD COLUMN stage2_evidence JSON")
                 )
+        # Sprint Stage 1 PAJAMA: stage1_evidence column carries the
+        # full Stage 1 evidence dict so the deterministic scalar
+        # `scores.feasibility` (and its soft-zone-adjusted value) has
+        # a queryable audit trail. NULL on legacy rows only — Stage 1
+        # is the entry point of the cascade, so every inserted candidate
+        # post-PAJAMA has a non-NULL stage1_evidence.
+        if "stage1_evidence" not in column_names:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE candidates ADD COLUMN stage1_evidence JSON")
+                )
 
         with self._session() as session:
             null_count = session.scalar(
@@ -422,6 +433,7 @@ class ProgramsDB:
         stage4_findings: list[dict[str, Any]] | None = None,
         stage4_assessments: dict[str, str] | None = None,
         stage2_evidence: dict[str, Any] | None = None,
+        stage1_evidence: dict[str, Any] | None = None,
     ) -> int:
         """Insert one candidate. Returns the new row id. `run_id` is required.
 
@@ -454,6 +466,7 @@ class ProgramsDB:
             stage4_findings=stage4_findings,
             stage4_assessments=stage4_assessments,
             stage2_evidence=stage2_evidence,
+            stage1_evidence=stage1_evidence,
             fitness=aggregate_fitness(scores),
             island_id=island_id,
             generation=generation,

@@ -23,6 +23,7 @@ from alphamo.schemas.findings import (
 from tests.fixtures.exemplars import SATOSHI_FIXTURE
 from tests.fixtures.parsed_message import FakeParsedMessage
 from tests.fixtures.stage2_evidence import failing_stage2_finding, passing_stage2_finding
+from tests.fixtures.stage1_evidence import failing_stage1_finding, passing_stage1_finding
 
 
 # --------------------------------------------------------------------- helpers
@@ -32,9 +33,7 @@ def _stub_cascade(monkeypatch, fit=0.85):
     monkeypatch.setattr(
         cascade_mod,
         "stage1_feasibility",
-        lambda a, c, **kw: Stage1Finding(
-            feasibility=fit, middle_class_accessible=True, reasoning="ok"
-        ),
+        lambda a, c, **kw: passing_stage1_finding(reasoning="ok"),
     )
     monkeypatch.setattr(
         cascade_mod,

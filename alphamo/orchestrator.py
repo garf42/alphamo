@@ -959,6 +959,19 @@ class Orchestrator:
             if result.stage2 is not None
             else None
         )
+        # Sprint Stage 1 PAJAMA: persist the full Stage 1 evidence dict
+        # so the deterministic `scores.feasibility` scalar (and the
+        # downstream soft-zone-adjusted value flowing into Scores) has
+        # a queryable audit trail. Stage 1 is the cascade entry point —
+        # every inserted candidate post-PAJAMA carries non-None
+        # stage1_evidence. The enum string serialisations (RevenueType,
+        # BuyerAccessibility, CapitalRequired, RegulatorySeverity) come
+        # through unchanged via model_dump(mode="json").
+        stage1_evidence_payload = (
+            result.stage1.model_dump(mode="json")
+            if result.stage1 is not None
+            else None
+        )
         # Sprint 15 (Q3): propagate seed candidate ids as parent_ids so
         # lineage is queryable. Seeds whose `.id` is None (legacy / ad-
         # hoc constructions) are filtered out; an all-None list collapses
@@ -974,6 +987,7 @@ class Orchestrator:
             stage4_findings=stage4_findings_payload,
             stage4_assessments=stage4_assessments_payload,
             stage2_evidence=stage2_evidence_payload,
+            stage1_evidence=stage1_evidence_payload,
         )
         row = self.db.get(candidate_id)
 
